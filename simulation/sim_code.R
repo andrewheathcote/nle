@@ -1,7 +1,6 @@
 source("simulation/sim_functions.R")
 source("simulation/designs.R")
 
-Sys.setenv(RENV_CONFIG_STARTUP_QUIET = "TRUE") # suppress renv messages on cores
 # Sample a test & validation set using uniform proposals
 # Sample a training set using Sobol' sampling
 # TODO Use parameters in the test set to simulate new trails for the KDE, to be able to evaluate at test values later

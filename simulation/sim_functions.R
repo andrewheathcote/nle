@@ -1,5 +1,3 @@
-require(renv)
-renv::restore()
 library(EMC2)
 
 param_matrix <- function(n_draws, param_names, lower, upper,

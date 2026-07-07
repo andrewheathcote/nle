@@ -14,7 +14,7 @@ for the three evidence accumulation models (LNR, RDM, DDM), in R.
 Rscript simulation/sim_code.R
 ```
 
-Requires the restored `renv` environment (R 4.5.3). Key packages: **EMC2**
+Key packages: **EMC2**
 (model definitions, design objects, analytic likelihoods), `randtoolbox`
 (Sobol' draws for training parameters), `arrow`/`dplyr`.
 

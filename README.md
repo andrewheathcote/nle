@@ -57,12 +57,21 @@ it is tracked **selectively** (see [`.gitignore`](.gitignore)):
 
 ### R (simulation, KDE, benchmark, results)
 
-R dependencies are pinned with [`renv`](https://rstudio.github.io/renv/).
-Captured R version: **4.5.3**.
+Uses your locally installed **EMC2** and current CRAN versions of the other
+packages (this fork does not pin dependencies; the upstream repo used `renv`):
 
 ```r
-renv::restore()
-# renv::status()   # should report "No issues found" (no drift)
+install.packages(c(
+  "WienR",                                # DDM analytic/numerical likelihood
+  "arrow",                                # parquet I/O
+  "randtoolbox",                          # Sobol' sampling
+  "dplyr", "tidyr", "stringr", "readr",   # data wrangling
+  "ggplot2", "patchwork",                 # plotting
+  "jsonlite",                             # timing-log I/O
+  "microbenchmark",                       # likelihood timing
+  "future", "future.apply",
+  "parallelly", "progressr"               # parallel simulation
+))
 ```
 
 ### Python (flow training & flow timing)
@@ -87,7 +96,7 @@ them by running the pipeline below.
 
 | # | Step | Command | Working dir | Notes / approx. cost |
 |---|---|---|---|---|
-| 1 | Restore R env | `Rscript -e 'renv::restore()'` | root | one-off |
+| 1 | Install R packages | see [Installation](#installation) | root | one-off |
 | 2 | Simulate data | `Rscript simulation/sim_code.R` | root | writes `data/`; DDM is the expensive model (large budget ≈ hours). See [simulation/README.md](simulation/README.md) |
 | 3 | Train flows | run [`flow/notebooks/flow_training.py`](flow/notebooks/flow_training.py) cell-by-cell | `flow/notebooks/` | per-model × per-budget cells (RDM/LNR/DDM). Writes checkpoints **directly** to the canonical `results/model_states/<budget>_budget/<head>/`. See [flow/README.md](flow/README.md) |
 | 4 | Fit / evaluate KDE | `Rscript kde/KDE.R` | root | reads `data/kde_fit/`, `data/test/`; writes `results/<MODEL>/<budget>/`. See [kde/README.md](kde/README.md) |
