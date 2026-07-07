@@ -1,0 +1,16 @@
+# Runtime dependencies for the `flow` package, kept in sync with the
+# [project.dependencies] table in pyproject.toml.
+# Preferred install path is `pip install -e .` (or `uv sync`) from flow/;
+# this file exists for environments that only consume requirements.txt.
+distrax==0.1.5
+flax==0.10.6
+jax==0.5.3
+matplotlib==3.10.8
+numpy==2.2.6
+optax==0.2.8
+scipy==1.15.3
+tqdm==4.67.3
+orbax-checkpoint<0.11.2
+pandas==3.0.3
+pyarrow==24.0.0
+scikit-learn==1.9.0

@@ -1,0 +1,80 @@
+# generated outputs (regenerable from data/ + code; obtained from the deposit)
+artifacts/
+diagnostics/
+
+# results/: track analysis code + paper figures + small tables; ignore the
+# bulk regenerable outputs (predictions, timings, checkpoints, ~5.2 GB).
+# NB: a single "results/" rule cannot be re-included file-by-file, so we ignore
+# everything first, re-descend into subdirs, then re-include the small inputs.
+# (.gitignore has no inline comments, so keep every pattern on its own line.)
+results/**
+# re-descend into subdirs so the file negations below can apply
+!results/**/
+!results/**/*.R
+!results/**/*.md
+# paper-figure panels (all of them, by request) and small summary tables
+!results/figures_paper/*.pdf
+!results/tables_paper/*.csv
+# keep these regenerable/stale trees out even though they hold *.R
+results/prelim_results/**
+results/full_results_cache/**
+results/full_results_files/**
+# presentation helper for the (untracked) Quarto report; the paper figure/table
+# pipeline (plotting.R / tables.R) does not use it, so keep it out too
+results/_results_helpers.R
+# Quarto is intentionally NOT tracked: reports (*.qmd), rendered *.html, and
+# caches (.quarto/) stay out of the repo. Also still ignored implicitly:
+# results/<MODEL>/<budget>/*.{csv,rds}, results/*/timing/**,
+# results/model_states/**, *.zip, _rt_overlay_flow_grid.*
+
+# pipeline inputs (~3.7 GB — keep out of git; obtained from the deposit or by
+# running simulation/sim_code.R)
+data/
+# benchmark eval datasets are regenerable bulk — keep them out…
+benchmark/scripts_julian/DDM/**
+benchmark/scripts_julian/LNR/**
+benchmark/scripts_julian/RDM/**
+# …but track the small, deterministic eval_params.csv (seed=2 inputs to every
+# timing script), so timing is reproducible without re-simulating
+!benchmark/scripts_julian/DDM/
+!benchmark/scripts_julian/LNR/
+!benchmark/scripts_julian/RDM/
+!benchmark/scripts_julian/DDM/eval_params.csv
+!benchmark/scripts_julian/LNR/eval_params.csv
+!benchmark/scripts_julian/RDM/eval_params.csv
+
+# old benchmarking scripts
+benchmark/old_benchmarking_files/
+
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Quarto cache
+.quarto/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Notebooks: ignore the .ipynb, track the jupytext .py mirror (R4)
+flow/notebooks/*.ipynb
+flow/notebooks/old/
+
+# implementation plans
+plans/
+
+# model states
+flow/notebooks/model_states/
+
+# Not yet implemented
+mcmc/
+sbc/
+flow/scripts/

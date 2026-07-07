@@ -1,0 +1,71 @@
+cff-version: 1.2.0
+title: "Likelihood Approximation in Evidence Accumulation Models: KDE vs. Normalizing Flow"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - given-names: Julian
+    family-names: Wuth
+    email: julian.wuth@gmail.com
+repository-code: "https://github.com/julianwuth/likelihood-kde-normflow"
+license: MIT
+references:
+  - type: article
+    authors:
+      - family-names: Lin
+        given-names: Yi-Shin
+      - family-names: Heathcote
+        given-names: Andrew
+      - family-names: Holmes
+        given-names: William R.
+    title: "Parallel probability density approximation"
+    journal: "Behavior Research Methods"
+    volume: 51
+    issue: 6
+    year: 2019
+    start: 2777
+    end: 2799
+    doi: 10.3758/s13428-018-1153-1
+  - type: article
+    authors:
+      - family-names: Boelts
+        given-names: Jan
+      - family-names: Lueckmann
+        given-names: Jan-Matthis
+      - family-names: Gao
+        given-names: Richard
+      - family-names: Macke
+        given-names: Jakob H.
+    title: "Flexible and efficient simulation-based inference for models of decision-making"
+    journal: "eLife"
+    volume: 11
+    year: 2022
+    doi: 10.7554/eLife.77220
+  - type: article
+    authors:
+      - family-names: Fengler
+        given-names: Alexander
+      - family-names: Govindarajan
+        given-names: Lakshmi N.
+      - family-names: Chen
+        given-names: Tony
+      - family-names: Frank
+        given-names: Michael J.
+    title: "Likelihood approximation networks (LANs) for fast inference of simulation models in cognitive neuroscience"
+    journal: "eLife"
+    volume: 10
+    year: 2021
+    doi: 10.7554/eLife.65074
+  - type: conference-paper
+    authors:
+      - family-names: Papamakarios
+        given-names: George
+      - family-names: Sterratt
+        given-names: David
+      - family-names: Murray
+        given-names: Iain
+    title: "Sequential neural likelihood: Fast likelihood-free inference with autoregressive flows"
+    collection-title: "Proceedings of the Twenty-Second International Conference on Artificial Intelligence and Statistics"
+    year: 2019
+    start: 837
+    end: 848
+    url: "https://proceedings.mlr.press/v89/papamakarios19a.html"
