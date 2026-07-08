@@ -65,7 +65,8 @@ check("R: log_sf",      d$r_lsf, 1e-9)
 check("C++: log_pdf",   d$c_lp,  1e-9)
 check("C++: cdf",       d$c_cdf, 1e-9)
 check("C++: log_sf",    d$c_lsf, 1e-9)
-check("C++ vs R (all outputs)", d$rc, 1e-12)
+# tolerance allows BLAS-vs-loop summation-order noise in the MLP mat-vecs
+check("C++ vs R (all outputs)", d$rc, 1e-10)
 
 # --- 3. Bounding box: just outside each face -> pdf = 0, cdf = 0 ---
 lo <- fl$bounds_sampled$lower; hi <- fl$bounds_sampled$upper
@@ -109,17 +110,25 @@ cat(sprintf("%-46s %s\n", "C++ trial-wise (caching + out-of-box rows)",
             if (tw_ok) "PASS" else "FAIL"))
 if (!tw_ok) fails <- fails + 1L
 
-# --- 5. Sanity: pdf integrates to ~1 over rt ---
-d_int <- 0
+# --- 5. Sanity: pdf/cdf consistency and normalization ---
+# pdf must equal d cdf / d rt (central finite differences), and the cdf must
+# approach 0 and 1 at the extremes (proper normalized density — checked
+# without integrate(), which is fragile for peaked densities).
+d_fd <- 0; d_norm <- 0
 for (pid in seq_len(min(5, n_sets))) {
   g <- golden[golden$param_id == pid, ]
   theta <- as.numeric(g[1L, ctx_names])
-  igr <- integrate(function(x) flow_eval_cpp(ptr, theta, x)$pdf,
-                   lower = 1e-8, upper = Inf, rel.tol = 1e-6,
-                   subdivisions = 1000L)
-  d_int <- max(d_int, abs(igr$value - 1))
+  rt0 <- exp(seq(log(0.05), log(15), length.out = 60))
+  h <- rt0 * 1e-6
+  fd <- (flow_eval_cpp(ptr, theta, rt0 + h)$cdf -
+         flow_eval_cpp(ptr, theta, rt0 - h)$cdf) / (2 * h)
+  pdf0 <- flow_eval_cpp(ptr, theta, rt0)$pdf
+  d_fd <- max(d_fd, abs(fd - pdf0) / pmax(pdf0, 1))
+  ends <- flow_eval_cpp(ptr, theta, c(1e-6, 1e6))$cdf
+  d_norm <- max(d_norm, ends[1], 1 - ends[2])
 }
-check("C++: integral of pdf over rt (vs 1)", d_int, 1e-4)
+check("C++: pdf vs d(cdf)/d(rt), rel.", d_fd, 1e-4)
+check("C++: cdf endpoints (0 / 1)", d_norm, 1e-5)
 
 # --- 6. Benchmark ---
 cat("\n--- Benchmark (per call, evaluating pdf+cdf at n rts) ---\n")

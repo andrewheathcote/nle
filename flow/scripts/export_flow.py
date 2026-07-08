@@ -58,9 +58,13 @@ MODEL_REGISTRY = {
         "checkpoint_head": "LNR",
     },
     "RDM": {
-        # sim_code.R: transforms = NULL -> sampled scale == natural scale
+        # sim_code.R passes transforms = NULL to param_matrix, whose default
+        # is rep("log", dim) (sim_functions.R:34, "For RDM"): sampled
+        # uniformly on the natural scale, stored/conditioned on the log
+        # scale for EVERY parameter. Verified against the train/val/test
+        # parquet ranges (all equal log of the designs.R bounds).
         "context": ["v", "B", "t0", "s", "A"],
-        "transforms": {p: "identity" for p in ["v", "B", "t0", "s", "A"]},
+        "transforms": {p: "log" for p in ["v", "B", "t0", "s", "A"]},
         "bounds_natural": {"lower": [1e-3, 0.1, 0.05, 0.1, 1e-4],
                            "upper": [5.0, 3.0, 1.0, 2.0, 2.0]},
         "checkpoint_head": "RDM",
