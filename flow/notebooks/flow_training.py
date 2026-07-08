@@ -286,8 +286,15 @@ test_pd.to_csv(SAVE_PATH / "flow_ll_pred.csv", index=False)
 # ### Medium budget
 
 # %%
+DATA = "rt" # The normflow is only trained on one accumulator
+CONTEXT = ["v", "B", "t0", "s", "A"]
+TARGET   = "ll"
+RESPONSE = "R"
 TRAIN_PATH = Path('../../data/train/medium/RDM_single/trials')
+VAL_PATH = Path('../../data/val/RDM_single/trials')
+
 dset_train = ds.dataset(TRAIN_PATH, format="parquet")
+dset_val = ds.dataset(VAL_PATH, format="parquet")
 
 # %%
 NUM_BINS = 32
@@ -475,8 +482,15 @@ test_pd.to_csv(SAVE_PATH / "flow_ll_pred.csv", index=False)
 # ### Large budget
 
 # %%
+DATA = "rt" # The normflow is only trained on one accumulator
+CONTEXT = ["v", "B", "t0", "s", "A"]
+TARGET   = "ll"
+RESPONSE = "R"
 TRAIN_PATH = Path('../../data/train/large/RDM_single/trials')
+VAL_PATH = Path('../../data/val/RDM_single/trials')
+
 dset_train = ds.dataset(TRAIN_PATH, format="parquet")
+dset_val = ds.dataset(VAL_PATH, format="parquet")
 
 # %%
 NUM_BINS = 32
@@ -658,6 +672,7 @@ test_pd.to_csv(SAVE_PATH / "flow_ll_pred.csv", index=False)
 DATA = "rt" # The normflow is only trained on one accumulator
 CONTEXT_LNR = ["m", "s", "t0"]
 TARGET   = "ll"
+RESPONSE = "R"
 TRAIN_PATH = Path('../../data/train/small/LNR_single/trials')
 VAL_PATH = Path('../../data/val/LNR_single/trials')
 
@@ -859,6 +874,7 @@ test_pd.to_csv(SAVE_PATH / "flow_ll_pred.csv", index=False)
 DATA = "rt" # The normflow is only trained on one accumulator
 CONTEXT_LNR = ["m", "s", "t0"]
 TARGET   = "ll"
+RESPONSE = "R"
 TRAIN_PATH = Path('../../data/train/medium/LNR_single/trials')
 VAL_PATH = Path('../../data/val/LNR_single/trials')
 
@@ -1050,6 +1066,7 @@ test_pd.to_csv(SAVE_PATH / "flow_ll_pred.csv", index=False)
 DATA = "rt" # The normflow is only trained on one accumulator
 CONTEXT_LNR = ["m", "s", "t0"]
 TARGET   = "ll"
+RESPONSE = "R"
 TRAIN_PATH = Path('../../data/train/large/LNR_single/trials')
 VAL_PATH = Path('../../data/val/LNR_single/trials')
 

@@ -29,7 +29,7 @@ results/_results_helpers.R
 
 # pipeline inputs (~3.7 GB — keep out of git; obtained from the deposit or by
 # running simulation/sim_code.R)
-data/
+data
 # benchmark eval datasets are regenerable bulk — keep them out…
 benchmark/scripts_julian/DDM/**
 benchmark/scripts_julian/LNR/**
@@ -77,4 +77,6 @@ flow/notebooks/model_states/
 # Not yet implemented
 mcmc/
 sbc/
-flow/scripts/
+
+# IDE settings (Positron / VS Code)
+.vscode/
