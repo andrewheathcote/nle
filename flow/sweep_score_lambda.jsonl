@@ -1,0 +1,4 @@
+{"score_lambda": 0.0, "epochs": 10, "seed": 100, "val_nll": -0.06773440107607688, "val_score": 10.016383123703491, "train_s": 99.50526785850525, "s_per_epoch": 9.950526785850524, "n_val_batches": 39}
+{"score_lambda": 10.0, "epochs": 10, "seed": 100, "val_nll": 1.094145878767356, "val_score": 0.7847718283151969, "train_s": 269.21283888816833, "s_per_epoch": 26.921283888816834, "n_val_batches": 39}
+{"score_lambda": 0.1, "epochs": 10, "seed": 100, "val_nll": 0.14063190907621995, "val_score": 0.24735104674712205, "train_s": 270.879408121109, "s_per_epoch": 27.0879408121109, "n_val_batches": 39}
+{"score_lambda": 1.0, "epochs": 10, "seed": 100, "val_nll": 1.0779393345881731, "val_score": 31.959753550015964, "train_s": 271.3337950706482, "s_per_epoch": 27.13337950706482, "n_val_batches": 39}

@@ -48,9 +48,42 @@ def batches(dset, data_names, context_names, target_names, response_name,
             yield data_j, jnp.asarray(context), jnp.asarray(y)
 
 
+# a and Z jointly set where the accumulator starts RELATIVE to each boundary:
+# distance to the upper bound is a(1-Z), to the lower a*Z. The conditioner gets
+# a and Z as separate standardised inputs and must learn to form those
+# products - a multiplicative interaction MLPs represent inefficiently. That
+# would explain why the residual bias is shared by exactly these two
+# parameters, is systematic across all 15 seeds, and survived capacity, data,
+# ensembling and the classifier fix. These append the products directly.
+def add_geometry_features(context, context_names, response_name=None):
+    ia, iz = context_names.index("a"), context_names.index("Z")
+    a = np.exp(context[:, ia])          # a is stored on the log scale
+    Z = _norm_cdf(context[:, iz])       # Z on the probit scale
+    new = np.concatenate([(a * Z)[:, None],            # distance to lower
+                          (a * (1.0 - Z))[:, None]], axis=1)
+    # R must stay the LAST column: downstream code slices context[:, -1] for the
+    # response and context[:, :n_theta] for parameters, so insert before it.
+    if response_name is not None and response_name in context_names:
+        return np.concatenate([context[:, :-1], new, context[:, -1:]], axis=1)
+    return np.concatenate([context, new], axis=1)
+
+
+def _norm_cdf(x):
+    from math import sqrt
+    import scipy.special as sp
+    return 0.5 * (1.0 + sp.erf(x / sqrt(2.0)))
+
+
 def _load_dataset(dset, data_names, context_names, target_names,
-                  response_name, sign, standardize=False, scaler=None):
-    cols = [data_names] + context_names + [target_names]
+                  response_name, sign, standardize=False, scaler=None,
+                  geometry=False):
+    # target_names may be a LIST, in which case y comes back as (n, k). Needed
+    # by the score-matching loss (ll plus 8 true-score columns) and by the
+    # off-sample grid loss (ll plus a flag marking rows that are not model
+    # samples, which must feed the MSE term but not the NLL).
+    tnames = list(target_names) if isinstance(target_names, (list, tuple)) \
+        else [target_names]
+    cols = [data_names] + context_names + tnames
     if sign and response_name not in cols:
         cols = cols + [response_name]
 
@@ -63,6 +96,9 @@ def _load_dataset(dset, data_names, context_names, target_names,
         axis=1,
     )
 
+    if geometry:
+        context = add_geometry_features(context, context_names, response_name)
+
     if standardize:
         if response_name in context_names:
             feat, resp = context[:, :-1], context[:, -1:]
@@ -74,7 +110,11 @@ def _load_dataset(dset, data_names, context_names, target_names,
                 scaler = preprocessing.StandardScaler().fit(context)
             context = scaler.transform(context)
 
-    y = table.column(target_names).to_numpy(zero_copy_only=False).astype(np.float32)
+    if len(tnames) == 1:
+        y = table.column(tnames[0]).to_numpy(zero_copy_only=False).astype(np.float32)
+    else:
+        y = np.stack([table.column(c).to_numpy(zero_copy_only=False).astype(np.float32)
+                      for c in tnames], axis=1)
 
     if sign:
         response = table.column(response_name).to_numpy(zero_copy_only=False).astype(np.int32)
@@ -98,18 +138,40 @@ class PreloadedBatches:
 
     def __init__(self, dset, data_names, context_names, target_names,
                  response_name, batch_size=8192, shuffle=True, sign=False,
-                 drop_last=True, rng=None, standardize=False, scaler=None):
+                 drop_last=True, rng=None, standardize=False, scaler=None,
+                 pair_rows=False, geometry=False):
         self._data, self._context, self._y, self._scaler = _load_dataset(
-            dset, data_names, context_names, target_names, response_name, sign, standardize, scaler
+            dset, data_names, context_names, target_names, response_name, sign,
+            standardize, scaler, geometry
         )
         self._n = int(self._data.shape[0])
         self._batch_size = batch_size
         self._shuffle = shuffle
         self._drop_last = drop_last
         self._rng = rng if rng is not None else np.random.default_rng()
+        # pair_rows: the simulator writes exactly 2 trials per parameter draw,
+        # adjacently and in file order. The score penalty needs both members of
+        # a pair in the same batch at positions 2k / 2k+1, so shuffle PAIRS
+        # rather than rows. Verified on data/train/large/DDM/trials: every
+        # fragment holds an even row count and t[0::2] == t[1::2] on param_id.
+        self._pair_rows = pair_rows
+        if pair_rows:
+            if self._n % 2:
+                raise ValueError(
+                    "pair_rows=True needs an even row count; got %d" % self._n)
+            if batch_size % 2:
+                raise ValueError(
+                    "pair_rows=True needs an even batch_size; got %d" % batch_size)
 
     def __iter__(self):
-        if self._shuffle:
+        if self._pair_rows:
+            n_pairs = self._n // 2
+            order = (self._rng.permutation(n_pairs) if self._shuffle
+                     else np.arange(n_pairs))
+            idx = np.empty(self._n, dtype=np.int64)
+            idx[0::2] = 2 * order
+            idx[1::2] = 2 * order + 1
+        elif self._shuffle:
             idx = self._rng.permutation(self._n)
         else:
             idx = np.arange(self._n)

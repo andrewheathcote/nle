@@ -100,7 +100,12 @@ simulate_trials <- function(p_vec, design, param_id, n_trials = 2048, # 2048 tri
   # Compute likelihood per trial
   dadm  <- EMC2:::design_model(dat, design, rt_resolution = rt_resolution, verbose = FALSE) # bins rts and determines winner
   model <- attr(dadm, "model")() # extract model
-  pars  <- EMC2:::get_pars_matrix(p_vec, dadm, model = model) # This applies transforms and bounds the parameters
+  # EMC2 renamed get_pars_matrix -> get_pars_matrix_oo after this code was
+  # written (Julian's renv pin had the old name). Same signature
+  # (p_vector, dadm, model, ...); resolve whichever the installed build has.
+  .get_pars_matrix <- if (exists("get_pars_matrix", asNamespace("EMC2")))
+    EMC2:::get_pars_matrix else EMC2:::get_pars_matrix_oo
+  pars  <- .get_pars_matrix(p_vec, dadm, model = model) # This applies transforms and bounds the parameters
 
   if (model$c_name == "RDM") {
     ll <- log_likelihood_race_per_trial(pars, dadm, model, min_ll = log(1e-10))

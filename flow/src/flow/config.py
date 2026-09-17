@@ -11,6 +11,10 @@ from flax import nnx
 def spline_flow(data, context, conditioner):
     num_splines = conditioner.num_splines
     num_bins = conditioner.num_bins
+    # spline support in log-rt; conditioners built before this attribute
+    # existed default to the original [-5, 5]
+    range_min = getattr(conditioner, "range_min", -5.0)
+    range_max = getattr(conditioner, "range_max", 5.0)
     params = conditioner(context)                 # (N, dout)
     spline_size = 3 * num_bins + 1
     idx = 0
@@ -20,7 +24,7 @@ def spline_flow(data, context, conditioner):
         sp = params[..., idx:idx + spline_size]
         idx += spline_size
         layers.append(distrax.RationalQuadraticSpline(
-            sp, range_min=-5.0, range_max=5.0,
+            sp, range_min=range_min, range_max=range_max,
             boundary_slopes="identity", min_bin_size=1e-4,
         ))
         if i < num_splines - 1:                    # affine between splines, not after the last
@@ -140,7 +144,8 @@ class MLP_no_norm(nnx.Module):
         return self.out(x)
 
 
-def make_mlp_conditioner(rngs, dims, num_bins=16, num_splines=3, spline_flow = spline_flow, use_norm=True):
+def make_mlp_conditioner(rngs, dims, num_bins=16, num_splines=3, spline_flow = spline_flow, use_norm=True,
+                         range_min=-5.0, range_max=5.0):
     # each spline needs 3*num_bins + 1 params
     # each affine between splines needs 2 params (shift, log_scale)
     num_affine = num_splines - 1
@@ -152,6 +157,8 @@ def make_mlp_conditioner(rngs, dims, num_bins=16, num_splines=3, spline_flow = s
     m.num_bins = num_bins
     m.num_splines = num_splines
     m.spline_flow = spline_flow
+    m.range_min = range_min
+    m.range_max = range_max
     
     return m
 
@@ -217,15 +224,22 @@ def joint_train_step(conditioner, classifier,
     opt_clf.update(grads_clf)
 
 
-def joint_log_prob(conditioner, classifier, rt, params, response):
+def joint_log_prob(conditioner, classifier, rt, params, response,
+                   clf_params=None):
     """Joint log p(rt, R | params).
 
     params:   (N, K)    — DDM parameters in sampled scale, no R
     response: (N,)      — R, 1 or 2
+    clf_params: (N, K)  — optional separate encoding for the classifier. Needed
+                only when the flow and the classifier are conditioned on
+                different parameterisations of the same draw, as under
+                train_ddm.py --triple, where the flow takes (SZ0, SZ, SZ1) and
+                the frozen classifier still takes EMC2's (a, Z, SZ). Defaults
+                to `params`, i.e. the ordinary single-encoding case.
     """
     R_col = response[..., None].astype(jnp.float32)
     full_context = jnp.concatenate([params, R_col], axis=-1)
-    clf_input    = params
+    clf_input    = params if clf_params is None else clf_params
 
     log_p_rt_given, _ = spline_flow(rt, full_context, conditioner)
 

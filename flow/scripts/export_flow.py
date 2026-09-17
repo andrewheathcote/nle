@@ -40,6 +40,8 @@ from flax import nnx
 from flow.config import make_mlp_conditioner, spline_flow
 from flow.training import load_obj
 
+_FORCE_STEP = [None]
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 RANGE_MIN, RANGE_MAX = -5.0, 5.0     # spline range used by flow.config.spline_flow
@@ -128,17 +130,17 @@ def mlp_forward(ctx_std, layers, norms):
     return h @ W + b
 
 
-def build_knots(raw, num_bins):
+def build_knots(raw, num_bins, range_min=RANGE_MIN, range_max=RANGE_MAX):
     """raw: (n, 3K+1) conditioner output -> x_pos, y_pos, slopes (n, K+1)."""
     k = num_bins
-    widths = normalize_bin_sizes(raw[:, :k], RANGE_MAX - RANGE_MIN, MIN_BIN_SIZE)
-    heights = normalize_bin_sizes(raw[:, k:2 * k], RANGE_MAX - RANGE_MIN, MIN_BIN_SIZE)
+    widths = normalize_bin_sizes(raw[:, :k], range_max - range_min, MIN_BIN_SIZE)
+    heights = normalize_bin_sizes(raw[:, k:2 * k], range_max - range_min, MIN_BIN_SIZE)
     slopes = normalize_knot_slopes(raw[:, 2 * k:], MIN_KNOT_SLOPE)
     n = raw.shape[0]
-    pad_lo = np.full((n, 1), RANGE_MIN)
-    pad_hi = np.full((n, 1), RANGE_MAX)
-    x_pos = np.concatenate([pad_lo, RANGE_MIN + np.cumsum(widths[:, :-1], axis=1), pad_hi], axis=1)
-    y_pos = np.concatenate([pad_lo, RANGE_MIN + np.cumsum(heights[:, :-1], axis=1), pad_hi], axis=1)
+    pad_lo = np.full((n, 1), range_min)
+    pad_hi = np.full((n, 1), range_max)
+    x_pos = np.concatenate([pad_lo, range_min + np.cumsum(widths[:, :-1], axis=1), pad_hi], axis=1)
+    y_pos = np.concatenate([pad_lo, range_min + np.cumsum(heights[:, :-1], axis=1), pad_hi], axis=1)
     # boundary_slopes="identity"
     slopes[:, 0] = 1.0
     slopes[:, -1] = 1.0
@@ -214,7 +216,7 @@ def flow_eval_f64(theta, rt, layers, norms, scaler_mean, scaler_scale, num_bins)
 
 def read_conditioner(ckpt_dir):
     mgr = ocp.CheckpointManager(str(ckpt_dir.resolve()))
-    step = mgr.best_step()
+    step = _FORCE_STEP[0] if _FORCE_STEP[0] is not None else mgr.best_step()
     if step is None:
         step = mgr.latest_step()
     raw = mgr.restore(step, args=ocp.args.Composite(
@@ -267,16 +269,38 @@ def build_jax_conditioner(layers, norms, num_bins):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="LNR", choices=sorted(MODEL_REGISTRY))
-    ap.add_argument("--budget", default="small", choices=["small", "medium", "large"])
+    # free-form: budgets are now arbitrary run tags, not the original three
+    ap.add_argument("--budget", default="small",
+                    help="run tag under results/model_states/<budget>_budget/")
+    ap.add_argument("--step", type=int, default=None,
+                    help="export this checkpoint step instead of the best-val "
+                         "one — needed to screen a window of plateau "
+                         "checkpoints, which is the recipe (see SBC_PLAN "
+                         "Phase 14)")
+    ap.add_argument("--tag-suffix", default="",
+                    help="appended to the output tag, e.g. _e207")
+    ap.add_argument("--context", default=None,
+                    help="comma list overriding the registry's context order, "
+                         "for a run trained with a different column order. The "
+                         "network is unchanged; this only records what its "
+                         "inputs actually are.")
     ap.add_argument("--n-param-sets", type=int, default=25)
+    ap.add_argument("--port-tol", type=float, default=5e-3,
+                    help="max |dlog_pdf| tolerated between the float64 port and "
+                         "distrax. Raise only after checking the printed "
+                         "distribution — a single outlier is not a port bug.")
     args = ap.parse_args()
 
-    spec = MODEL_REGISTRY[args.model]
+    spec = dict(MODEL_REGISTRY[args.model])
+    if args.context:
+        spec["context"] = args.context.split(",")
+        print(f"context order overridden: {spec['context']}", flush=True)
     ckpt_dir = (REPO_ROOT / "results" / "model_states"
                 / f"{args.budget}_budget" / spec["checkpoint_head"])
     out_dir = REPO_ROOT / "port" / "export"
     out_dir.mkdir(parents=True, exist_ok=True)
-    tag = f"{args.model.lower()}_{args.budget}"
+    _FORCE_STEP[0] = args.step
+    tag = f"{args.model.lower()}_{args.budget}{args.tag_suffix}"
 
     step, layers, norms, num_bins = read_conditioner(ckpt_dir)
     n_par = sum(W.size + b.size for W, b in layers) + \
@@ -290,7 +314,21 @@ def main():
             f"Checkpoint input dim {layers[0][0].shape[0]} != "
             f"{len(spec['context'])} context params for {args.model}.")
 
-    loader = load_obj(str(ckpt_dir / "train_loader.pkl"))
+    # The checkpointer wipes the checkpoint dir when training starts, so a
+
+    # scaler written there beforehand is gone; train_race.py persists it to
+
+    # the run root instead. Prefer the checkpoint dir, fall back to the root.
+
+    _sp = ckpt_dir  / "train_loader.pkl"
+
+    if not _sp.exists():
+
+        _sp = ckpt_dir.parent / "train_loader.pkl"
+
+        print(f"scaler from {_sp} (checkpoint-dir copy absent)", flush=True)
+
+    loader = load_obj(str(_sp))
     scaler = loader._scaler
     scaler_mean = np.asarray(scaler.mean_, dtype=np.float64)
     scaler_scale = np.asarray(scaler.scale_, dtype=np.float64)
@@ -310,18 +348,39 @@ def main():
     conditioner = build_jax_conditioner(layers, norms, num_bins)
     ctx32 = ((theta - scaler_mean) / scaler_scale).astype(np.float32)
     max_lp, max_z = 0.0, 0.0
+    all_lp = []
     for i in range(theta.shape[0]):
         rt32 = jnp.asarray(rt, dtype=jnp.float32)
         ctx_rep = jnp.tile(jnp.asarray(ctx32[i]), (len(rt), 1))
         lp32, flow = spline_flow(rt32, ctx_rep, conditioner)
         z32 = flow.bijector.inverse(rt32)
-        max_lp = max(max_lp, float(np.max(np.abs(np.asarray(lp32) - log_pdf[i]))))
+        d_lp = np.abs(np.asarray(lp32) - log_pdf[i])
+        max_lp = max(max_lp, float(np.max(d_lp)))
         max_z = max(max_z, float(np.max(np.abs(np.asarray(z32) - z[i]))))
+        all_lp.extend(d_lp.ravel().tolist())
+    # Report the DISTRIBUTION, not just the max. This guard is a max over ~575
+    # sampled points and has a fat-tailed failure mode: one unlucky draw near a
+    # spline knot or the range boundary can trip it while the model is
+    # indistinguishable from one that passed. Without percentiles there is no
+    # way to tell a real port bug (everything shifted) from a single outlier.
+    a = np.array(all_lp)
     print(f"float64 port vs distrax float32: max |dlog_pdf| = {max_lp:.3e}, "
           f"max |dz| = {max_z:.3e}")
-    assert max_lp < 5e-3 and max_z < 5e-4, (
-        "NumPy float64 port disagrees with distrax beyond float32 tolerance — "
-        "do not export; fix the port first.")
+    print(f"  |dlog_pdf| over {a.size} points: median {np.median(a):.2e}  "
+          f"p90 {np.percentile(a,90):.2e}  p99 {np.percentile(a,99):.2e}  "
+          f"max {a.max():.2e} ; frac>1e-3 = {(a>1e-3).mean():.4f}")
+    # Report BOTH values and name the one that failed. The two conditions mean
+    # different things: dlog_pdf drifts with float32 accumulation and scales with
+    # network size (raise --port-tol knowingly), whereas dz measures the spline
+    # INVERSION and a large value means an ill-conditioned knot layout at some
+    # theta — a real defect in that checkpoint, not a tolerance question.
+    _fail = []
+    if max_lp >= args.port_tol: _fail.append(f"dlog_pdf {max_lp:.3e} >= {args.port_tol:.1e}")
+    if max_z >= 5e-4: _fail.append(f"dz {max_z:.3e} >= 5.0e-04 (spline inversion, NOT a tolerance issue)")
+    assert not _fail, (
+        "float64 port disagrees with distrax: " + "; ".join(_fail) +
+        f"  [max |dlog_pdf| = {max_lp:.3e}, max |dz| = {max_z:.3e}]. "
+        "Check the distribution line above.")
 
     # --- weights JSON ---
     weights = {

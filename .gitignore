@@ -76,7 +76,21 @@ flow/notebooks/model_states/
 
 # Not yet implemented
 mcmc/
-sbc/
 
 # IDE settings (Positron / VS Code)
 .vscode/
+.Rlibs/
+
+# --- SBC / flow-calibration campaign (added with the sbc/ tree) ---
+# Training logs are progress-bar spam: 2.0 GB across 62 files, and every one is
+# regenerable by re-running the training script. The small result objects
+# (*.rds) in sbc/ ARE the evidence and are tracked.
+sbc/**/*.log
+# EMC2 writes a *_tmp.RData beside each SBC cell while it runs; the .rds beside
+# it is the finished object.
+*_tmp.RData
+# port/export/ holds exported flow weights + golden vectors, 914 MB across ~900
+# files, one set per training checkpoint. They are regenerable from the
+# checkpoints via flow/scripts/export_flow_ddm.py. The lnr_* reference exports
+# committed earlier stay tracked (an ignore rule does not untrack anything).
+port/export/*

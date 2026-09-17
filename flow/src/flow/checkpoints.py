@@ -12,8 +12,22 @@ import orbax.checkpoint as ocp
 from flax import nnx
 
 
-def make_checkpoint_manager(path, clear_dir=False):
-    """Manager that keeps the latest epoch + the best-val-loss epoch."""
+def make_checkpoint_manager(path, clear_dir=False, max_to_keep=None,
+                            save_interval_steps=1):
+    """Manager that keeps the latest epoch + the best-val-loss epoch.
+
+    max_to_keep defaults to 1 (the historical behaviour: only the best-val
+    checkpoint survives). Raise it to retain a window of late epochs, which is
+    what any within-run analysis needs — with one checkpoint per run there is no
+    way to tell run-to-run variation from epoch-to-epoch variation inside a
+    single run, nor to average weights across epochs. Set from train_ddm.py via
+    --keep-checkpoints, or the FLOW_KEEP_CHECKPOINTS environment variable.
+
+    Checkpoints are ~1.5 MB for a [256,128] conditioner plus its optimizer
+    state, so keeping 30 costs well under 100 MB.
+    """
+    if max_to_keep is None:
+        max_to_keep = int(os.environ.get("FLOW_KEEP_CHECKPOINTS", "1"))
 
     path = Path(path)
     if path.exists() and clear_dir:
@@ -23,7 +37,8 @@ def make_checkpoint_manager(path, clear_dir=False):
     return ocp.CheckpointManager(
         os.path.abspath(path),
         options=ocp.CheckpointManagerOptions(
-            max_to_keep=1,
+            max_to_keep=max_to_keep,
+            save_interval_steps=save_interval_steps,
             best_fn=lambda m: m["val_loss"],
             best_mode="min",
         ),

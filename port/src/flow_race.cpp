@@ -176,7 +176,8 @@ static inline void rqs_inverse_one(const Knots& kn, double u,
 
 static inline bool in_box(const FlowModel& m, const double* theta) {
   for (int j = 0; j < m.n_ctx; ++j)
-    if (theta[j] < m.lower[j] || theta[j] > m.upper[j]) return false;
+    if (std::isnan(theta[j]) || theta[j] < m.lower[j] || theta[j] > m.upper[j])
+      return false;
   return true;
 }
 
@@ -200,6 +201,13 @@ static void eval_block(const Knots& kn, const double* rt, int n, int offset,
 // ---------------------------------------------------------------------------
 // R interface
 // ---------------------------------------------------------------------------
+
+// TRUE if the external pointer still holds a live model (XPtrs read back
+// from a saved session deserialize as NULL and must be rebuilt).
+// [[Rcpp::export]]
+bool flow_ptr_valid(SEXP ptr_) {
+  return TYPEOF(ptr_) == EXTPTRSXP && R_ExternalPtrAddr(ptr_) != nullptr;
+}
 
 // [[Rcpp::export]]
 SEXP flow_build(List fl) {

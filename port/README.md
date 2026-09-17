@@ -83,6 +83,36 @@ read from the export. RDM is already registered (natural-scale parameters,
   `dlnorm`+`plnorm` cost. For models with expensive likelihoods (full DDM)
   this is the orders-of-magnitude win.
 
+## DDM-character models (two networks)
+
+The DDM workflow mirrors the race workflow with a second network: a spline
+flow over rt conditioned on `[standardized params, raw response code R]`,
+plus a choice-classifier MLP giving the logit of P(R = 2). One conditioning
+pass per parameter vector yields spline knots for **both** responses and
+P(R), after which each (rt, R) pair costs one spline inversion:
+
+```
+joint pdf(rt, R)     = dnorm(z_R) * |dz/du| / rt * P(R)
+defective cdf(rt, R) = pnorm(z_R) * P(R)         (-> P(R) as rt -> Inf)
+```
+
+```sh
+cd flow && uv run python scripts/export_flow_ddm.py --budget large
+Rscript port/tests/validate_ddm.R large
+```
+
+Files: `flow/scripts/export_flow_ddm.py`, `R/flow_ddm.R` (requires
+`flow_race.R` sourced first), `src/flow_ddm.cpp`
+(`ddm_build` / `ddm_eval_cpp` / `ddm_eval_trials_cpp`),
+`tests/validate_ddm.R`. Validated at ~1e-12 against float64 golden vectors;
+total probability mass (both responses) exact to machine precision.
+
+**Speed (the headline)**: ~110 µs per 1,000 (rt, R) evaluations — about
+**4,000–6,000× faster** than WienR's numerical full-DDM density (`dWDM`)
+on the same machine. Note the exporter's float32 cross-check gates on the
+region above the `min_ll` floor; float32 noise grows in the clamped far
+tail (documented in the script).
+
 ## Files
 
 | File | Role |

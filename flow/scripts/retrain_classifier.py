@@ -1,0 +1,136 @@
+"""Retrain the choice classifier at the tuned configuration and splice it into
+the flow exports, producing new `<tag>_c2` weight files.
+
+The shipped classifier learns P(R|theta) by binary cross-entropy on simulated R
+labels. Measured against the analytic choice probability (WienR::pWDM) on
+20,000 held-out theta it has mean |error| 0.0553 and max 0.727. The tuned
+version regresses on the exact probability instead and reaches 9.6e-05 mean /
+0.0058 max - a 575x reduction. Since v governs choice proportions, an
+over-predicted P(R=2) forces the fitted v down, which is the sign of the v
+residual (~-1.0) now the only parameter outside the G1 gate.
+
+The flow and classifier are modular - plain-MLE flows never see the classifier
+during training - so this needs no flow retraining, only a re-export.
+
+  uv run python scripts/retrain_classifier.py --tags cap256w,cap256w_s101,...
+"""
+from __future__ import annotations
+import argparse, json
+from pathlib import Path
+
+import numpy as np
+import pyarrow.parquet as pq
+import jax, jax.numpy as jnp, optax
+from flax import nnx
+
+from flow.config import make_choice_classifier
+from flow.training import load_obj
+
+REPO = Path(__file__).resolve().parents[2]
+CONTEXT = ["v", "a", "t0", "s", "Z", "SZ", "sv", "st0"]
+# winning Optuna trial (120 trials, objective = mean |P_hat - P_true|)
+# Two configurations from the 120-trial study. `big` minimises error; `small`
+# is the SMALLEST net still comfortably inside requirement. The requirement is
+# not "minimum error" but "P(R) error negligible against v": dP/dv ~ 0.22 and
+# v posterior sd ~0.08, so dP = 0.011 costs 0.05 v-sd. mean|err| < 0.005 is
+# ample. The shipped classifier was 0.0553; `small` reaches 0.0034 with 289
+# parameters, 464x fewer than `big` - which was over-engineered because I
+# optimised for minimum error rather than sufficiency.
+CONFIGS = {
+  "big":   dict(depth=3, width=256, taper=False, lr=0.001491898934850391,
+                batch=256,  epochs=194, loss="mse"),
+  "small": dict(depth=2, width=16,  taper=True,  lr=0.00864657337621943,
+                batch=1024, epochs=194, loss="hybrid"),
+}
+
+
+def load(split, suffix=""):
+    """`suffix="_grad"` selects the CORRECTED targets.
+
+    The original data/choice_prob/*.parquet was generated without the
+    s-scaling: it passed a = exp(a), v = v straight to pWDM, but the DDM
+    likelihood depends on v, a, sv only through v/s, a/s, sv/s. Over the
+    training box (s in [0.1, 2]) that target is wrong by 0.055 on average and
+    up to 0.72. Classifiers fitted to it (tags c2, c3) reproduce the bug
+    faithfully and are 6x WORSE than the shipped classifier on the true
+    probability (0.0552 vs 0.0092 mean abs error). Always use "_grad".
+    """
+    t = pq.read_table(REPO / "data" / "choice_prob" /
+                      f"{split}{suffix}.parquet").to_pandas()
+    return t[CONTEXT].to_numpy(np.float32), t["p_R2"].to_numpy(np.float32)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tags", required=True)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--config", default="big", choices=list(CONFIGS))
+    ap.add_argument("--suffix", default="c2")
+    ap.add_argument("--data-suffix", default="_grad",
+                    help="'_grad' = corrected targets (default); '' = the "
+                         "original, s-unscaled ones, kept only to reproduce "
+                         "the c2/c3 runs")
+    a = ap.parse_args()
+
+    Xtr, ytr = load("train", a.data_suffix); Xva, yva = load("val", a.data_suffix)
+    print(f"targets: data/choice_prob/*{a.data_suffix}.parquet", flush=True)
+    # the classifier must standardise exactly as the flow does, or the export's
+    # flow/classifier scaler assertion fails
+    sc = load_obj(str(REPO / "results/model_states/large_budget/DDM_flow/train_loader.pkl"))._scaler
+    mu, sd = sc.mean_.astype(np.float32), sc.scale_.astype(np.float32)
+
+    BEST = CONFIGS[a.config]
+    dims = [len(CONTEXT)] + [max(8, BEST["width"] // (2 ** i) if BEST["taper"]
+                                 else BEST["width"]) for i in range(BEST["depth"])]
+    print(f"config={a.config} dims={dims}", flush=True)
+    clf = make_choice_classifier(rngs=nnx.Rngs(default=jax.random.key(a.seed)), dims=dims)
+    steps = BEST["epochs"] * len(Xtr) // BEST["batch"]
+    sched = optax.warmup_cosine_decay_schedule(0.0, BEST["lr"],
+                                               warmup_steps=max(1, steps // 10),
+                                               decay_steps=steps)
+    opt = nnx.Optimizer(clf, optax.adamw(sched), wrt=nnx.Param)
+    Xs = jnp.asarray((Xtr - mu) / sd); ys = jnp.asarray(ytr)
+
+    def loss_fn(m, xb, yb):
+        logit = m(xb); p = jax.nn.sigmoid(logit)
+        mse = jnp.mean((p - yb) ** 2)
+        if BEST["loss"] == "hybrid":
+            return mse + 0.1 * optax.sigmoid_binary_cross_entropy(logit, yb).mean()
+        return mse
+
+    @nnx.jit
+    def step(m, o, xb, yb):
+        l, g = nnx.value_and_grad(loss_fn)(m, xb, yb); o.update(g); return l
+
+    rng = np.random.default_rng(a.seed); n = len(Xs); bs = BEST["batch"]
+    for ep in range(BEST["epochs"]):
+        idx = rng.permutation(n)
+        for s in range(0, n - bs + 1, bs):
+            sl = jnp.asarray(idx[s:s + bs]); step(clf, opt, Xs[sl], ys[sl])
+        if (ep + 1) % 40 == 0:
+            clf.eval()
+            pv = np.asarray(jax.nn.sigmoid(clf(jnp.asarray((Xva - mu) / sd))))
+            print(f"  epoch {ep+1:3d}  val mean|err| {np.abs(pv-yva).mean():.6f}", flush=True)
+            clf.train()
+
+    clf.eval()
+    pv = np.asarray(jax.nn.sigmoid(clf(jnp.asarray((Xva - mu) / sd))))
+    err = pv - yva
+    print(f"FINAL mean|err| {np.abs(err).mean():.6f}  signed {err.mean():+.6f}  "
+          f"max {np.abs(err).max():.4f}", flush=True)
+
+    # splice into each export, matching the stored layout: layers = [{W, b}, ...]
+    layers = [{"W": np.asarray(l.kernel.value).tolist(),
+               "b": np.asarray(l.bias.value).tolist()} for l in clf.layers]
+    for tag in a.tags.split(","):
+        src = REPO / "port/export" / f"ddm_{tag}_weights.json"
+        w = json.load(open(src))
+        w["classifier_mlp"]["layers"] = layers
+        w["checkpoint_step_classifier"] = f"tuned-{a.config}"
+        dst = REPO / "port/export" / f"ddm_{tag}_{a.suffix}_weights.json"
+        json.dump(w, open(dst, "w"))
+        print(f"  wrote {dst.name}", flush=True)
+
+
+if __name__ == "__main__":
+    main()
