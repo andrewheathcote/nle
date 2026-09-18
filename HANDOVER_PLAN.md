@@ -56,8 +56,12 @@ paragraph of that section rather than let a reviewer find it.
     architecture** but does not predict absolute SBC bias **across**
     architectures, because the displacement is multivariate (`I^-1 g`).
 - **Results.** rdm_small vs rdm_large: total |g| 0.0126 vs 0.0563 (4.5x), with
-  the improvement concentrated in B and t0, the two worst parameters. SBC cell
-  to confirm. Comparison against Malte's RDM likelihood on **calibration**.
+  the improvement concentrated in B and t0, the two worst parameters. **SBC now
+  confirms it at N = 100 AND N = 400** (500 replicates each): every parameter
+  inside the gate, every rank distribution uniform, coverage 0.940-0.970. t0
+  standardised bias −0.013 and −0.001 — a 12x improvement on rdm_large's +0.152
+  and closer to zero than the ANALYTIC's own +0.039. Comparison against Malte's
+  RDM likelihood on **calibration**.
 
 ### 1.3 DDM — inherits the above, adds the choice classifier
 
@@ -84,9 +88,13 @@ paragraph of that section rather than let a reviewer find it.
   (0.8 ms at t0 = 0.3 s). Analytic
   control at N=100 and N=400 establishes the drift is the flow's, not the
   pipeline's.
-- **The residual, stated plainly.** Systematic means of −0.036 on `a` and
-  −0.071 on t0 survive everything tried. Selection and batch size act on the
-  spread; the residual is in the centre.
+- **The residual, stated plainly.** A systematic mean of −0.0343 on `a`
+  (t = −3.53, p = 0.006 over ten matched seed-runs, 89/100 checkpoints negative)
+  survives selection and batch size, which act only on the spread. The t0
+  residual is NOT universal: it is robust at batch 1024 (−0.070, 49/50) but
+  absent in the matched batch-128 arm (−0.008, 2 of 5 seeds positive), pooled
+  −0.039 at p = 0.057. Distillation is the one intervention that moves either
+  centre.
 
 ### 1.4 The recipe
 
@@ -136,7 +144,7 @@ sections, because they fail in different ways.
 | Edge-weighted loss | the leading edge is where the error is | monotone harm: +0.009 / +0.471 / +0.991 / +1.53 at amp 0/3/10/30. Upweighting collapses the effective sample size |
 | More capacity / more bins | the obvious first move | spline bins never bind; [512,256] was worse than [256,128] |
 | More trials per parameter draw | more data per theta | no gain beyond 40 |
-| Larger batch to shift the bias | one run showed a 5x improvement | replication over 5 seeds: mean shift t = 0.10. It reduces VARIANCE 8.7x and does not move the mean |
+| Larger batch to shift the bias | one run showed a 5x improvement | replication over 5 seeds: mean shift t = 0.10, and against a MATCHED same-machine arm the variance ratio is 2.84x (p = 0.34), not the 8.7x first reported. It buys reproducibility and 3x epoch speed, not calibration |
 
 **B. Ways to get a wrong number and not know it**
 
@@ -242,26 +250,44 @@ long-and-winding-road/
 
 ## 4. Prerequisites before handover
 
-Ordered by whether they block the document.
+Ordered by whether they block the document. Status as of 2026-09-18.
 
 **Blocking**
 
-1. **Re-measure the DDM score bias at H = 0.01.** `score_bias_draws.R` still
-   defaults to 0.05, whose analytic control is +0.00187 on `a` — 14% of
-   cap256w_c4's signal. Rankings are unaffected (the offset is common), so no
-   conclusion changes, but absolute numbers should not be published at the
-   larger step. Minutes of compute.
-2. **RDM SBC cell** on the selected [64,32] flow (~13 h local), to make the RDM
-   results section a calibration claim rather than a score-bias claim.
-3. **Settle the DDM artefact**: whether distillation or the regression baseline
-   changes the recommendation (both running now).
+1. ~~Re-measure the DDM score bias at H = 0.01.~~ **DONE.** All headline numbers
+   re-measured at H = 0.01 (analytic control on `a` now +0.00008, was +0.00187).
+2. ~~RDM SBC cell on the selected [64,32] flow.~~ **DONE, twice** — N = 100 and
+   N = 400, 500 replicates each, both passing on every criterion (Phases 26, 28).
+3. **Settle the DDM artefact.** IN PROGRESS. The distillation beta sweep
+   (beta = 20/30/50, then 3 seeds at the selected beta) is running locally;
+   the direct-regression baseline is measured and is the best-calibrated route
+   tried (|g_a| + |g_t0| = 0.0143 against 0.0738 for the production flow).
+4. **The st0 = 0 build.** NEW, and now the most promising route: see
+   `handover/ST0_ZERO_RETRAIN.md`. Two SBC cells with st0 held fixed (0.05 and
+   0.01) are running on tux26 to test the mechanism with the existing artefact;
+   the 7-parameter retrain spec and its simulation scripts are written and
+   verified.
 
 **Non-blocking but worth having**
 
-4. Finish the batch-128 arm on tux26 for a same-machine variance control.
-5. Decide whether to include the direct-regression baseline as a section or an
-   appendix item — it answers an obvious reviewer question either way.
-6. One end-to-end rehearsal: fresh clone of the clean directory, follow
-   `README.md`, reach a validated artefact. This is the only way to find the
-   files we forgot, and the tux26 transfer showed we forget several
-   (`LICENSE`, `README.md`, the classifier directory, the library symlink).
+5. ~~Finish the batch-128 arm on tux26 for a same-machine variance control.~~
+   **DONE** (Phase 25) — and it corrected two earlier claims.
+6. Decide whether the direct-regression baseline is a section or an appendix
+   item. It now has both g_a and g_t0 measured and wins on both, so it needs a
+   considered answer rather than a footnote.
+7. One end-to-end rehearsal: fresh clone of the clean directory, follow
+   `README.md`, reach a validated artefact. **Still outstanding, and still the
+   only way to find the files we forgot** — the tux26 transfers this week
+   forgot `sbc_specs.R` (it lives outside the repo there) and left a stale
+   bundle installed on the laptop.
+
+**Corrections folded in since this plan was written**
+
+- The "~3 ms" t0 offset was a units error: the Phase 7 table's values are on the
+  LOG scale, so the offset is 0.28% = 0.83 ms at t0 = 0.3 s. Nine occurrences
+  fixed across this file and `SBC_PLAN.md`.
+- The 8.7x batch variance ratio does not survive a matched control (2.84x,
+  p = 0.34).
+- The export-gate failures are a seed effect, not a batch effect (Fisher
+  p = 0.32).
+- LNR is out of scope; the paper covers DDM and RDM only.
