@@ -2460,3 +2460,67 @@ This is the justification that item 2 asked for, with one caveat: it is
 calibrated on the same four SBC cells it is tested on, in the leave-one-N-out
 sense only. A genuinely independent test would be a new cell at an N not in the
 set — N=200 for the RDM analogue, or N=1600 for the DDM.
+
+## Phase 28 — RDM at N=400: t0 is FLAT, and the DDM contrast is decisive
+
+tux26, 24 cores (cores_per_chain 8 x 3), N = 400, 500 replicates, 866.9 min.
+Bundle verified at launch and the original restored on exit (exit 0).
+
+| par | std bias | mean rank | KS p | coverage | gate |
+|---|---|---|---|---|---|
+| v | +0.034 | 0.496 | 0.81 | 0.946 | PASS |
+| v_lMTRUE | −0.026 | 0.502 | 0.71 | 0.948 | PASS |
+| B | +0.041 | 0.487 | 0.33 | 0.940 | PASS |
+| A | +0.090 | 0.475 | 0.054 | 0.946 | PASS |
+| **t0** | **−0.001** | 0.518 | 0.11 | 0.944 | PASS |
+
+Coverage is 0.940-0.948 against nominal 0.95 (MC se 0.0097) — slightly low
+across the board but within 1 se everywhere.
+
+### The result this cell was run to get
+
+N = 400 is exactly where the DDM's t0 failure became decisive. Same estimator,
+same gate, same replicate count:
+
+| N | DDM `cap256w_c4` t0 | RDM `rdm_small` t0 |
+|---|---|---|
+| 100 | +0.118 (KS p 3.9e-01) | −0.013 (KS p 2.7e-01) |
+| 200 | +0.249 (KS p **3.3e-04**) | — |
+| 400 | +0.319 (KS p **1.8e-07**) | **−0.001** (KS p 1.1e-01) |
+| 800 | +0.371 (KS p **3.8e-06**) | — |
+
+**The DDM's t0 bias grows monotonically and its rank distribution collapses;
+the RDM's is flat at zero and stays uniform.** This is not a power difference —
+both cells have 500 replicates at the same N, and the DDM's effect is 300x its
+own standard error at N=400.
+
+### What it establishes
+
+1. **The RDM is confirmed at the N where the DDM broke.** Phase 26's pass was
+   not an artefact of N=100 being underpowered. Scenario 1 stands; no further
+   RDM compute is required, and no t0 correction is needed for the RDM.
+
+2. **The t0/st0 mechanism survives its sharpest test.** Phase 7 proposed that
+   the DDM's t0 error comes from a leading-edge trade-off between t0 and st0.
+   The RDM has NO st0: its support boundary is a hard jump with nothing to trade
+   against. The mechanism predicts no t0 failure here, and there is none, at
+   either N. The rival explanation — that normalizing flows generically
+   mis-handle a density's leading edge — predicts a failure that grows with N in
+   BOTH models, and is refuted.
+
+3. **A cost: the independent test of the t0 correction is no longer available
+   from the RDM.** Phase 27's correction is calibrated and tested on the same
+   four DDM cells (leave-one-N-out). The RDM would have provided a clean
+   out-of-sample check had it shown the same bias — but it has no bias to
+   correct. An independent DDM cell at an N outside {100,200,400,800} remains
+   the honest way to close Phase 27.
+
+### The one parameter worth watching
+
+`A` moved from −0.075 (N=100) to +0.090 (N=400), with KS p 0.054 — the only
+marginal value in the table, and a sign flip. Both are comfortably inside the
+gate and 0.054 is unremarkable across five parameters, but note that A is by far
+the best-identified parameter here (sd of posterior medians 0.0165 against
+~0.09 for the rest), so a small absolute error shows up larger in standardised
+terms. If an RDM cell is ever run at higher N, A is the parameter to watch, not
+t0.
