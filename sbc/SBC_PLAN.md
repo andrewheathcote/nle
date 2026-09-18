@@ -2524,3 +2524,77 @@ the best-identified parameter here (sd of posterior medians 0.0165 against
 ~0.09 for the rest), so a small absolute error shows up larger in standardised
 terms. If an RDM cell is ever run at higher N, A is the parameter to watch, not
 t0.
+
+## Phase 29 — REFUTED: fixing st0 does NOT fix t0
+
+tux26, 24 cores, N=400, 500 replicates each. Cell A holds st0 at the prior mean
+(0.05), Cell B at the training-box floor (0.01). Both use the shipped
+`cap256w_c4` flow with st0 moved from the sampled set into `constants`, so the
+design, priors and replicate count match the estimated-st0 cell exactly.
+
+| par | st0 ESTIMATED | st0 FIXED 0.05 | st0 FIXED 0.01 |
+|---|---|---|---|
+| v | +0.052 (p 0.38) | +0.080 (p 0.071) | +0.156 (p 7.4e-03) |
+| a | +0.012 (p 0.74) | −0.072 (p 0.20) | **+0.448 (p 6.8e-17)** |
+| **t0** | **+0.319 (p 1.8e-07)** | **+0.269 (p 8.5e-07)** | **+0.293 (p 8.5e-11)** |
+| Z | −0.032 (p 0.64) | **−0.148 (p 5.0e-05)** | **−0.405 (p 2.8e-12)** |
+| sv | +0.014 (p 0.74) | −0.005 (p 0.84) | −0.019 (p 0.39) |
+| SZ | −0.051 (p 0.12) | +0.030 (p 0.81) | −0.154 (p 1.2e-02) |
+| st0 | −0.136 (p 3.3e-02) | — | — |
+
+### The hypothesis and its fate
+
+Phase 7 proposed a **t0/st0 leading-edge trade-off**: t0 and st0 jointly set
+where the density turns on, so a flow that smooths the onset trades one against
+the other. Phase 28 supported it by analogy — the RDM has no st0 and no t0 bias.
+
+The prediction is direct: remove st0 from the ESTIMATION problem and the
+trade-off has no partner, so the t0 bias should collapse.
+
+**It does not.** At st0 fixed to its true value the t0 bias goes +0.319 ->
++0.269, a 16% reduction, with the rank distribution still decisively non-uniform
+(KS p 8.5e-07). The bias is essentially intact.
+
+**The posterior-trade-off account of the t0 bias is therefore wrong.** What
+remains is the simpler explanation: the flow mis-fits the leading edge, that
+error biases t0 directly, and st0 is a passenger rather than a cause. Phase 7's
+observation that st0's bias is opposite in sign to t0's is then a CONSEQUENCE of
+both reading the same mis-fitted edge, not evidence of a trade.
+
+### Where the error goes instead
+
+Fixing st0 does not remove the error, it **relocates** it. With st0 estimated,
+Z is clean (−0.032, p 0.64); with st0 fixed at 0.05, Z degrades to −0.148
+(p 5.0e-05). The estimated st0 was absorbing error that now lands on Z. This is
+the same "error migrates to wherever it is not being watched" pattern as the
+original blind spot, and it is the third time this project has seen it.
+
+### Cell B is worse across the board, and is confounded
+
+At st0 = 0.01 every parameter degrades: a +0.448 (p 6.8e-17, nearly at the 0.5
+gate), Z −0.405, v +0.156, and coverage falls below nominal for t0 (0.914) and
+a (0.932) against an MC se of 0.0097. **st0 = 0.01 is the exact lower bound of
+the training box**, so this confounds "near-hard edge" with "box boundary" as
+flagged when the cell was designed. It cannot distinguish them. A cell at
+st0 = 0.02 would separate the two, and is worth running before any claim is made
+about behaviour near zero.
+
+### Consequences
+
+1. **The paper's mechanism section must be rewritten.** The t0/st0 trade-off is
+   not the explanation. The RDM's clean t0 therefore needs a different account:
+   candidates are that its [64,32] flow fits its own leading edge better, that
+   the race assembly f_R * prod S_j is more forgiving of edge error, or that t0
+   is simply better identified there. None of these is yet tested.
+2. **"Fix st0 and the artefact is safe" is FALSE** and must not be recommended.
+   Fixing st0 leaves t0 biased and makes Z worse; fixing it near zero is worse
+   still.
+3. **The st0 = 0 retrain is not undermined — if anything it matters more.**
+   Cells A and B evaluate the EXISTING 8-parameter flow with st0 pinned; they do
+   not test a flow trained without st0. A dedicated 7-parameter flow spends all
+   its capacity on the hard-edge case instead of covering st0 in [0.01, 0.49],
+   and Cell B shows the current artefact is poor near its st0 floor. The retrain
+   is now the experiment that decides whether the leading edge is learnable at
+   all, rather than a convenience build.
+4. **The multiplicative t0 correction (Phase 27) is unaffected** and is now the
+   only demonstrated remedy for the shipped artefact.
