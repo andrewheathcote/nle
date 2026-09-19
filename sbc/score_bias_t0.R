@@ -38,6 +38,18 @@ CORES <- as.integer(Sys.getenv("SBT_CORES", "4"))
 FI <- c(v=1L,a=2L,t0=3L,s=4L,Z=5L,SZ=6L,sv=7L,st0=8L)
 H  <- 0.05            # step on the sampled (log) scale for t0
 PARS <- c("t0")
+# st0 = 0 build: 7-column context, detected from the first export rather than
+# from a flag. With st0 = 0 the support boundary is a HARD jump -- there is no
+# smear to clear -- so the restricted region can start just above t0, as in the
+# RDM (sbc/score_bias_race.R), instead of past the st0 tail.
+.ctx1 <- local({
+  t1 <- sub("^REG:", "", tags[1])
+  f <- sprintf("port/export/ddm_%s_weights.json", t1)
+  if (file.exists(f)) jsonlite::fromJSON(f, simplifyVector = TRUE)$context_names
+  else NULL
+})
+ST0_ZERO <- !is.null(.ctx1) && !("st0" %in% .ctx1)
+if (ST0_ZERO) cat("context has no st0: 7-parameter mode, hard support edge\n")
 
 # A tag of the form REG:<tag> is the DIRECT-REGRESSION baseline
 # (results/model_states/<tag>_budget/regress.json), evaluated with the SAME
@@ -73,12 +85,14 @@ ptrs <- lapply(tags, build_one); names(ptrs) <- tags
 an_lpdf <- function(th, rt, R) { w <- pnorm(th[FI[["Z"]]])
   WienR::dWDM(rt, response=ifelse(R==1,"lower","upper"), a=exp(th[FI[["a"]]]),
     v=th[FI[["v"]]], w=w, t0=exp(th[FI[["t0"]]]), sv=exp(th[FI[["sv"]]]),
-    sw=2*pnorm(th[FI[["SZ"]]])*min(w,1-w), st0=exp(th[FI[["st0"]]]),
+    sw=2*pnorm(th[FI[["SZ"]]])*min(w,1-w),
+    st0=if (ST0_ZERO) 0 else exp(th[FI[["st0"]]]),
     precision=1e-8)$logvalue }
 an_cdf <- function(th, rt, R) { w <- pnorm(th[FI[["Z"]]])
   WienR::pWDM(rt, response=ifelse(R==1,"lower","upper"), a=exp(th[FI[["a"]]]),
     v=th[FI[["v"]]], w=w, t0=exp(th[FI[["t0"]]]), sv=exp(th[FI[["sv"]]]),
-    sw=2*pnorm(th[FI[["SZ"]]])*min(w,1-w), st0=exp(th[FI[["st0"]]]),
+    sw=2*pnorm(th[FI[["SZ"]]])*min(w,1-w),
+    st0=if (ST0_ZERO) 0 else exp(th[FI[["st0"]]]),
     precision=1e-8)$value }
 fl_lpdf <- function(ptr, th, rt, R) {
   if (inherits(ptr, "ddm_regress")) return(reg_logL(ptr$net, th, rt, R))
@@ -111,7 +125,10 @@ cat(sprintf("draws: %d   tags: %s   cores: %d\n\n", n_draws, paste(tags, collaps
 
 one <- function(i) {
   tr <- truth[i,]
-  th0 <- c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]],tr[["st0"]])
+  th0 <- if (ST0_ZERO)
+    c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]])
+  else
+    c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]],tr[["st0"]])
   t0n <- exp(tr[["t0"]])
   # A must start above the END of the st0 smear, not merely above the onset.
   # Inside the smear the density varies on the scale of st0, so a step of H in
@@ -119,7 +136,12 @@ one <- function(i) {
   # is badly biased (measured: -0.202 against a target of +0.138). Past the
   # smear the density is smooth in t0 and the estimator agrees with the closed
   # form to under 1%. The +H perturbation pushes the smear to t0*exp(H) + st0.
-  cut <- (t0n * exp(H) + exp(tr[["st0"]])) * 1.05
+  # With st0 > 0 the cut must clear the END of the uniform smear, not just the
+  # onset: inside the smear the density varies on the scale of st0 and a step of
+  # H in log t0 is far too coarse. With st0 = 0 there is no smear, so the RDM's
+  # simpler cut applies and keeps more of the informative region.
+  cut <- if (ST0_ZERO) t0n * exp(H) * 1.05
+         else (t0n * exp(H) + exp(tr[["st0"]])) * 1.05
   rt  <- cut + exp(seq(log(1e-3), log(8), length.out = 160))
   dr  <- c(diff(rt)[1], (head(diff(rt),-1)+tail(diff(rt),-1))/2, tail(diff(rt),1))
   grid <- list(rt=rt, w=lapply(1:2, function(R) exp(an_lpdf(th0,rt,R))*dr))
