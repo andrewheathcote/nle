@@ -42,8 +42,14 @@ train_one() {
   if [ -d "$ck" ] && [ "$(ls "$ck" | grep -c '^[0-9]')" -ge 30 ]; then
     say "  $tag already trained; skipping"; return 0
   fi
+  # --val-data is REQUIRED. The default (data/val/DDM) was simulated with st0
+  # sampled from [0.01, 0.49], so its rt and ll reflect a smeared leading edge.
+  # Checkpoints are retained by best val_loss, so validating an st0 = 0 flow on
+  # smeared data would actively select checkpoints that OVER-SMOOTH the leading
+  # edge -- the exact failure mode this build exists to test.
   OMP_NUM_THREADS=3 "$PY" flow/scripts/train_ddm.py \
     --tag "$tag" --st0-zero --train-data "$DATA" \
+    --val-data data/val/DDM_st0zero/trials \
     --batch 1024 --epochs 300 --num-bins 64 --widths 256,128 \
     --keep-checkpoints 30 --seed "$seed" --classifier-from c4clf \
     > "$ROOT/sbc/train_${tag}.log" 2>&1

@@ -47,6 +47,8 @@ from flow.training import save_obj
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTEXT = ["v", "a", "t0", "s", "Z", "SZ", "sv", "st0"]
+# 7-parameter st0 = 0 build; see handover/ST0_ZERO_RETRAIN.md
+CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
 LL_FLOOR = float(np.log(1e-10))
 
 
@@ -63,7 +65,7 @@ class MLP(nnx.Module):
         return x.squeeze(-1)
 
 
-def load_split(path, scaler=None):
+def load_split(path, scaler=None, ctx=CONTEXT, target="ll"):
     """Features are [standardised theta, R, standardised log rt]; target is ll.
 
     Rows whose ll sits at the min_ll floor carry no information about the
@@ -71,17 +73,18 @@ def load_split(path, scaler=None):
     would drag the fit toward a constant. They are dropped.
     """
     t = ds.dataset(path, format="parquet").to_table(
-        columns=CONTEXT + ["R", "rt", "ll"]).to_pandas()
-    keep = np.isfinite(t["ll"].to_numpy()) & (t["ll"].to_numpy() > LL_FLOOR + 1e-9)
+        columns=ctx + ["R", "rt", target]).to_pandas()
+    y = t[target].to_numpy()
+    keep = np.isfinite(y) if target != "ll" else (np.isfinite(y) & (y > LL_FLOOR + 1e-9))
     t = t[keep]
-    th = t[CONTEXT].to_numpy(np.float32)
+    th = t[ctx].to_numpy(np.float32)
     lrt = np.log(t["rt"].to_numpy(np.float32))[:, None]
     R = t["R"].to_numpy(np.float32)[:, None]
     raw = np.concatenate([th, lrt], axis=1)
     if scaler is None:
         scaler = (raw.mean(0), raw.std(0))
     X = np.concatenate([(raw - scaler[0]) / scaler[1], R], axis=1)
-    return X.astype(np.float32), t["ll"].to_numpy(np.float32), scaler, int(keep.sum()), int(len(keep))
+    return X.astype(np.float32), t[target].to_numpy(np.float32), scaler, int(keep.sum()), int(len(keep))
 
 
 def main():
@@ -94,10 +97,15 @@ def main():
     ap.add_argument("--batch", type=int, default=1024)
     ap.add_argument("--peak-lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=100)
+    ap.add_argument("--st0-zero", action="store_true",
+                    help="7-parameter build with st0 absent")
+    ap.add_argument("--target", default="ll", choices=["ll", "cdf"],
+                    help="ll = log density; cdf = defective CDF")
     a = ap.parse_args()
 
-    Xtr, ytr, scaler, kept, tot = load_split(REPO_ROOT / a.train_data)
-    Xva, yva, _, _, _ = load_split(REPO_ROOT / a.val_data, scaler)
+    CTX = CONTEXT_ST0ZERO if a.st0_zero else CONTEXT
+    Xtr, ytr, scaler, kept, tot = load_split(REPO_ROOT / a.train_data, ctx=CTX, target=a.target)
+    Xva, yva, _, _, _ = load_split(REPO_ROOT / a.val_data, scaler, ctx=CTX, target=a.target)
     print(f"[{time.strftime('%H:%M:%S')}] tag={a.tag}  train={kept:,}/{tot:,} rows "
           f"({100*(tot-kept)/tot:.2f}% at the ll floor, dropped)  "
           f"features={Xtr.shape[1]}  batch={a.batch}  epochs={a.epochs}", flush=True)
@@ -147,7 +155,7 @@ def main():
                                  for l in net.layers],
                       "scaler_mean": scaler[0].tolist(),
                       "scaler_scale": scaler[1].tolist(),
-                      "context": CONTEXT, "epoch": ep + 1}
+                      "context": CTX, "target": a.target, "epoch": ep + 1}
             save_obj(_payload, str(out / "regress.pkl"))
             # JSON too, so the R side can evaluate it with the SAME score-bias
             # estimator the flows use. A parallel Python implementation would

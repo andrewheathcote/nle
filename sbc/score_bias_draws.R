@@ -19,7 +19,7 @@
 
 if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
 source("port/R/flow_race.R"); source("port/R/flow_ddm.R")
-suppressPackageStartupMessages(library(EMC2))
+suppressPackageStartupMessages({library(EMC2); library(jsonlite)})
 
 args <- commandArgs(trailingOnly = TRUE)
 n_draws <- as.integer(args[1]); tags <- args[-1]
@@ -38,6 +38,21 @@ N_CHECK <- 40L
 H <- as.numeric(Sys.getenv("SB_H", "0.01"))
 PARS <- c("v","a","Z","sv","SZ","st0")            # t0 excluded (moving support)
 FI <- c(v=1L,a=2L,t0=3L,s=4L,Z=5L,SZ=6L,sv=7L,st0=8L)
+# The st0 = 0 build has a 7-column context and no st0 at all. Detect it from the
+# first export rather than from a flag, so the estimator cannot be pointed at a
+# 7-column model while still differencing an 8th parameter that does not exist.
+.ctx_of <- function(tg) {
+  f <- sprintf("port/export/ddm_%s_weights.json", sub("^ENS:.*?,?", "", tg))
+  if (!file.exists(f)) return(NULL)
+  jsonlite::fromJSON(f, simplifyVector = TRUE)$context_names
+}
+.ctx <- .ctx_of(tags[1])
+if (!is.null(.ctx) && !("st0" %in% .ctx)) {
+  PARS <- c("v","a","Z","sv","SZ")
+  FI   <- c(v=1L,a=2L,t0=3L,s=4L,Z=5L,SZ=6L,sv=7L)
+  ST0_ZERO <- TRUE
+  cat("context has no st0: 7-parameter (st0 = 0) mode; st0 dropped from PARS\n")
+} else ST0_ZERO <- FALSE
 
 # A tag of the form ENS:tagA,tagB,... builds an equal-weight density mixture
 # of those members (EMC2's shipped ddm_build_ensemble), so an ensemble can be
@@ -67,7 +82,8 @@ names(ptrs) <- tags
 an_lpdf <- function(th, rt, R) { w <- pnorm(th[FI[["Z"]]])
   WienR::dWDM(rt, response = ifelse(R==1,"lower","upper"), a = exp(th[FI[["a"]]]),
     v = th[FI[["v"]]], w = w, t0 = exp(th[FI[["t0"]]]), sv = exp(th[FI[["sv"]]]),
-    sw = 2*pnorm(th[FI[["SZ"]]])*min(w,1-w), st0 = exp(th[FI[["st0"]]]),
+    sw = 2*pnorm(th[FI[["SZ"]]])*min(w,1-w),
+    st0 = if (ST0_ZERO) 0 else exp(th[FI[["st0"]]]),
     precision = 1e-8)$logvalue }
 fl_lpdf <- function(ptr, th, rt, R) {
   Th <- matrix(th, nrow=length(rt), ncol=length(th), byrow=TRUE)
@@ -104,7 +120,10 @@ A <- array(NA_real_, c(N_CHECK, length(PARS)), dimnames=list(NULL, PARS))
 t0s <- proc.time()[3]
 for (i in seq_len(n_draws)) {
   tr <- truth[i,]
-  th0 <- c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]],tr[["st0"]])
+  th0 <- if (ST0_ZERO)
+    c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]])
+  else
+    c(tr[["v"]],tr[["a"]],tr[["t0"]],0,tr[["Z"]],tr[["SZ"]],tr[["sv"]],tr[["st0"]])
   t0n <- exp(tr[["t0"]])
   rt <- t0n + exp(seq(log(1e-3), log(8), length.out=120))
   dr <- c(diff(rt)[1], (head(diff(rt),-1)+tail(diff(rt),-1))/2, tail(diff(rt),1))
