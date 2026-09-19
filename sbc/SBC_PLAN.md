@@ -2677,3 +2677,82 @@ comparisons of training interventions are uninformative in this domain.
   calibrated route measured — and is now the ONLY route that beats plain MLE on
   the centre. It has not been seed-replicated, and on this phase's evidence
   that replication is mandatory before any claim is made for it.
+
+## Phase 31 — the direct-regression baseline REPLICATES, and it has no residual
+
+Four seeds (reg_b1k plus 401/402/403), identical settings, measured with the
+same estimators at H = 0.01 over 200 SBC prior draws. Analytic controls: a
++0.00007 for the six-parameter estimator; the t0 estimator agrees with its
+closed form to 0.3%.
+
+| | g_a | g_t0 |
+|---|---|---|
+| reg_b1k | +0.0076 | +0.0063 |
+| reg_s401 | −0.0182 | −0.0215 |
+| reg_s402 | +0.0058 | +0.0014 |
+| reg_s403 | +0.0063 | −0.0267 |
+| **mean (sd)** | **+0.0004 (0.0124)** | **−0.0101 (0.0164)** |
+
+**Neither mean differs from zero** (p = 0.96 and p = 0.31). This is the first
+claim in the project to survive seed replication.
+
+### Against the plain-MLE flow (5 seeds, same estimator)
+
+| | regression | flow | diff | t | p |
+|---|---|---|---|---|---|
+| g_a | +0.0004 | −0.0259 | +0.0263 | 2.22 | 0.065 |
+| g_t0 | −0.0101 | −0.0696 | +0.0595 | **3.30** | **0.017** |
+
+The regression net is **significantly better on t0**, the parameter that fails
+SBC, and its between-seed sd is ~2x smaller on both parameters. Against
+distillation at beta = 30 it is better on t0 by +0.064 (p = 0.145, n small).
+
+### Normalisation, the thing a flow gets for free
+
+Total mass over rt and R, which a flow makes exactly 1 by construction:
+
+| seed | mean | sd across theta |
+|---|---|---|
+| reg_b1k | 1.00003 | 0.00190 |
+| reg_s401 | 1.00710 | 0.00167 |
+| reg_s402 | 1.00006 | 0.00217 |
+| reg_s403 | 1.00084 | 0.00185 |
+
+A CONSTANT offset is harmless — it shifts every log-likelihood equally. What
+matters is the variation with theta, sd(log Z) ~ 0.002, which is an order of
+magnitude below the score biases being compared. s401's 0.7% mean offset is
+therefore not a defect; its theta-variation is the lowest of the four.
+
+### What this means, stated carefully
+
+**The flow's calibration residual is not intrinsic to the problem.** A plain
+MLP regressing on the analytic log-density, with no classifier, no
+normalisation guarantee and no spline machinery, has no detectable systematic
+bias on either parameter — where the flow has g_a = −0.0343 at p = 0.006 over
+ten seeds. Whatever causes the flow's residual is a property of the flow, not
+of the DDM's density.
+
+**But the comparison is not free.** Direct regression:
+- requires the analytic likelihood to train, so it can only COMPRESS something
+  you already have. It is useless for a genuinely intractable model, which is
+  the case NLE exists for;
+- gives no CDF, so race models (f_R * prod S_j) and censoring are out of reach
+  without a second network with nothing tying dF/drt to f;
+- is not normalised, though the measured theta-variation is small enough not to
+  matter here.
+
+So the honest framing for the paper is a **division of labour**, not a winner:
+where an analytic exists but is too slow, regression is the better artefact —
+simpler, better calibrated, one forward pass. Where no analytic exists, or a
+CDF is needed, the flow is the only option and its residual is the price.
+
+That is a more useful result than "our flow works", and it directly answers the
+reviewer question this baseline was built to answer.
+
+### Consequence for the st0 = 0 build
+
+The st0 = 0 artefact is a compression of an analytic that exists, which is
+exactly the regime where regression wins. The build now running trains flows;
+a regression arm on the same data costs ~2 h against the flows' ~10 h and
+should be run alongside, with the speed of both measured. Deciding between them
+on calibration AND speed is cheap, and the flow is not the obvious default.
