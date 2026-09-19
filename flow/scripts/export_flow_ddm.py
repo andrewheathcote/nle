@@ -47,6 +47,13 @@ CONTEXT = ["v", "a", "t0", "s", "Z", "SZ", "sv", "st0"]
 # heads carry different context encodings and different scalers. The port keeps
 # the EMC2 parameterisation as its public interface and re-encodes for the flow.
 CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
+# st0 = 0 build: a 7-parameter DDM with no non-decision-time variability.
+# EMC2 gives st0 a default of -Inf on the sampled scale under an exp transform,
+# so omitting st0 from the design formula sets it to exactly 0 (verified via
+# mapped_pars). The flow's existing box cannot reach st0 = 0 -- its floor is
+# 0.01, since log(0) = -Inf -- so this needs its own training data and its own
+# network. See handover/ST0_ZERO_RETRAIN.md.
+CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
 
 # --step exports a NAMED checkpoint instead of the best-val one. Needed to study
 # variation WITHIN a single training run: with one checkpoint per run there is
@@ -79,8 +86,13 @@ def emc2_to_triple(theta):
     return th
 TRANSFORMS = {"v": "identity", "a": "log", "t0": "log", "s": "log",
               "Z": "probit", "SZ": "probit", "sv": "log", "st0": "log"}
-BOUNDS_NATURAL = {"lower": [-6.0, 0.05, 0.05, 0.1, 0.1, 0.05, 0.01, 0.01],
-                  "upper": [6.0, 5.0, 1.0, 2.0, 0.9, 0.99, 4.0, 0.49]}
+# Keyed by parameter, not positional: a positional list silently mis-pairs
+# bounds with columns as soon as the context is a subset (the st0 = 0 build).
+BOUNDS_NAT = {"v": (-6.0, 6.0), "a": (0.05, 5.0), "t0": (0.05, 1.0),
+              "s": (0.1, 2.0), "Z": (0.1, 0.9), "SZ": (0.05, 0.99),
+              "sv": (0.01, 4.0), "st0": (0.01, 0.49)}
+BOUNDS_NATURAL = {"lower": [BOUNDS_NAT[p][0] for p in CONTEXT],
+                  "upper": [BOUNDS_NAT[p][1] for p in CONTEXT]}
 
 
 def tf_one(v, t):
@@ -91,10 +103,10 @@ def tf_one(v, t):
     return float(v)
 
 
-def sampled_bounds():
-    tfs = [TRANSFORMS[p] for p in CONTEXT]
-    return {"lower": [tf_one(v, t) for v, t in zip(BOUNDS_NATURAL["lower"], tfs)],
-            "upper": [tf_one(v, t) for v, t in zip(BOUNDS_NATURAL["upper"], tfs)]}
+def sampled_bounds(ctx=None):
+    ctx = ctx if ctx is not None else CONTEXT
+    return {"lower": [tf_one(BOUNDS_NAT[p][0], TRANSFORMS[p]) for p in ctx],
+            "upper": [tf_one(BOUNDS_NAT[p][1], TRANSFORMS[p]) for p in ctx]}
 
 
 def read_mlp(ckpt_dir, kind):
@@ -163,6 +175,15 @@ def ddm_eval_f64(theta, rt, R, flow_layers, flow_norms, clf_layers,
     return z, log_pdf_joint, cdf_defective, log_p_R, (ctx_std, raw, x_pos, y_pos, slopes)
 
 
+def CTX_SEL(args):
+    """Context column list for this build. The exporter writes this into
+    context_names and the R/C++ port builds theta from it, so it MUST match
+    what training used -- a mismatch silently permutes the inputs."""
+    if getattr(args, "st0_zero", False):
+        return CONTEXT_ST0ZERO
+    return CONTEXT_TRIPLE if args.triple else CONTEXT
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--budget", default="large",
@@ -173,6 +194,10 @@ def main():
                     help="export this checkpoint step instead of the best-val one")
     ap.add_argument("--tag-suffix", default="",
                     help="appended to the output tag, e.g. _e207")
+    ap.add_argument("--st0-zero", action="store_true",
+                    help="7-parameter build with st0 absent (see "
+                         "handover/ST0_ZERO_RETRAIN.md); requires training data "
+                         "simulated with st0 = 0")
     ap.add_argument("--triple", action="store_true",
                     help="flow was trained with train_ddm.py --triple")
     ap.add_argument("--port-tol", type=float, default=5e-3,
@@ -212,8 +237,9 @@ def main():
           f"layernorm={flow_norms is not None}")
     print(f"Classifier: step {c_step}, widths {c_widths}")
     print(f"Total parameters: {n_par}")
-    assert f_widths[0] == len(CONTEXT) + 1, "flow input dim != n_params + 1 (R)"
-    assert c_widths[0] == len(CONTEXT), "classifier input dim != n_params"
+    CTX = CTX_SEL(args)
+    assert f_widths[0] == len(CTX) + 1, "flow input dim != n_params + 1 (R)"
+    assert c_widths[0] == len(CTX), "classifier input dim != n_params"
 
     # scaler: the flow head's pkl (the notebook saved the classifier's loader
     # there, but both were fitted on the same data -> verify they agree)
@@ -246,10 +272,10 @@ def main():
     scaler_scale = np.asarray(sc_f.scale_, dtype=np.float64)
     clf_scaler_mean = np.asarray(sc_c.mean_, dtype=np.float64)
     clf_scaler_scale = np.asarray(sc_c.scale_, dtype=np.float64)
-    assert scaler_mean.shape[0] == len(CONTEXT), "scaler covers params only"
+    assert scaler_mean.shape[0] == len(CTX), "scaler covers params only"
 
     # --- golden grid ---
-    bounds_s = sampled_bounds()
+    bounds_s = sampled_bounds(CTX)
     rng = np.random.default_rng(20260708)
     lo = np.array(bounds_s["lower"]); hi = np.array(bounds_s["upper"])
     theta = rng.uniform(lo, hi, size=(args.n_param_sets, len(lo)))
@@ -343,9 +369,10 @@ def main():
         "model": "DDM", "budget": args.budget,
         "checkpoint_step_flow": f_step, "checkpoint_step_classifier": c_step,
         "exported": str(date.today()),
-        "context_names": CONTEXT_TRIPLE if args.triple else CONTEXT,
-        "classifier_context_names": CONTEXT,
-        "context_encoding": "triple" if args.triple else "emc2",
+        "context_names": CTX,
+        "classifier_context_names": CTX,
+        "context_encoding": ("st0zero" if args.st0_zero
+                             else "triple" if args.triple else "emc2"),
         "classifier_scaler": {"mean": clf_scaler_mean.tolist(),
                               "scale": clf_scaler_scale.tolist()},
         "context_transforms": TRANSFORMS,
@@ -381,7 +408,7 @@ def main():
 
     # --- golden CSV (long format, both responses) ---
     gpath = out_dir / f"{tag}_golden.csv"
-    ctx_cols = ",".join(CONTEXT)
+    ctx_cols = ",".join(CTX)
     with open(gpath, "w") as f:
         f.write(f"param_id,{ctx_cols},R,rt,z,log_pdf_joint,cdf_defective,log_p_R\n")
         for i in range(theta.shape[0]):

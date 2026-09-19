@@ -47,6 +47,13 @@ CONTEXT = ["v", "a", "t0", "s", "Z", "SZ", "sv", "st0"]
 # conditioning representation changes, so the conditioner no longer has to
 # represent EMC2's Ttransform kink at Z = 0.5. Select with --triple.
 CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
+# st0 = 0 build: a 7-parameter DDM with no non-decision-time variability.
+# EMC2 gives st0 a default of -Inf on the sampled scale under an exp transform,
+# so omitting st0 from the design formula sets it to exactly 0 (verified via
+# mapped_pars). The flow's existing box cannot reach st0 = 0 -- its floor is
+# 0.01, since log(0) = -Inf -- so this needs its own training data and its own
+# network. See handover/ST0_ZERO_RETRAIN.md.
+CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
 TARGET = "ll"
 RESPONSE = "R"
 
@@ -91,6 +98,10 @@ def main():
                          "only). Raise it to study within-run variation or to "
                          "average weights across late epochs; a [256,128] "
                          "checkpoint is ~1.5 MB.")
+    ap.add_argument("--st0-zero", action="store_true",
+                    help="7-parameter build with st0 absent (see "
+                         "handover/ST0_ZERO_RETRAIN.md); requires training data "
+                         "simulated with st0 = 0")
     ap.add_argument("--triple", action="store_true",
                     help="train on the (SZ0, SZ, SZ1) reparameterisation "
                          "instead of (a, Z, SZ); requires a dataset written "
@@ -157,7 +168,10 @@ def main():
 
     # (SZ0, SZ, SZ1) swaps which columns condition the flow; everything
     # downstream is driven by this list, so nothing else needs to change.
-    CTX = CONTEXT_TRIPLE if args.triple else CONTEXT
+    if args.st0_zero and args.triple:
+        raise SystemExit("--st0-zero and --triple are mutually exclusive")
+    CTX = (CONTEXT_ST0ZERO if args.st0_zero
+           else CONTEXT_TRIPLE if args.triple else CONTEXT)
 
     out_base = REPO_ROOT / "results" / "model_states" / f"{args.tag}_budget"
     flow_dir = out_base / "DDM_flow"
