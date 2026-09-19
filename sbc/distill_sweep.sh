@@ -28,6 +28,13 @@ say() { echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
 train_arm() {   # tag beta seed
   local tag=$1 beta=$2 seed=$3
+  # resume: skip a run that already has its full checkpoint window, so a
+  # failure in a later stage does not cost the training again
+  local ck="$ROOT/results/model_states/${tag}_budget/DDM_flow"
+  if [ -d "$ck" ] && [ "$(ls "$ck" | grep -c '^[0-9]')" -ge 10 ]; then
+    say "  $tag already trained ($(ls "$ck" | grep -c '^[0-9]') checkpoints); skipping"
+    return 0
+  fi
   # --train-data is NOT optional here: train_ddm.py defaults to
   # data/train/large (1M rows), while every dist_* arm used the 16M-row
   # tpt40p400k set. Omitting it trains on 1/16th of the data and the new beta
@@ -41,7 +48,11 @@ train_arm() {   # tag beta seed
 }
 
 export_arm() {  # tag  -> exports every retained checkpoint
-  local tag=$1 d="$ROOT/results/model_states/${tag}_budget/DDM_flow"
+  # NB: two statements, not `local tag=$1 d=...${tag}...`. bash declares every
+  # name in a single `local` before evaluating any right-hand side, so the
+  # second assignment would expand an unset local and abort under set -u.
+  local tag=$1
+  local d="$ROOT/results/model_states/${tag}_budget/DDM_flow"
   [ -d "$d" ] || { say "  $tag: no checkpoint dir, skipping"; return 1; }
   for e in $(ls "$d" | grep '^[0-9]' | sort -n); do
     [ -f "$ROOT/port/export/ddm_${tag}_e${e}_weights.json" ] && continue

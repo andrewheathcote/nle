@@ -2598,3 +2598,82 @@ about behaviour near zero.
    all, rather than a convenience build.
 4. **The multiplicative t0 correction (Phase 27) is unaffected** and is now the
    only demonstrated remedy for the shipped artefact.
+
+## Phase 30 — RETRACTED: distillation does not move the mean either
+
+Phase 24 reported distillation as "the first intervention to move the mean",
+resting on three single runs (beta = 1, 10, pure) that ordered monotonically on
+both g_a and g_t0. The sweep and its replication kill that claim.
+
+### The sweep (beta = 20, 30, 50; 10 checkpoints each, seed 100)
+
+| beta | g_a | g_t0 |
+|---|---|---|
+| 0 (MLE) | −0.0259 | −0.0696 |
+| 1 | −0.0114 | −0.0624 |
+| 10 | +0.0137 | −0.0317 |
+| **20** | +0.0342 | **−0.0836** |
+| **30** | +0.0231 | **+0.0159** |
+| 50 | +0.0146 | +0.0216 |
+| pure | +0.0461 | +0.0265 |
+
+The monotonicity already fails at beta = 20, which is worse than beta = 1,
+beta = 10 AND plain MLE, despite a checkpoint sd of only 0.0057.
+
+### The replication (beta = 30, three fresh seeds)
+
+| seed | g_a | g_t0 |
+|---|---|---|
+| 100 (the sweep run) | +0.0231 | **+0.0159** |
+| 301 | −0.0645 | −0.0879 |
+| 302 | +0.0204 | −0.0823 |
+| 303 | −0.0645 | −0.1417 |
+
+Three fresh seeds give g_t0 mean **−0.1040, sd 0.0328**. The sweep's own run sits
+**+3.7 sd** away from that mean. It was a lucky draw, exactly as `b1k_amp0` was
+in Phase 22.
+
+### Against plain MLE, replicated on both sides
+
+| | beta = 30 (4 runs) | plain MLE (5 seeds) | diff | t | p |
+|---|---|---|---|---|---|
+| g_t0 | −0.0740 (sd 0.0656) | −0.0696 (sd 0.0358) | −0.0044 | −0.12 | 0.91 |
+| g_a | −0.0214 (sd 0.0498) | −0.0259 (sd 0.0225) | +0.0046 | +0.17 | 0.87 |
+
+**Distillation moves neither mean.** Phase 24 is retracted in full.
+
+### Why Phase 24 looked convincing
+
+Its defence was "three runs landing in the correct order on two correlated-but-
+distinct quantities is not a plausible accident". The arithmetic says otherwise:
+the spread across beta = 1/10/pure was 0.0889, while the between-seed sd at
+FIXED beta is 0.0328. Three draws from a distribution that wide land in
+monotone order by chance 1 time in 6, and there were two quantities to look at.
+The pattern was well inside what noise produces.
+
+### The lesson, now paid for three times
+
+Batch size (Phases 16 -> 20 -> 22 -> 25) and distillation (24 -> 30) both
+produced a confident single-run claim that replication destroyed. The invariant:
+**an intervention's effect must be compared against the between-SEED spread at
+fixed settings, measured, before it is believed.** Every arm in this project
+that was believed on one run per condition has since been retracted; no arm
+replicated across >= 3 seeds has been.
+
+For the paper this belongs in the appendix as a methodological finding, not a
+confession: with flow training, run-to-run variance at fixed hyperparameters is
+comparable to the effect sizes anyone will want to report, so single-run
+comparisons of training interventions are uninformative in this domain.
+
+### What survives
+
+- Selection and large batch control the SPREAD. Nothing tried controls the
+  CENTRE.
+- The systematic residual stands: g_a −0.0343 (t = −3.53, p = 0.006, 10 seeds),
+  g_t0 batch-dependent and pooled −0.039 (p = 0.057).
+- **Phase 27's multiplicative t0 correction is the only demonstrated remedy**,
+  and Phase 29 removed the st0-fixing alternative.
+- The direct-regression baseline (g_a +0.0080, g_t0 +0.0063) remains the best
+  calibrated route measured — and is now the ONLY route that beats plain MLE on
+  the centre. It has not been seed-replicated, and on this phase's evidence
+  that replication is mandatory before any claim is made for it.
