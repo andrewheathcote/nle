@@ -2985,3 +2985,54 @@ the flow's surface is skewed; or the sampler's exploration reaches regions
 neither optimiser start covered. A direct check -- running the EMC2 sampler on
 one simulated dataset and comparing its t0 posterior against the analytic's --
 would settle it and is the obvious next step.
+
+## Phase 34 — the analytic control PASSES: the st0=0 failure is the flow's
+
+The st0 = 0 flow cell (Phase 32) was run without an analytic control, breaking
+the rule Phase 13 exists to enforce. Running it now, same design, same priors,
+same sampler, N=400, 500 replicates, 313.1 min on 24 cores:
+
+| par | ANALYTIC std bias | coverage | FLOW std bias | coverage |
+|---|---|---|---|---|
+| v | +0.039 | 0.948 | +0.094 | 0.944 |
+| a | **+0.048** | 0.950 | **+2.233** | 0.156 |
+| **t0** | **+0.017** | **0.946** | **+3.144** | **0.000** |
+| Z | +0.018 | 0.970 | −0.621 | 0.868 |
+| SZ | −0.016 | 0.962 | −0.546 | 0.906 |
+| sv | +0.092 | 0.952 | +0.085 | 0.930 |
+
+**The analytic recovers every parameter essentially perfectly** — worst
+standardised bias 0.092, coverage 0.946–0.970 against nominal 0.95.
+
+So st0 = 0 inference is NOT intrinsically hard, the hard support boundary does
+NOT defeat the sampler, and the tight t0 posterior is not the problem.
+**The failure in Phase 32 is entirely the flow's.**
+
+### A single dataset had suggested otherwise, and was wrong
+
+`sbc/test_sampler_posterior.R` fitted one simulated dataset with both
+likelihoods and found the ANALYTIC missing t0 by 3.32 posterior sd, with the
+flow only 1.09 ms worse. That reading — that the failure might be intrinsic —
+does not survive 500 replicates: it was one unlucky draw from a distribution
+whose true mean bias is +0.0001. **n = 1 diagnostics set hypotheses, they do not
+settle them**, which is the same lesson as Phases 22, 30 and 32b in a fourth
+costume.
+
+### Consequences
+
+1. **Phase 32's headline stands**: the st0 = 0 flow is unusable and must not
+   ship. Phase 32b's correction to its *mechanism* also stands — the fault is
+   not the support boundary.
+2. **Phase 33's account is the live one**: the flow's error varies across
+   parameter space, distorting the likelihood SURFACE away from the truth, where
+   a local diagnostic like score bias cannot see it.
+3. **The (rt − t0) reparameterisation is now clearly warranted.** With the
+   analytic exonerated, the target is squarely the flow's representation, and
+   the strongest structural fix is to remove t0 from the conditioning set
+   entirely: train on the decision time d = rt − t0, so the network never sees
+   t0 and cannot distort the surface in the t0 direction. t0 then enters only
+   through an exact shift with unit Jacobian.
+4. It also sharpens the paper: an exact likelihood and an approximation that is
+   correct to ±0.02 log units over 87% of the mass give *completely* different
+   SBC verdicts on the same data. That is the thesis, with the cleanest control
+   in the project behind it.
