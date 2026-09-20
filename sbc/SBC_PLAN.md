@@ -2847,3 +2847,75 @@ A flow intended to support inference about a boundary parameter needs the
 boundary built in, not learned: a hard floor at t0 in the evaluator, an
 explicitly truncated base distribution, or a parameterisation in (rt − t0).
 None of these is tested, and the last is the natural next experiment.
+
+## Phase 32b — CORRECTION to Phase 32's mechanism
+
+Phase 32 asserted that the st0 = 0 failure works through the support boundary:
+that a proposed t0 above an observed rt costs infinity under the analytic but
+only ~10 log units under the flow, so t0 drifts up. **That specific mechanism is
+not supported, and the claim was made without testing it.**
+
+### The test it fails
+
+`sbc/test_t0_truncation.R` simulates a dataset at a known truth, then profiles
+the log-likelihood in t0 with everything else held at the truth, for the
+analytic, the flow, and the flow with the true support enforced
+(`ll = -Inf` when `t0 > rt`). Peak displacement from the truth, ms, 8 draws:
+
+| flow | analytic | flow | flow + truncation |
+|---|---|---|---|
+| `cap256w_c4` (st0 > 0) | +0.87 | +1.18 | **+1.18** |
+| `z0_s503_e282` (st0 = 0) | +0.69 | +0.86 | **+0.86** |
+
+Truncation changes nothing for either flow, because **the profile maximum sits
+comfortably below min(rt) and the constraint never binds**. And the st0 = 0
+flow's marginal t0 displacement is +0.86 ms — against an SBC bias of +0.0414 in
+log units, which at t0 = 0.3 s is **+12.6 ms**. The marginal profile is off by a
+fifteenth of the SBC effect.
+
+Note also that the analytic itself carries +0.69 to +0.87 ms of finite-sample
+MLE bias here, so the flow's *excess* over the analytic is only ~0.2-0.3 ms.
+
+### Not a wiring bug either
+
+The EMC2 bundle path (`ddm_ens_eval_trials_cpp` via `.theta_DDMnn7`) and the R
+port agree to **1.1e-14** on matched theta and rt. The SBC result is real.
+
+### What is actually established
+
+1. The st0 = 0 flow fails SBC catastrophically: t0 +3.144 with coverage 0.000,
+   a +2.233, Z -0.621, SZ -0.546, while v and sv are clean.
+2. The training target is exact (0.000000 against WienR over 500 rows).
+3. The flow fits 87% of the probability mass to +-0.02 log units.
+4. The flow assigns finite log-density where the analytic is -Inf (log f ~ -9.5
+   at 99% of t0), with total mass below t0 of 9e-6 for the 8-parameter flow.
+5. **The failure is a JOINT displacement of (t0, a, Z, SZ), not a marginal t0
+   problem.** Holding the others at the truth removes almost all of it. The
+   four parameters that move are exactly those the Fisher information couples
+   (t0-SZ +0.86, a-Z -0.44); v and sv, which are uncoupled, are unaffected.
+
+The mechanism is therefore in the joint geometry, and remains **unidentified**.
+A profile in one parameter cannot see it; the next diagnostic is a full MLE over
+all parameters, flow versus analytic, on matched simulated data.
+
+### The lesson, which is the same one as Phases 22 and 30
+
+A plausible mechanism was written up as established on the strength of a
+consistent story rather than a test, one commit after the test would have taken
+ten minutes. The prior two retractions were about believing single runs; this
+one is about believing an explanation. **Register the prediction a mechanism
+makes, then test it, before writing it up as the finding.**
+
+### Status of the two proposed fixes
+
+- **Enforcing the support** (`ll = -Inf` when `t0 > rt`) is correct -- it is a
+  true property of the model, costs nothing, and removes a class of failure that
+  can occur. But it is measured here NOT to bind at the likelihood maximum for
+  either flow, so it is insurance rather than a remedy. Worth adding to the
+  evaluator regardless.
+- **Parameterising in (rt - t0)** is untouched by this correction and is now the
+  more promising route. Modelling the decision time d = rt - t0 puts the
+  boundary at a FIXED location, and under the flow's log transform the boundary
+  maps to log d -> -Inf, which a spline over the real line represents naturally
+  rather than having to learn. t0 then enters only through an exact shift with
+  unit Jacobian. Untested.
