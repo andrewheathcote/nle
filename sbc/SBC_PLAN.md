@@ -2919,3 +2919,69 @@ makes, then test it, before writing it up as the finding.**
   maps to log d -> -Inf, which a spline over the real line represents naturally
   rather than having to learn. t0 then enters only through an exact shift with
   unit Jacobian. Untested.
+
+## Phase 33 — the distortion is GLOBAL, and score bias cannot see it
+
+Phase 32b left the st0 = 0 failure unexplained: SBC gives t0 +3.144 with
+coverage 0.000, but neither a t0 profile nor a joint MLE started at the truth
+reproduces it. Two further diagnostics, both on `z0_s503_e282`.
+
+### Joint MLE over all free parameters, started at the truth (40 draws, N=400)
+
+| par | analytic | flow | flow − analytic | t |
+|---|---|---|---|---|
+| v | +0.01021 | −0.00735 | −0.01755 | −1.43 |
+| a | +0.00060 | +0.00531 | **+0.00471** | **2.99** |
+| t0 | +0.00570 | +0.00694 | +0.00124 | 0.51 |
+| Z | +0.00086 | +0.01050 | **+0.00964** | **2.77** |
+| SZ | +0.07621 | +0.16903 | +0.09282 | 1.26 |
+| sv | −0.00184 | −0.03129 | −0.02945 | −0.41 |
+
+t0 excess is **+0.37 ms** against an SBC bias of +12.6 ms. `a` and `Z` are
+significantly displaced but small. The likelihood surface AT the truth is
+essentially fine.
+
+### Multi-start: is there a better optimum elsewhere? (12 draws x 13 starts)
+
+Starts dispersed at 2x the prior sd:
+
+| | t0 displacement (ms) | |
+|---|---|---|
+| started at the truth | +2.83 | |
+| best of 13 starts | **+4.42** | nll better by **0.855** on average |
+
+**There are better-scoring optima away from the truth, and they sit at higher
+t0.** A truth-started optimiser never visits them; MCMC does. This closes part
+of the gap between the MLE tests and SBC, and points at the real character of
+the fault.
+
+### What this establishes
+
+**The flow's defect is not local to the truth — it is in how its error varies
+ACROSS parameter space.** Near any given theta the density is excellent (87% of
+mass to +-0.02 log units, Phase 32). But log f̂(rt | theta) as a function of
+theta for FIXED data is distorted, creating spurious likelihood gains at
+displaced parameter values.
+
+**This is a limit of the score-bias diagnostic, and it belongs in the paper.**
+g = d/dtheta E_true[log f̂] is evaluated AT the truth: it is a local derivative,
+and a small g at every theta does not constrain the shape of the likelihood
+surface between thetas. The posterior is a global object. So:
+
+- score bias is **necessary but not sufficient**;
+- it ranks checkpoints within an architecture (rho = -0.989) because they share
+  a surface shape, and fails across architectures because they do not;
+- **only SBC probes the surface the posterior actually explores.**
+
+That also explains the pattern in Phase 9b — g_a is a smooth function of
+(v, sv, st0, t0) with joint R^2 = 0.946 and essentially no dependence on `a`
+itself. The error was always a property of WHERE you are in the space.
+
+### Still unaccounted for
+
+Multi-start recovers +4.42 ms of the SBC's +12.6 ms. The remainder is not yet
+explained. Candidates: the posterior mean/median differs from any mode because
+the flow's surface is skewed; or the sampler's exploration reaches regions
+neither optimiser start covered. A direct check -- running the EMC2 sampler on
+one simulated dataset and comparing its t0 posterior against the analytic's --
+would settle it and is the obvious next step.
