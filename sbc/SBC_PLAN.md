@@ -2756,3 +2756,94 @@ exactly the regime where regression wins. The build now running trains flows;
 a regression arm on the same data costs ~2 h against the flows' ~10 h and
 should be run alongside, with the speed of both measured. Deciding between them
 on calibration AND speed is cheap, and the flow is not the obvious default.
+
+## Phase 32 — st0 = 0 FAILS catastrophically, and finally explains t0
+
+tux26, 24 cores, N=400, 500 replicates, 173.8 min. Flow `z0_s503_e282`, selected
+from 90 checkpoints across 3 seeds on total |g| = 0.064.
+
+| par | coverage | mean bias | std bias | |
+|---|---|---|---|---|
+| v | 0.944 | +0.0087 | +0.094 | |
+| **a** | **0.156** | +0.0600 | **+2.233** | FAILS |
+| **t0** | **0.000** | +0.0414 | **+3.144** | FAILS |
+| **Z** | 0.868 | −0.0188 | **−0.621** | FAILS |
+| **SZ** | 0.906 | −0.0794 | **−0.546** | FAILS |
+| sv | 0.930 | +0.0134 | +0.085 | |
+
+**t0 coverage is 0.000** — the truth was outside the credible interval in all 500
+replicates. That is not a calibration problem, it is a broken likelihood.
+
+### It is not the data, and not the bulk of the density
+
+The training target is EXACT: stored `ll` against WienR at st0 = 0, 500 sampled
+rows, mean / median / max error all **0.000000**.
+
+The flow is excellent where the mass is. Error against the analytic, by distance
+past t0, for one SBC draw:
+
+| rt − t0 (s) | mean err | max \|err\| | true mass |
+|---|---|---|---|
+| 0.001–0.003 | **+20.300** | 41.8 | **0.00000** |
+| 0.003–0.010 | +1.602 | 6.58 | 0.00043 |
+| 0.010–0.030 | +0.077 | 0.61 | 0.05345 |
+| 0.030–0.100 | −0.014 | 0.047 | 0.39802 |
+| 0.100–0.300 | +0.017 | 0.043 | 0.47097 |
+| 0.300–1.000 | −0.115 | 0.378 | 0.11707 |
+| 1.000–3.000 | +2.905 | 9.04 | 0.00043 |
+
+**87% of the mass is fitted to ±0.02 log units.** The error is confined to the
+first few milliseconds past t0, where the true mass rounds to zero.
+
+### The mechanism, at last
+
+With st0 = 0 the support boundary is hard: the analytic density is **exactly
+zero** below t0, so log f = −Inf. A spline flow over log rt has positive density
+everywhere and cannot produce −Inf. Measured on the selected flow, at the true
+t0 = 0.2876 s:
+
+| rt | flow log f | analytic |
+|---|---|---|
+| 0.2013 (70% of t0) | −10.70 | −Inf |
+| 0.2848 (99% of t0) | −9.41 | −Inf |
+| 0.2934 (102%) | −4.99 | finite |
+
+Total flow mass below the true t0 is **0.0000** — so in MASS terms the flow is
+right to within rounding.
+
+**But inference is driven by log-density, not by mass.** When the sampler
+proposes a t0 above some observed rt, the analytic penalty is infinite and t0 is
+pinned below min(rt). The flow's penalty is about 10 log units per offending
+trial — finite, and easily outweighed by a better fit to the other 399. So t0 is
+pushed up, `a` compensates, and Z/SZ follow. Exactly the observed sign and
+ordering.
+
+### What this settles
+
+1. **The t0 bias is a hard-boundary problem, not a trade-off.** Phase 29
+   refuted the t0/st0 posterior trade-off; this supplies the replacement. In the
+   8-parameter model st0 > 0 makes the true density genuinely smooth at the
+   onset, so the flow's smoothness is not a mis-specification and the bias stays
+   survivable (+0.319). Remove the smear and the same flow becomes unusable.
+
+2. **"Train it without st0" is not a fix — it is the worst case.** The st0 = 0
+   artefact must not ship. Phase 29 already removed fixing st0 at evaluation
+   time; this removes retraining without it.
+
+3. **A density can be correct to 1e-11 in mass and still destroy a boundary
+   parameter.** Held-out likelihood, MSE and total-mass checks all pass this
+   flow. Only SBC catches it. This is the thesis of the paper in its most
+   extreme form, and it is worth leading with.
+
+4. **It predicts where else this bites**: any parameter defining a support
+   boundary, in any model, approximated by a density with unbounded support.
+   The RDM's clean t0 is now the anomaly needing explanation, not the DDM's
+   failure — its edge is gentler and its race assembly carries survivor
+   information, but neither has been tested.
+
+### Consequence
+
+A flow intended to support inference about a boundary parameter needs the
+boundary built in, not learned: a hard floor at t0 in the evaluator, an
+explicitly truncated base distribution, or a parameterisation in (rt − t0).
+None of these is tested, and the last is the natural next experiment.

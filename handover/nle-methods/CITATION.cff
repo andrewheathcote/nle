@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: "ABC: calibration-grade neural likelihoods for evidence accumulation models"
+message: "If you use this software or its artefacts, please cite it."
+type: software
+authors:
+  - family-names: Heathcote
+    given-names: Andrew
+    affiliation: "University of Amsterdam"
+  - family-names: Wuth
+    given-names: Julian
+repository-code: "https://github.com/ampl-psych/ABC"
+license: GPL-3.0
+abstract: >-
+  Methods and diagnostics for building neural likelihood approximations of
+  evidence accumulation models that are calibrated, not merely accurate
+  pointwise. Includes the score-bias diagnostic and its analytic control, a
+  simulation-based calibration harness, and validated flow artefacts for the
+  DDM and RDM usable from EMC2.
+keywords:
+  - simulation-based inference
+  - neural likelihood estimation
+  - normalizing flows
+  - simulation-based calibration
+  - evidence accumulation models
+  - diffusion decision model

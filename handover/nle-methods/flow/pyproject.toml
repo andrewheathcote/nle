@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flow"
+version = "0.1.0"
+description = "Normalizing-flow likelihood approximation for evidence accumulation models (LNR, RDM, DDM)."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { file = "../LICENSE" }
+authors = [
+    { name = "Julian Wuth", email = "julian.wuth@gmail.com" },
+]
+dependencies = [
+    "distrax==0.1.5",
+    "flax==0.10.6",
+    "jax==0.5.3",
+    "matplotlib==3.10.8",
+    "numpy==2.2.6",
+    "optax==0.2.8",
+    "scipy==1.15.3",
+    "tqdm==4.67.3",
+    "orbax-checkpoint<0.11.2",
+    "pyarrow",
+    "scikit-learn",
+    "pandas"
+]
+
+[project.optional-dependencies]
+notebooks = ["jupytext", "ipykernel"]
+test = ["pytest"]
+gpu = ["jax[cuda12]==0.5.3"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flow"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning:tensorflow_probability.*",
+    "ignore:jax.core.Var is deprecated:DeprecationWarning:distrax.*",
+]
