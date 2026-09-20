@@ -54,6 +54,11 @@ CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
 # 0.01, since log(0) = -Inf -- so this needs its own training data and its own
 # network. See handover/ST0_ZERO_RETRAIN.md.
 CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
+# Decision-time build: train on d = rt - t0 and drop t0 from the CONTEXT
+# entirely. The network never sees t0, so it cannot distort the likelihood
+# surface in the t0 direction (Phase 33); t0 re-enters only as an exact shift
+# with unit Jacobian, so the stored `ll` is already the right target for d.
+CONTEXT_DECTIME = ["v", "a", "s", "Z", "SZ", "sv"]
 TARGET = "ll"
 RESPONSE = "R"
 
@@ -98,6 +103,10 @@ def main():
                          "only). Raise it to study within-run variation or to "
                          "average weights across late epochs; a [256,128] "
                          "checkpoint is ~1.5 MB.")
+    ap.add_argument("--decision-time", action="store_true",
+                    help="train on d = rt - t0 with t0 dropped from the "
+                         "context; requires a dataset carrying a `d` column "
+                         "(flow/scripts/make_dectime_data.py)")
     ap.add_argument("--st0-zero", action="store_true",
                     help="7-parameter build with st0 absent (see "
                          "handover/ST0_ZERO_RETRAIN.md); requires training data "
@@ -168,10 +177,12 @@ def main():
 
     # (SZ0, SZ, SZ1) swaps which columns condition the flow; everything
     # downstream is driven by this list, so nothing else needs to change.
-    if args.st0_zero and args.triple:
-        raise SystemExit("--st0-zero and --triple are mutually exclusive")
-    CTX = (CONTEXT_ST0ZERO if args.st0_zero
+    if sum([bool(args.st0_zero), bool(args.triple), bool(args.decision_time)]) > 1:
+        raise SystemExit("--st0-zero, --triple and --decision-time are mutually exclusive")
+    CTX = (CONTEXT_DECTIME if args.decision_time
+           else CONTEXT_ST0ZERO if args.st0_zero
            else CONTEXT_TRIPLE if args.triple else CONTEXT)
+    DATA_COL = "d" if args.decision_time else DATA
 
     out_base = REPO_ROOT / "results" / "model_states" / f"{args.tag}_budget"
     flow_dir = out_base / "DDM_flow"
@@ -265,7 +276,7 @@ def main():
         tnames = [TARGET] + [f"score_{p}" for p in CTX]
     elif args.grid_data is not None:
         tnames = [TARGET, "param_id"]
-    loader_args = dict(data_names=DATA, context_names=CTX + [RESPONSE],
+    loader_args = dict(data_names=DATA_COL, context_names=CTX + [RESPONSE],
                        target_names=tnames, response_name=RESPONSE,
                        standardize=True, geometry=args.geometry)
     # The score penalty needs both trials of a parameter draw in the same
@@ -353,7 +364,7 @@ def main():
                     float(train_loader._scaler.scale_[CTX.index("t0")]),
                     float(train_loader._scaler.mean_[CTX.index("st0")]),
                     float(train_loader._scaler.scale_[CTX.index("st0")]))),
-                data_names=DATA, context_names=CTX + [RESPONSE],
+                data_names=DATA_COL, context_names=CTX + [RESPONSE],
                 target_names=TARGET, response_name=RESPONSE,
                 checkpoint_path=str(flow_dir), early_stopping=False)
     print(f"[{time.strftime('%H:%M:%S')}] training done in "
