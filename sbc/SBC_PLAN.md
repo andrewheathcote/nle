@@ -3036,3 +3036,69 @@ costume.
    correct to ±0.02 log units over 87% of the mass give *completely* different
    SBC verdicts on the same data. That is the thesis, with the cleanest control
    in the project behind it.
+
+## Phase 35 — decision-time (rt − t0) ALSO fails, and shows t0 is a victim
+
+tux26, 24 cores, N=400, 500 replicates, 287.2 min. Flow `dt_s703_e167`, selected
+from 90 checkpoints across 3 seeds on total |g| = 0.0240 — the best screening
+number of any DDM build in the project, with g_t0 = −0.0034 against the shipped
+flow's −0.0620.
+
+The design, priors, N and replicate count match Phase 34's analytic cell exactly,
+so that cell is the control and no second run was needed.
+
+| model | v | a | t0 | Z | SZ | sv |
+|---|---|---|---|---|---|---|
+| **analytic (control)** | +0.039 | +0.048 | **+0.017** | +0.018 | −0.016 | +0.092 |
+| st0 = 0 flow | +0.094 | +2.233 | +3.144 | −0.621 | −0.546 | +0.085 |
+| **decision-time flow** | +0.318 | **+1.665** | **+2.490** | **−0.877** | **−0.850** | −0.199 |
+
+Coverage for t0: analytic 0.946, st0=0 0.000, decision-time **0.002**.
+
+### The hypothesis, and what actually happened
+
+Dropping t0 from the conditioning set was meant to be structural: the network
+never sees t0, so it *cannot* distort the likelihood surface in the t0
+direction, and t0 re-enters only as an exact shift with unit Jacobian
+(golden-validated at 1.0e-11; the wrapper agrees with the R port to 9.8e-15).
+
+**t0 is still displaced by +2.490 with coverage 0.002.** Only modestly better
+than the st0=0 build, and `Z`, `SZ` and `v` are all WORSE.
+
+### What that establishes, and it is the useful part
+
+**t0's displacement cannot be caused by the flow's representation of t0,
+because in this build the flow has no representation of t0 at all.** It must
+arrive through the other parameters: the flow's error in the decision-time
+density displaces (a, Z, SZ), and t0 follows through the Fisher coupling
+(t0-SZ +0.86, a-Z −0.44).
+
+So **t0 is the victim, not the cause** — the parameter where a distortion
+originating elsewhere surfaces most visibly, because its posterior is 3-20x
+tighter than the others and it is coupled to all of them.
+
+That reframes the whole t0 investigation, including for the SHIPPED
+8-parameter flow: its +0.319 is very likely secondary too. Chasing t0
+representations -- the st0/t0 trade-off (Phase 29), the support boundary
+(Phase 32b), the conditioning set (here) -- has now failed three times, and
+this phase explains why all three were looking in the wrong place.
+
+### Why the screening number was so misleading
+
+`dt_s703_e167` had the best total |g| of any DDM checkpoint measured (0.0240,
+with g_t0 = −0.0034) and failed SBC catastrophically. This is Phase 33's point
+in its sharpest form: **score bias is a derivative at the truth and says nothing
+about the likelihood surface the posterior explores.** Screening on it selects
+confidently among models that may all be unusable.
+
+### Where this leaves the DDM
+
+- The shipped `cap256w_c4` (st0 estimated) remains the only DDM artefact that
+  passes SBC, with the Phase 27 multiplicative correction for t0.
+- Three reduced-parameterisation builds -- st0 fixed, st0 = 0, decision-time --
+  have now all failed. **None should ship.**
+- The remaining hypothesis is that the fault is accuracy in the *shape* of the
+  density as a function of (a, Z, SZ), not anything about t0. Testing it means
+  measuring surface distortion directly rather than at the truth: e.g. the
+  flow-vs-analytic log-likelihood difference profiled over the coupled
+  parameters on FIXED data, which is cheap and has never been done.

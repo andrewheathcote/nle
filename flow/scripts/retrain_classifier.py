@@ -28,6 +28,16 @@ from flow.training import load_obj
 
 REPO = Path(__file__).resolve().parents[2]
 CONTEXT = ["v", "a", "t0", "s", "Z", "SZ", "sv", "st0"]
+# st0 = 0 build. P(R | theta) is EXACTLY independent of st0 -- verified
+# analytically: P(upper) varies by 1.5e-11 across st0 in [0.001, 0.4], because
+# st0 shifts WHEN a response occurs, not WHICH boundary is hit. So the existing
+# choice-probability targets are valid unchanged; only the st0 input column is
+# dropped, and each theta_7 still maps to a unique p_R2.
+CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
+# Decision-time build: P(R | theta) depends on neither st0 NOR t0 -- both shift
+# WHEN a response occurs, not WHICH boundary is hit -- so the same targets serve
+# a six-input classifier with both dropped.
+CONTEXT_DECTIME = ["v", "a", "s", "Z", "SZ", "sv"]
 # winning Optuna trial (120 trials, objective = mean |P_hat - P_true|)
 # Two configurations from the 120-trial study. `big` minimises error; `small`
 # is the SMALLEST net still comfortably inside requirement. The requirement is
@@ -44,7 +54,7 @@ CONFIGS = {
 }
 
 
-def load(split, suffix=""):
+def load(split, suffix="", ctx=None):
     """`suffix="_grad"` selects the CORRECTED targets.
 
     The original data/choice_prob/*.parquet was generated without the
@@ -57,12 +67,13 @@ def load(split, suffix=""):
     """
     t = pq.read_table(REPO / "data" / "choice_prob" /
                       f"{split}{suffix}.parquet").to_pandas()
-    return t[CONTEXT].to_numpy(np.float32), t["p_R2"].to_numpy(np.float32)
+    return (t[ctx or CONTEXT].to_numpy(np.float32),
+            t["p_R2"].to_numpy(np.float32))
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tags", required=True)
+    ap.add_argument("--tags", default="", help="exports to splice into; unused with --out-json")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--config", default="big", choices=list(CONFIGS))
     ap.add_argument("--suffix", default="c2")
@@ -70,17 +81,38 @@ def main():
                     help="'_grad' = corrected targets (default); '' = the "
                          "original, s-unscaled ones, kept only to reproduce "
                          "the c2/c3 runs")
+    ap.add_argument("--decision-time", action="store_true",
+                    help="6-parameter build: drop st0 AND t0")
+    ap.add_argument("--st0-zero", action="store_true",
+                    help="7-parameter build: drop st0 from the classifier input")
+    ap.add_argument("--scaler-from", default="large",
+                    help="budget whose flow scaler the classifier must match; "
+                         "the export asserts the two agree")
+    ap.add_argument("--out-json", default=None,
+                    help="write the trained classifier to this JSON instead of "
+                         "splicing into exports (needed when no export exists "
+                         "yet, as for a fresh st0=0 build)")
     a = ap.parse_args()
 
-    Xtr, ytr = load("train", a.data_suffix); Xva, yva = load("val", a.data_suffix)
+    CTX = (CONTEXT_DECTIME if a.decision_time
+           else CONTEXT_ST0ZERO if a.st0_zero else CONTEXT)
+    Xtr, ytr = load("train", a.data_suffix, CTX)
+    Xva, yva = load("val", a.data_suffix, CTX)
     print(f"targets: data/choice_prob/*{a.data_suffix}.parquet", flush=True)
     # the classifier must standardise exactly as the flow does, or the export's
     # flow/classifier scaler assertion fails
-    sc = load_obj(str(REPO / "results/model_states/large_budget/DDM_flow/train_loader.pkl"))._scaler
+    _p = REPO / "results/model_states" / f"{a.scaler_from}_budget"
+    _sc_path = _p / "DDM_flow" / "train_loader.pkl"
+    if not _sc_path.exists():
+        _sc_path = _p / "train_loader.pkl"      # checkpointer wipes DDM_flow
+    sc = load_obj(str(_sc_path))._scaler
+    assert sc.mean_.shape[0] == len(CTX), (
+        f"scaler has {sc.mean_.shape[0]} entries but context has {len(CTX)}; "
+        f"--scaler-from {a.scaler_from} is the wrong build")
     mu, sd = sc.mean_.astype(np.float32), sc.scale_.astype(np.float32)
 
     BEST = CONFIGS[a.config]
-    dims = [len(CONTEXT)] + [max(8, BEST["width"] // (2 ** i) if BEST["taper"]
+    dims = [len(CTX)] + [max(8, BEST["width"] // (2 ** i) if BEST["taper"]
                                  else BEST["width"]) for i in range(BEST["depth"])]
     print(f"config={a.config} dims={dims}", flush=True)
     clf = make_choice_classifier(rngs=nnx.Rngs(default=jax.random.key(a.seed)), dims=dims)
@@ -122,6 +154,13 @@ def main():
     # splice into each export, matching the stored layout: layers = [{W, b}, ...]
     layers = [{"W": np.asarray(l.kernel.value).tolist(),
                "b": np.asarray(l.bias.value).tolist()} for l in clf.layers]
+    if a.out_json:
+        json.dump({"classifier_mlp": {"activation": "gelu", "layers": layers},
+                   "context_names": CTX,
+                   "checkpoint_step_classifier": f"tuned-{a.config}"},
+                  open(REPO / a.out_json, "w"))
+        print(f"wrote {a.out_json}", flush=True)
+        return
     for tag in a.tags.split(","):
         src = REPO / "port/export" / f"ddm_{tag}_weights.json"
         w = json.load(open(src))

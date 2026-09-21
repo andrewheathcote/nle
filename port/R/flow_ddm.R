@@ -67,7 +67,16 @@ ddm_load <- function(path) {
 }
 
 ddm_in_box <- function(fl, theta) {
-  all(theta >= fl$bounds_sampled$lower & theta <= fl$bounds_sampled$upper)
+  b <- fl$bounds_sampled
+  if (length(theta) != length(b$lower)) {
+    # dectime records the FULL bounds (7) while the flow context is 6; the
+    # recursive call passes the 6-vector, so drop t0 from the bounds too
+    j <- match("t0", fl$full_context_names)
+    if (!is.na(j) && length(theta) == length(b$lower) - 1L) {
+      b <- list(lower = b$lower[-j], upper = b$upper[-j])
+    }
+  }
+  all(theta >= b$lower & theta <= b$upper)
 }
 
 # Amortizable conditioning: one parameter vector -> spline knots for BOTH
@@ -118,6 +127,25 @@ ddm_condition <- function(fl, theta) {
 ddm_eval <- function(fl, theta, rt, R) {
   n <- length(rt)
   R <- rep_len(as.integer(R), n)
+  # Decision-time flows model d = rt - t0 and are NOT conditioned on t0. The
+  # port's public interface stays the full EMC2 vector, so t0 is stripped out
+  # here and used to shift rt. d(rt - t0)/drt = 1, so the Jacobian is one and
+  # log_pdf needs no correction. rt at or below t0 is outside the support.
+  if (identical(fl$context_encoding, "dectime")) {
+    j <- match("t0", fl$full_context_names)
+    stopifnot(!is.na(j), length(theta) == length(fl$full_context_names))
+    t0n <- exp(theta[j])
+    d <- rt - t0n
+    out <- ddm_eval(structure(modifyList(fl, list(context_encoding = "emc2")),
+                              class = class(fl)),
+                    theta[-j], pmax(d, .Machine$double.xmin), R)
+    bad <- !is.finite(d) | d <= 0
+    if (any(bad)) {
+      out$pdf[bad] <- 0; out$cdf[bad] <- 0
+      out$log_pdf[bad] <- -Inf; out$z[bad] <- NA_real_
+    }
+    return(out)
+  }
   if (!ddm_in_box(fl, theta)) {
     return(list(pdf = numeric(n), cdf = numeric(n),
                 log_pdf = rep(-Inf, n), p_R = rep(NA_real_, n),

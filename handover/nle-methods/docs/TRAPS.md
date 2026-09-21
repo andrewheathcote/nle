@@ -118,6 +118,19 @@ and always print which artefact is installed at the start of a run. A killed job
 left a test bundle in place and every subsequent local evaluation used the wrong
 model.
 
+**A frozen classifier whose input width no longer matches the flow.**
+Copying a classifier in at training time (`--classifier-from`) is convenient and
+silently wrong the moment the flow's context changes. It bit twice here, two
+days apart, on the 7- and 6-parameter builds. The exporter's width assertion
+caught it both times — **keep that assertion**; without it a mismatched head
+reaches SBC and shows up as a calibration failure with no obvious cause.
+
+Retraining the head is usually cheap and sometimes unnecessary: `P(R | θ)` is
+*exactly* independent of both `st0` and `t0` (measured spreads 1.5e-11 and 0.0),
+because they shift *when* a response occurs, not *which* boundary is hit. So the
+same choice-probability targets serve any of these builds with the irrelevant
+columns dropped — no new simulation.
+
 **Port-vs-reference guards calibrated on a small model.**
 A bigger network trips them on float32 accumulation. Report the error
 *distribution*, not the max — and when a checkpoint trips the gate, check

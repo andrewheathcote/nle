@@ -77,7 +77,11 @@ build_one <- function(tg) {
     return(structure(list(net = net), class = "ddm_regress"))
   }
   fl <- ddm_load(sprintf("port/export/ddm_%s_weights.json", tg))
-  if (identical(fl$context_encoding, "triple"))
+  # "dectime" flows need the t0 shift applied before evaluation, which the
+    # COMPILED port does not implement -- route them through the R port, as
+    # "triple" already is. Sending them to ddm_build would silently evaluate
+    # at rt instead of d.
+    if (fl$context_encoding %in% c("triple", "dectime"))
     structure(list(fl=fl), class="ddm_flow_rport") else EMC2:::ddm_build(fl)
 }
 ptrs <- lapply(tags, build_one); names(ptrs) <- tags

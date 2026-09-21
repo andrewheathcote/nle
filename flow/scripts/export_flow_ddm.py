@@ -54,6 +54,13 @@ CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
 # 0.01, since log(0) = -Inf -- so this needs its own training data and its own
 # network. See handover/ST0_ZERO_RETRAIN.md.
 CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
+# Decision-time build: the flow is conditioned on SIX parameters and models
+# d = rt - t0. t0 is NOT an input -- it enters only as a shift with unit
+# Jacobian, so the port must subtract it before evaluating. The export records
+# both the flow's own context and the full EMC2 parameter list, because the
+# port's public interface stays the full vector (as it does for "triple").
+CONTEXT_DECTIME = ["v", "a", "s", "Z", "SZ", "sv"]
+CONTEXT_DECTIME_FULL = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
 
 # --step exports a NAMED checkpoint instead of the best-val one. Needed to study
 # variation WITHIN a single training run: with one checkpoint per run there is
@@ -179,6 +186,8 @@ def CTX_SEL(args):
     """Context column list for this build. The exporter writes this into
     context_names and the R/C++ port builds theta from it, so it MUST match
     what training used -- a mismatch silently permutes the inputs."""
+    if getattr(args, "decision_time", False):
+        return CONTEXT_DECTIME
     if getattr(args, "st0_zero", False):
         return CONTEXT_ST0ZERO
     return CONTEXT_TRIPLE if args.triple else CONTEXT
@@ -194,6 +203,8 @@ def main():
                     help="export this checkpoint step instead of the best-val one")
     ap.add_argument("--tag-suffix", default="",
                     help="appended to the output tag, e.g. _e207")
+    ap.add_argument("--decision-time", action="store_true",
+                    help="flow trained with train_ddm.py --decision-time")
     ap.add_argument("--st0-zero", action="store_true",
                     help="7-parameter build with st0 absent (see "
                          "handover/ST0_ZERO_RETRAIN.md); requires training data "
@@ -275,9 +286,18 @@ def main():
     assert scaler_mean.shape[0] == len(CTX), "scaler covers params only"
 
     # --- golden grid ---
+    # Under --decision-time the port's public interface is the FULL parameter
+    # vector (t0 included) while the flow takes six columns and is evaluated at
+    # d = rt - t0. The d grid is shared across theta, so only the rt recorded in
+    # the golden CSV varies per parameter set: rt_ij = t0_i + d_j.
+    GOLD_CTX = CONTEXT_DECTIME_FULL if args.decision_time else CTX
+    bounds_gold = sampled_bounds(GOLD_CTX)   # for drawing the golden theta
+    # bounds_sampled must match context_names in LENGTH and ORDER: the port's
+    # in-box check indexes it by flow-context position, so writing the full
+    # 7-vector for a 6-column flow silently mis-pairs every bound.
     bounds_s = sampled_bounds(CTX)
     rng = np.random.default_rng(20260708)
-    lo = np.array(bounds_s["lower"]); hi = np.array(bounds_s["upper"])
+    lo = np.array(bounds_gold["lower"]); hi = np.array(bounds_gold["upper"])
     theta = rng.uniform(lo, hi, size=(args.n_param_sets, len(lo)))
     theta = theta.astype(np.float32).astype(np.float64)
     rt = np.geomspace(0.005, 20.0, 23).astype(np.float32).astype(np.float64)
@@ -289,6 +309,11 @@ def main():
     if args.triple:
         theta_flow = emc2_to_triple(theta)
         theta_clf = theta
+    if args.decision_time:
+        _j = GOLD_CTX.index("t0")
+        theta_flow = np.delete(theta, _j, axis=1)      # flow never sees t0
+        theta_clf = theta_flow                          # classifier matches the flow
+        assert theta_flow.shape[1] == len(CONTEXT_DECTIME)
 
     res = {R: ddm_eval_f64(theta_flow, rt, R, flow_layers, flow_norms, clf_layers,
                            scaler_mean, scaler_scale, num_bins,
@@ -371,7 +396,10 @@ def main():
         "exported": str(date.today()),
         "context_names": CTX,
         "classifier_context_names": CTX,
-        "context_encoding": ("st0zero" if args.st0_zero
+        **({"shift_param": "t0",
+            "full_context_names": CONTEXT_DECTIME_FULL} if args.decision_time else {}),
+        "context_encoding": ("dectime" if args.decision_time
+                             else "st0zero" if args.st0_zero
                              else "triple" if args.triple else "emc2"),
         "classifier_scaler": {"mean": clf_scaler_mean.tolist(),
                               "scale": clf_scaler_scale.tolist()},
@@ -380,6 +408,7 @@ def main():
         "response_coding": "flow context gets raw R (1.0 or 2.0) appended after "
                            "standardized params; classifier logit is for P(R=2)",
         "bounds_sampled": bounds_s,
+        **({"bounds_full": bounds_gold} if args.decision_time else {}),
         "bounds_natural": BOUNDS_NATURAL,
         "scaler": {"mean": scaler_mean.tolist(), "scale": scaler_scale.tolist()},
         "flow_mlp": {
@@ -408,15 +437,20 @@ def main():
 
     # --- golden CSV (long format, both responses) ---
     gpath = out_dir / f"{tag}_golden.csv"
-    ctx_cols = ",".join(CTX)
+    ctx_cols = ",".join(GOLD_CTX)
+    _t0j = GOLD_CTX.index("t0") if args.decision_time else None
     with open(gpath, "w") as f:
         f.write(f"param_id,{ctx_cols},R,rt,z,log_pdf_joint,cdf_defective,log_p_R\n")
         for i in range(theta.shape[0]):
             th = ",".join(f"{v:.17g}" for v in theta[i])
+            # under --decision-time the flow saw d_j; the CSV records the rt a
+            # caller would supply, rt = t0_i + d_j, so the port is tested on its
+            # own public interface
+            rt_i = (np.exp(theta[i, _t0j]) + rt) if args.decision_time else rt
             for R in (1, 2):
                 z, lp, cdfd, lpr, _ = res[R]
                 for j in range(len(rt)):
-                    f.write(f"{i + 1},{th},{R},{rt[j]:.17g},{z[i, j]:.17g},"
+                    f.write(f"{i + 1},{th},{R},{rt_i[j]:.17g},{z[i, j]:.17g},"
                             f"{lp[i, j]:.17g},{cdfd[i, j]:.17g},{lpr[i]:.17g}\n")
     n_rows = theta.shape[0] * 2 * len(rt)
     print(f"Wrote {gpath} ({n_rows} rows)")
