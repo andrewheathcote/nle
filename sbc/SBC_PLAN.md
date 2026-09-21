@@ -3102,3 +3102,67 @@ confidently among models that may all be unusable.
   measuring surface distortion directly rather than at the truth: e.g. the
   flow-vs-analytic log-likelihood difference profiled over the coupled
   parameters on FIXED data, which is cheap and has never been done.
+
+## Phase 36 — surface distortion measured directly: 1D profiles do not explain it either
+
+Phase 35 left the fault located "in the other parameters". This measures the
+likelihood SURFACE, which is what Phase 33 says score bias cannot see. For a
+FIXED simulated dataset,
+
+    Delta(theta) = log L_flow(data | theta) - log L_analytic(data | theta)
+
+A perfect approximation makes Delta constant. Any VARIATION tilts the surface
+and displaces the mode. Profiled over +-3 prior sd per parameter, others held at
+the truth, 12 datasets x 400 trials (`sbc/test_surface_distortion.R`).
+
+| par | shipped `cap256w_c4` — **PASSES** | decision-time `dt_s703_e167` — **FAILS** |
+|---|---|---|
+| | peak shift (sd) / tilt | peak shift (sd) / tilt |
+| v | +0.125 / 0.86 | +0.012 / 0.43 |
+| a | +0.000 / 20.89 | +0.025 / 18.40 |
+| t0 | +0.025 / 25.04 | +0.012 / 29.85 |
+| Z | −0.100 / 1.46 | −0.038 / 1.94 |
+| **SZ** | **−0.687** / 0.96 | **−0.762** / 1.07 |
+| **sv** | **−1.800** / 0.51 | **−1.350** / 0.78 |
+| st0 | +0.012 / 1.84 | — |
+
+### Two findings, one of them inconvenient
+
+**1. The distortion is concentrated in the variability parameters.** Both flows
+shift the profile peak of `sv` by 1.4-1.8 prior sd and `SZ` by ~0.7, while
+`v`, `a`, `t0` and `Z` move by under 0.13 sd. The flows fit the decision-time
+shape well and the variability structure poorly. That is consistent with
+Phase 35: t0's displacement arrives through its neighbours, and `SZ` is the
+parameter the Fisher information couples to t0 at +0.86.
+
+**2. It does not discriminate pass from fail.** The SHIPPED flow, which passes
+SBC, has a LARGER `sv` peak shift (−1.800) than the decision-time flow that
+fails (−1.350), and comparable shifts everywhere else. So a 1D profile with the
+other parameters held at the truth does not predict the SBC verdict.
+
+The likely reason the large sv/SZ shifts are survivable at all is that both are
+prior-dominated (per-trial sd 590 for sv), so the prior pins them however tilted
+the likelihood is. The shifts are real and inconsequential.
+
+### The honest state
+
+Three diagnostics have now failed to predict the SBC verdict: score bias at the
+truth (Phase 33), the joint MLE from the truth including multi-start (Phase 33),
+and 1D surface profiles from the truth (here). **Every one of them conditions on
+the truth in the other parameters.** The distortion that matters is genuinely
+multivariate — it lives in directions a one-at-a-time profile cannot reach.
+
+The next diagnostic that could work has to move several parameters at once:
+profile Delta along the leading eigenvectors of the Fisher information, or along
+the line joining the truth to the flow's own posterior mean from a fitted SBC
+replicate. Both are cheap; neither has been done.
+
+### For the paper
+
+This strengthens rather than weakens the thesis. It is one thing to say
+held-out likelihood does not predict calibration; it is another to show that
+score bias, joint MLE, multi-start optimisation and surface profiling all fail
+to predict it as well, while SBC separates a usable likelihood from an unusable
+one on the same data. **The practical recommendation is unchanged and now much
+better evidenced: run SBC, with its analytic control. Nothing cheaper
+substitutes.**
