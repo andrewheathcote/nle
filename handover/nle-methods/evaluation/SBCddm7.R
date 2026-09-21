@@ -5,12 +5,12 @@
 #
 # st0 is absent from the formula, so EMC2 sets it to its default -Inf on the
 # sampled scale and exp() gives st0 = 0 exactly. The flow is DDMnn7, defined in
-# handover/st0_zero/DDMnn7.R, which differs from DDMnn only in the theta builder
+# evaluation/DDMnn7.R, which differs from DDMnn only in the theta builder
 # (7 columns) and the bundle name.
 rm(list = ls())
 if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
 library(EMC2)
-source("handover/st0_zero/DDMnn7.R")
+source("evaluation/DDMnn7.R")
 setwd("sbc/nci"); source("sbc_specs.R"); setwd("../..")
 
 a <- commandArgs(trailingOnly = TRUE)

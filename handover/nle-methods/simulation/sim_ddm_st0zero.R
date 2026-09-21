@@ -8,7 +8,7 @@
 #   Rscript handover/st0_zero/sim_ddm_st0zero.R
 if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
 source("simulation/sim_functions.R")
-source("handover/st0_zero/designs_st0zero.R")
+source("simulation/designs_st0zero.R")
 
 TRAIN_SEED <- 3876        # same seed as the 8-parameter build
 N_PARAMS   <- 400000L

@@ -38,6 +38,13 @@ Rscript simulation/sim_ddm_st0zero.R  # 16e6 rows, st0 = 0 variant
 
 Check against `MANIFEST.sha256` to confirm your regeneration matches ours.
 
+Two directories are **created by running the pipeline** and are deliberately
+absent from a fresh clone: `data/` (by the commands above) and
+`results/model_states/` (by training). Everything else a script reads is
+included — the SBC prior draws the estimators condition on, the Fisher matrix,
+the exported flow weights under `port/export/`, and the SBC objects under
+`results/sbc/`. Verified by rehearsing this package in a clean directory.
+
 ## Quickstart: use an artefact
 
 ```r

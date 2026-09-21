@@ -11,7 +11,7 @@
 #   Rscript handover/st0_zero/sim_val_st0zero.R
 if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
 source("simulation/sim_functions.R")
-source("handover/st0_zero/designs_st0zero.R")
+source("simulation/designs_st0zero.R")
 
 VAL_SEED <- 1656      # same seed as the 8-parameter val set (simulation/sim_code.R)
 VAL_SIZE <- 10000
