@@ -22,11 +22,18 @@ des <- design(factors = list(subjects = 1, S = c("left", "right")),
               formula = list(v ~ 1, a ~ 1, t0 ~ 1, s ~ 1, Z ~ 1, SZ ~ 1, sv ~ 1),
               model = DDMnn7, use_matchfun = FALSE,
               constants = c(s = log(1)), verbose = FALSE)
-pmean <- c(v = 1, a = log(.8), t0 = log(.3), Z = qnorm(.5), sv = log(.1), SZ = qnorm(.2))
-psd   <- c(v = .15, a = .15, t0 = .1, Z = .05, sv = .15, SZ = .15)
+# prior() takes pmean POSITIONALLY, and sampled_pars() order follows the
+# formula, not the canonical DDM order -- writing the formula as (Z, SZ, sv)
+# rather than (Z, sv, SZ) silently transposes two priors. So look the values up
+# BY NAME in whatever order sampled_pars returns, and assert nothing is missing.
+PM <- c(v = 1, a = log(.8), t0 = log(.3), Z = qnorm(.5), sv = log(.1), SZ = qnorm(.2))
+PS <- c(v = .15, a = .15, t0 = .1, Z = .05, sv = .15, SZ = .15)
 sp <- names(sampled_pars(des))
 cat("sampled parameters:", paste(sp, collapse = ", "), "\n")
-stopifnot(identical(sp, names(pmean)))     # prior() takes pmean positionally
+stopifnot(all(sp %in% names(PM)), length(sp) == length(PM))
+pmean <- PM[sp]; psd <- PS[sp]
+cat("priors aligned to that order:",
+    paste(sprintf("%s=%.3f", names(pmean), pmean), collapse = " "), "\n")
 prior_in <- prior(des, type = "single", pmean = pmean, psd = psd)
 
 b <- readRDS(system.file("extdata", "flownn", "ddm_st0zero.rds",

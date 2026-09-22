@@ -3,7 +3,7 @@
 Three deliverables for Julian: a methods document, a clean OSF-ready code
 directory, and a separate directory backing the blind-alley appendix.
 
-Working notes live in `sbc/SBC_PLAN.md` (2087 lines, 25 phases). That file is
+Working notes live in `sbc/SBC_PLAN.md` (~3170 lines, 36 phases). That file is
 the audit trail, not a deliverable — everything below is distilled from it, and
 it should travel with the handover as provenance but not as reading.
 
@@ -243,14 +243,14 @@ long-and-winding-road/
   measurement-traps/         the analytic-control demos, H-sweep, cancellation split,
                              the s-scaling target comparison, context-order demo
   results/                   the SBC and score-bias .rds for the above
-  SBC_PLAN.md                the full audit trail, 25 phases
+  SBC_PLAN.md                the full audit trail, 36 phases
 ```
 
 ---
 
 ## 4. Prerequisites before handover
 
-Ordered by whether they block the document. Status as of 2026-09-18.
+Ordered by whether they block the document. Status as of 2026-09-22.
 
 **Blocking**
 
@@ -258,15 +258,15 @@ Ordered by whether they block the document. Status as of 2026-09-18.
    re-measured at H = 0.01 (analytic control on `a` now +0.00008, was +0.00187).
 2. ~~RDM SBC cell on the selected [64,32] flow.~~ **DONE, twice** — N = 100 and
    N = 400, 500 replicates each, both passing on every criterion (Phases 26, 28).
-3. **Settle the DDM artefact.** IN PROGRESS. The distillation beta sweep
-   (beta = 20/30/50, then 3 seeds at the selected beta) is running locally;
-   the direct-regression baseline is measured and is the best-calibrated route
-   tried (|g_a| + |g_t0| = 0.0143 against 0.0738 for the production flow).
-4. **The st0 = 0 build.** NEW, and now the most promising route: see
-   `handover/ST0_ZERO_RETRAIN.md`. Two SBC cells with st0 held fixed (0.05 and
-   0.01) are running on tux26 to test the mechanism with the existing artefact;
-   the 7-parameter retrain spec and its simulation scripts are written and
-   verified.
+3. ~~Settle the DDM artefact.~~ **SETTLED: ship `cap256w_c4`** (st0 estimated,
+   Phase 27 multiplicative t0 correction). It is the only DDM flow that passes
+   SBC. The direct-regression baseline remains the best-calibrated route on score
+   bias (|g_a| + |g_t0| = 0.0143 vs 0.0738), but score bias does not predict the
+   SBC verdict (Phases 33, 36), so that is not grounds to ship it unverified.
+4. ~~The st0 = 0 build.~~ **FAILED**, as did every reduced parameterisation:
+   st0 fixed (0.05, 0.01), st0 = 0 (Phases 32-34, analytic control passes so the
+   failure is the flow's), and decision-time rt - t0 (Phase 35). None ships.
+   All are documented in `long-and-winding-road/`.
 
 **Non-blocking but worth having**
 
@@ -275,11 +275,10 @@ Ordered by whether they block the document. Status as of 2026-09-18.
 6. Decide whether the direct-regression baseline is a section or an appendix
    item. It now has both g_a and g_t0 measured and wins on both, so it needs a
    considered answer rather than a footnote.
-7. One end-to-end rehearsal: fresh clone of the clean directory, follow
-   `README.md`, reach a validated artefact. **Still outstanding, and still the
-   only way to find the files we forgot** — the tux26 transfers this week
-   forgot `sbc_specs.R` (it lives outside the repo there) and left a stale
-   bundle installed on the laptop.
+7. ~~One end-to-end rehearsal.~~ **DONE** (commit b092a2b): a clean copy
+   surfaced 21 unresolved path references, all fixed; 0 unresolved references
+   and 0 parse failures across 104 files, and `score_bias_draws.R` reproduces
+   cap256w_c4's numbers inside the copy.
 
 **Corrections folded in since this plan was written**
 
@@ -291,3 +290,7 @@ Ordered by whether they block the document. Status as of 2026-09-18.
 - The export-gate failures are a seed effect, not a batch effect (Fisher
   p = 0.32).
 - LNR is out of scope; the paper covers DDM and RDM only.
+- `SBCddm7.R` (and its `_analytic`/`6` siblings) look priors up BY NAME:
+  `prior()` takes `pmean` positionally and `sampled_pars()` follows formula
+  order, so a (Z, SZ, sv) formula would transpose two priors. Checked
+  2026-09-22: every stored DDM SBC result has priors aligned to its columns.

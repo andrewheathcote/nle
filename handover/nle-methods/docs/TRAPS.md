@@ -118,6 +118,15 @@ and always print which artefact is installed at the start of a run. A killed job
 left a test bundle in place and every subsequent local evaluation used the wrong
 model.
 
+**Priors passed by position.**
+EMC2's `prior()` takes `pmean` and `psd` positionally, and `sampled_pars()`
+returns parameters in *formula* order, not the canonical model order. Writing
+the formula as `(Z, SZ, sv)` against a prior vector written `(Z, sv, SZ)`
+silently swaps two priors, and SBC then draws truths from one prior and fits
+under another. It shows up as a calibration failure on exactly those two
+parameters. Write the prior as a named vector and index it by
+`names(sampled_pars(design))`, as the `SBCddm*.R` drivers do.
+
 **A frozen classifier whose input width no longer matches the flow.**
 Copying a classifier in at training time (`--classifier-from`) is convenient and
 silently wrong the moment the flow's context changes. It bit twice here, two
