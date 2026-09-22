@@ -2759,6 +2759,15 @@ on calibration AND speed is cheap, and the flow is not the obvious default.
 
 ## Phase 32 — st0 = 0 FAILS catastrophically, and finally explains t0
 
+> **RETRACTED (Phase 37, 2026-09-23).** This cell simulated its data at
+> **st0 = 0.05**, not 0: `DDMnn`'s `p_types` default for st0 is −2.996, where the
+> analytic `DDM`'s is −Inf. The flow was trained at st0 = 0, so the verdict below
+> measures a model mismatch, not the flow. Phase 34's analytic control used the
+> `DDM` model and therefore simulated at st0 = 0, which is why it passed and
+> appeared to exonerate the pipeline. Corrected, the SAME flow PASSES. See
+> Phase 37 before reading any number in this section.
+
+
 tux26, 24 cores, N=400, 500 replicates, 173.8 min. Flow `z0_s503_e282`, selected
 from 90 checkpoints across 3 seeds on total |g| = 0.064.
 
@@ -2922,6 +2931,15 @@ makes, then test it, before writing it up as the finding.**
 
 ## Phase 33 — the distortion is GLOBAL, and score bias cannot see it
 
+> **RETRACTED (Phase 37, 2026-09-23).** This cell simulated its data at
+> **st0 = 0.05**, not 0: `DDMnn`'s `p_types` default for st0 is −2.996, where the
+> analytic `DDM`'s is −Inf. The flow was trained at st0 = 0, so the verdict below
+> measures a model mismatch, not the flow. Phase 34's analytic control used the
+> `DDM` model and therefore simulated at st0 = 0, which is why it passed and
+> appeared to exonerate the pipeline. Corrected, the SAME flow PASSES. See
+> Phase 37 before reading any number in this section.
+
+
 Phase 32b left the st0 = 0 failure unexplained: SBC gives t0 +3.144 with
 coverage 0.000, but neither a t0 profile nor a joint MLE started at the truth
 reproduces it. Two further diagnostics, both on `z0_s503_e282`.
@@ -2988,6 +3006,13 @@ would settle it and is the obvious next step.
 
 ## Phase 34 — the analytic control PASSES: the st0=0 failure is the flow's
 
+> **RETRACTED (Phase 37).** The control was not matched to the cell it was
+> controlling: it used the analytic `DDM` model, whose st0 default is 0, while
+> the flow cell's `DDMnn` default put st0 at 0.05. Both cells were run with st0
+> omitted from the formula, so they were fitting DIFFERENT data-generating
+> models. The conclusion "the failure is entirely the flow's" does not follow.
+
+
 The st0 = 0 flow cell (Phase 32) was run without an analytic control, breaking
 the rule Phase 13 exists to enforce. Running it now, same design, same priors,
 same sampler, N=400, 500 replicates, 313.1 min on 24 cores:
@@ -3038,6 +3063,15 @@ costume.
    in the project behind it.
 
 ## Phase 35 — decision-time (rt − t0) ALSO fails, and shows t0 is a victim
+
+> **RETRACTED (Phase 37, 2026-09-23).** This cell simulated its data at
+> **st0 = 0.05**, not 0: `DDMnn`'s `p_types` default for st0 is −2.996, where the
+> analytic `DDM`'s is −Inf. The flow was trained at st0 = 0, so the verdict below
+> measures a model mismatch, not the flow. Phase 34's analytic control used the
+> `DDM` model and therefore simulated at st0 = 0, which is why it passed and
+> appeared to exonerate the pipeline. Corrected, the SAME flow PASSES. See
+> Phase 37 before reading any number in this section.
+
 
 tux26, 24 cores, N=400, 500 replicates, 287.2 min. Flow `dt_s703_e167`, selected
 from 90 checkpoints across 3 seeds on total |g| = 0.0240 — the best screening
@@ -3105,6 +3139,15 @@ confidently among models that may all be unusable.
 
 ## Phase 36 — surface distortion measured directly: 1D profiles do not explain it either
 
+> **RETRACTED (Phase 37, 2026-09-23).** This cell simulated its data at
+> **st0 = 0.05**, not 0: `DDMnn`'s `p_types` default for st0 is −2.996, where the
+> analytic `DDM`'s is −Inf. The flow was trained at st0 = 0, so the verdict below
+> measures a model mismatch, not the flow. Phase 34's analytic control used the
+> `DDM` model and therefore simulated at st0 = 0, which is why it passed and
+> appeared to exonerate the pipeline. Corrected, the SAME flow PASSES. See
+> Phase 37 before reading any number in this section.
+
+
 Phase 35 left the fault located "in the other parameters". This measures the
 likelihood SURFACE, which is what Phase 33 says score bias cannot see. For a
 FIXED simulated dataset,
@@ -3166,3 +3209,114 @@ to predict it as well, while SBC separates a usable likelihood from an unusable
 one on the same data. **The practical recommendation is unchanged and now much
 better evidenced: run SBC, with its analytic control. Nothing cheaper
 substitutes.**
+
+## Phase 37 — the st0 = 0 and decision-time failures were a DESIGN DEFAULT, not the flows
+
+The largest retraction in the project, and it was found by a diagnostic that
+disagreed with SBC rather than by rechecking SBC.
+
+### How it was found
+
+A new diagnostic (`sbc/test_posterior_shift.R`) computes the flow's posterior
+directly on fixed data — importance-reweighting draws from a defensive mixture
+of the analytic and flow Laplace approximations, so the prior is included and
+every parameter moves together, which is what Phases 33 and 36 said the failing
+diagnostics could not do. Over 60 prior datasets it reports SBC's own statistic,
+`mean(posterior mean − truth) / sd`, for both likelihoods on the same data.
+
+| flow | predicted t0 | observed SBC t0 |
+|---|---|---|
+| `cap256w_c4` (passes SBC) | **+0.28** | **+0.319** |
+| `z0_s503_e282` (st0 = 0) | +0.12 to +0.20 | +3.144 |
+| `dt_s703_e167` (decision time) | +0.27 to +0.55 | +2.490 |
+
+It reproduces the shipped flow's SBC bias and contradicts the other two by a
+factor of 15. Unchanged by a 12-start search for distant modes, and unchanged by
+simulating with `WienR::rWDM` instead of grid inversion. The analytic control of
+the diagnostic reads ~0 (within ±0.13 at 60 datasets).
+
+Ruled out, in order: the laptop wrapper (EMC2's `DDMnn7` path and the R port
+agree to 1e-9 ACROSS theta, not merely at the truth); the bundle tux26 ran (its
+logs record `z0_s503` step 282, md5 identical to the laptop's); tux26's own
+compiled evaluator (identical log-densities to the laptop port, ~1e-12, on fixed
+inputs); and the sampler (a local 3-replicate cell reproduced the failure exactly
+— t0 +5.44, coverage 0.000 — in 3.2 minutes).
+
+### The cause
+
+**`DDMnn`'s `p_types` default for `st0` is −2.996 on the sampled scale (= 0.05 s).
+The analytic `DDM`'s is −Inf (= 0).** Omitting `st0` from a design formula
+therefore gives st0 = 0.05 under a flow design and st0 = 0 under the analytic
+design. Both st0 = 0 drivers omitted it, so:
+
+- the FLOW cells simulated data with a 50 ms uniform non-decision smear and
+  evaluated it with flows trained at st0 = 0;
+- the ANALYTIC control cell simulated at st0 = 0 and evaluated at st0 = 0, so it
+  passed — **the control was not matched to the cell it was controlling.**
+
+A second entry compounds it: `DDMnn`'s `bound$minmax` confines st0 to
+[0.01, 0.49] with no `exception`, where `DDM` carries `c(sv = 0, SZ = 0, st0 = 0)`.
+Simply naming `st0 = -Inf` in `constants` therefore makes every replicate fail
+out of bounds until the exception is added too.
+
+Four independent confirmations:
+
+| check | flow design (`DDMnn7`) | analytic design (`DDM`) |
+|---|---|---|
+| `mapped_pars(...)[1, "st0"]` | **0.05** | 0 |
+| simulated mean rt (20k trials) | 0.4755 | 0.4514 |
+| `WienR::rWDM` reference | 0.4744 at st0 = 0.05 | 0.4519 at st0 = 0 |
+| KS on 100k simulated trials | max abs ECDF−CDF **0.0020** at st0 = 0.05 (0.1453 at st0 = 0) | — |
+
+And the tell that generalises: on EMC2-simulated data from these cells, the
+**analytic** MLE is displaced +13.4 ms in t0, where matched data give +1.0 ms.
+The approximation and the exact likelihood were displaced TOGETHER, which no
+defect of the approximation can produce.
+
+### The corrected result
+
+Same flow, same design, same priors, N = 400, laptop, 12 replicates:
+
+| | v | a | t0 | Z | SZ | sv | t0 coverage |
+|---|---|---|---|---|---|---|---|
+| st0 omitted (as Phase 32 ran it) | −0.16 | **+2.13** | **+5.44** | −0.45 | −0.57 | +1.19 | **0.000** |
+| st0 named a constant | −0.161 | **+0.038** | **+0.346** | −0.032 | +0.068 | −0.003 | **1.000** |
+
+**The st0 = 0 flow passes.** At 12 replicates the standard error on the
+standardised bias is ~0.29, so this is a provisional pass pending a 500-replicate
+confirmation, but the catastrophic verdict is gone and the corrected numbers are
+in the same range as the shipped flow's.
+
+### What this retracts
+
+- **Phase 32** (st0 = 0 "fails catastrophically", "a density can be correct to
+  1e-11 in mass and still destroy a boundary parameter") — the failure was the
+  data, not the density.
+- **Phase 32b's** residue: the mechanism it corrected was never operative.
+- **Phase 33** ("the distortion is GLOBAL, and score bias cannot see it") — the
+  joint MLE and multi-start tests were run against the same mismatched cell.
+- **Phase 34** ("the failure is entirely the flow's") — unmatched control.
+- **Phase 35** (decision-time build "also fails", "t0 is a victim, not a cause")
+  — the `DDMnn6` driver omits st0 the same way. Re-run in progress.
+- **Phase 36**, in part: its comparison of a "passing" against a "failing" flow
+  compared two flows that both pass.
+
+What SURVIVES: Phase 29 (fixing st0 at evaluation time does not fix t0 — those
+cells name st0 explicitly), every 8-parameter DDM cell and every RDM cell (their
+formulas name all parameters, so no default is used), and the score-bias results,
+which never went through EMC2 designs.
+
+### The methodological lesson, which is the sharpest one yet
+
+Previous lessons were about believing single runs (Phases 22, 30) and believing
+untested mechanisms (32b). This one is about controls:
+
+**A control is only a control if it differs from the treatment in exactly one
+respect.** The analytic cell differed in two: the likelihood AND, invisibly, the
+simulated model. It therefore certified a pipeline that was broken, for two
+weeks, across four phases, while every cheap diagnostic that contradicted it was
+recorded as a failure of the diagnostic.
+
+The corollary is worth stating positively: **when a cheap diagnostic disagrees
+with an expensive one, do not assume the cheap one is wrong.** The posterior-shift
+estimator was right and cost one minute per flow against three to five hours.
