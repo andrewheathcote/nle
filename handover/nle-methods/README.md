@@ -21,7 +21,7 @@ are opposite, because what matters is **where** the error sits, not how big it i
 | `evaluation/` | **the diagnostics** — score bias, its analytic control, SBC harness |
 | `artefacts/` | the selected flows, as weights JSON and EMC2-loadable bundles |
 | `results/` | the SBC and score-bias objects backing every number we report |
-| `docs/` | the recipe, EMC2 integration, and the traps checklist |
+| `docs/` | the methods document, the recipe, EMC2 integration, and the traps checklist |
 
 ## Data is regenerated, not deposited
 
@@ -89,10 +89,10 @@ rested on one run per condition was later retracted; none replicated across
 |---|---|---|
 | `rdm_small.rds` | passes N=100 and N=400 | worst \|std bias\| 0.090 |
 | `ddm_cap256w_c4.rds` | passes N=100–800 | `t0` carries a +0.28% offset; see `docs/RECIPE.md` |
-| `ddm_st0zero.rds` | **pending** | 7-parameter st0=0 build; SBC in progress |
+| `ddm_st0zero.rds` | **FAILS** | 7-parameter st0=0 build; t0 coverage 0.000 — kept as a negative example, do not use |
 
 ## Provenance
 
-`SBC_PLAN.md` in the parent project is the full audit trail — 34 phases,
+`SBC_PLAN.md` in the parent project is the full audit trail — 36 phases,
 including the claims we retracted and why. It travels with this repository as
 provenance rather than as reading.
