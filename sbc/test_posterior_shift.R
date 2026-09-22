@@ -31,6 +31,14 @@ TAG <- if (length(a)) a[1] else "cap256w_c4"
 ND  <- if (length(a) > 1) as.integer(a[2]) else 48L
 M   <- if (length(a) > 2) as.integer(a[3]) else 2000L
 CORES <- as.integer(Sys.getenv("PS_CORES", "9"))
+# MULTISTART=k adds k optimiser starts dispersed at 2 prior sd for EACH
+# likelihood, and puts the best-scoring mode found into the proposal. With k = 0
+# both Laplace centres are found from the truth, which (Phase 33) never visits
+# the flow's better-scoring optima away from it.
+KMS <- as.integer(Sys.getenv("MULTISTART", "0"))
+# SIM=emc2 simulates with EMC2's own sampler (WienR::rWDM, exact), as SBC does,
+# instead of inverse-CDF on a 3000-point log grid.
+SIMEMC <- Sys.getenv("SIM", "grid") == "emc2"
 N <- as.integer(Sys.getenv("NTRIAL", "400"))
 fl <- ddm_load(sprintf("port/export/ddm_%s_weights.json", TAG))
 ST0EST <- "st0" %in% fl$context_names     # context, not context_encoding (Phase 36)
@@ -59,7 +67,17 @@ totll <- function(f, th, rt, R) {
 lprior <- function(x) sum(dnorm(x, PM, PS, log = TRUE))
 lpost  <- function(f, x, rt, R) lprior(x) + totll(f, full_th(x), rt, R)
 
+sim_emc <- function(th0) {
+  p <- data.frame(v = th0[["v"]], a = exp(th0[["a"]]), t0 = exp(th0[["t0"]]),
+                  z = pnorm(th0[["Z"]]), sv = exp(th0[["sv"]]),
+                  sz = 2 * pnorm(th0[["SZ"]]) * min(pnorm(th0[["Z"]]), 1 - pnorm(th0[["Z"]])),
+                  st0 = if (ST0EST) exp(th0[["st0"]]) else 0)
+  r <- WienR::rWDM(N, a = p$a, v = p$v, w = p$z, t0 = p$t0, sv = p$sv, method = "p-ars",
+                      sw = p$sz, st0 = p$st0)
+  list(rt = r$q, R = ifelse(r$response == "lower", 1L, 2L)) }
+
 sim <- function(th0) {
+  if (SIMEMC) return(sim_emc(th0))
   grid <- exp(th0[["t0"]]) + exp(seq(log(1e-4), log(20), length.out = 3000))
   dens <- lapply(1:2, function(R) exp(an_l(th0, grid, R)))
   dr <- c(diff(grid), tail(diff(grid), 1))
@@ -69,9 +87,12 @@ sim <- function(th0) {
                                 grid[which.max(cw >= runif(1))] })
   list(rt = rt, R = R) }
 
-laplace <- function(f, x0, y) {
+laplace <- function(f, x0, y, k = 0) {
   nlp <- function(x) { v <- -lpost(f, x, y$rt, y$R); if (is.finite(v)) v else 1e10 }
-  o <- optim(x0, nlp, method = "BFGS", control = list(maxit = 500, reltol = 1e-10))
+  fit <- function(s) optim(s, nlp, method = "BFGS", control = list(maxit = 500, reltol = 1e-10))
+  o <- fit(x0)
+  for (j in seq_len(k)) { oj <- fit(x0 + 2 * PS * rnorm(length(x0)))
+                          if (oj$value < o$value) o <- oj }
   H <- optimHess(o$par, nlp)
   e <- eigen((H + t(H)) / 2, symmetric = TRUE)
   # the prior alone bounds posterior precision below; floor there so a flat or
@@ -93,15 +114,19 @@ one <- function(i) {
   truth <- rnorm(length(FREE), PM, PS); names(truth) <- FREE
   y <- sim(full_th(truth))
   if (min(y$rt) <= exp(truth[["t0"]])) return(NULL)
-  la <- laplace(an_l, truth, y); lf <- laplace(fl_l, truth, y)
-  Sa <- 1.5^2 * la$S; Sf <- 1.5^2 * lf$S
-  X <- rbind(rmvn(M / 2, la$m, Sa), rmvn(M / 2, lf$m, Sf)); colnames(X) <- FREE
-  q1 <- dmvn(X, la$m, Sa); q2 <- dmvn(X, lf$m, Sf); qm <- pmax(q1, q2)
-  lq <- qm + log(0.5 * exp(q1 - qm) + 0.5 * exp(q2 - qm))
+  la <- laplace(an_l, truth, y, KMS); lf <- laplace(fl_l, truth, y, KMS)
+  comps <- list(la, lf)
+  if (KMS > 0) comps <- c(comps, list(laplace(fl_l, truth, y, 0)))   # keep the local flow mode too
+  K <- length(comps)
+  X <- do.call(rbind, lapply(comps, function(cc) rmvn(M %/% K, cc$m, 1.5^2 * cc$S)))
+  colnames(X) <- FREE
+  Q <- sapply(comps, function(cc) dmvn(X, cc$m, 1.5^2 * cc$S)); qm <- apply(Q, 1, max)
+  lq <- qm + log(rowMeans(exp(Q - qm)))
   pa <- apply(X, 1, function(x) lpost(an_l, x, y$rt, y$R))
   pf <- apply(X, 1, function(x) lpost(fl_l, x, y$rt, y$R))
   list(truth = truth, an = wstats(pa - lq, X), fl = wstats(pf - lq, X),
-       map_a = la$m, map_f = lf$m)
+       map_a = la$m, map_f = lf$m,
+       d_map_t0 = unname(lf$m["t0"] - la$m["t0"]))
 }
 
 cat(sprintf("flow %s   %d datasets x %d trials, %d draws, cores %d\n",
@@ -126,4 +151,5 @@ for (p in FREE) cat(sprintf("%-5s %+10.3f %+10.3f %+12.3f %10.3f\n", p,
 cat(sprintf("\nESS  analytic median %.0f (min %.0f)   flow median %.0f (min %.0f)\n",
             median(essa), min(essa), median(essf), min(essf)))
 saveRDS(list(tag = TAG, res = res, sb_an = sb(ea), sb_fl = sb(ef), shift = shift,
-             sd_ratio = wr), sprintf("sbc/postshift_%s.rds", TAG))
+             sd_ratio = wr), sprintf("sbc/postshift_%s%s%s.rds", TAG, if (KMS > 0) sprintf("_ms%d", KMS) else "",
+                         if (SIMEMC) "_emcsim" else ""))
