@@ -1,6 +1,7 @@
 # Calibration-grade neural likelihoods for evidence accumulation models
 
-*Methods document. Companion to `RECIPE.md` (the five steps, condensed),
+*Methods document, revised 2026-09-23 after Phase 37 retracted the st0 = 0 and
+decision-time SBC verdicts (§3.7). Companion to `RECIPE.md` (the five steps, condensed),
 `TRAPS.md` (the checklist) and `EMC2_INTEGRATION.md` (the how-to). Every number
 here is backed by an object under `results/` or, for the dead ends, under
 `../long-and-winding-road/`. The full audit trail is `SBC_PLAN.md` in the parent
@@ -46,9 +47,9 @@ can order models *opposite* to calibration:
   uncorrelated with θ, so it cancels. The flow's error varies systematically with θ.
 - Five DDM flows differing only in seed have validation losses spanning 0.001
   and score biases on `a` spanning 0.154, correlated −0.20 (P8).
-- The st0 = 0 flow fits 87% of the probability mass to ±0.02 log units, has
-  total mass correct to rounding, and passes every golden and mass check. Its
-  SBC coverage for t0 is **0.000** (P32, P34).
+- Half of the DDM flows from one recipe, differing only in seed, fail SBC — one
+  with a standardised bias on `a` of −1.493, three times the gate — while their
+  held-out losses are indistinguishable (P11).
 
 The quantitative reason is in P13: the region that carries the information
 about `t0` holds ~6% of the probability mass and contributes ~0.1% of the mean
@@ -324,38 +325,46 @@ outside {100, 200, 400, 800} would close it.
 - **Nothing we tried moves either centre.** Distillation looked as if it did on
   single runs and was retracted on replication (P24 → P30).
 
-### 3.7 Reduced parameterisations all fail — do not ship them
+### 3.7 Reduced parameterisations: what is actually established
 
-Three builds tried to remove t0's difficulty structurally. Each was selected on
-score bias, confirmed with SBC at N = 400 / 500 replicates, and fails:
+Three builds tried to remove t0's difficulty structurally. The record here was
+badly wrong until 2026-09-23 and is now this:
 
-| build | worst parameters (std bias) | t0 coverage | reference |
-|---|---|---|---|
-| shipped flow, st0 *fixed* at 0.05 | t0 +0.269, Z −0.148 | — | P29 |
-| shipped flow, st0 *fixed* at 0.01 | a +0.448, Z −0.405, t0 +0.293 | 0.914 | P29 |
-| dedicated st0 = 0 flow (`z0_s503_e282`) | **t0 +3.144, a +2.233**, Z −0.621, SZ −0.546 | **0.000** | P32 |
-| decision-time flow, rt − t0 (`dt_s703_e167`) | **t0 +2.490, a +1.665**, Z −0.877, SZ −0.850 | **0.002** | P35 |
-| *analytic, st0 = 0 (control)* | *worst 0.092* | *0.946* | P34 |
+| build | verdict | status |
+|---|---|---|
+| shipped flow, st0 *fixed* at 0.05 at evaluation time | t0 +0.269, Z degrades to −0.148 | stands (P29) |
+| shipped flow, st0 *fixed* at 0.01 | a +0.448, Z −0.405, t0 +0.293; confounded with the training-box floor | stands (P29) |
+| dedicated st0 = 0 flow (`z0_s503_e282`) | **passes**: t0 +0.346, a +0.038, coverage 1.000 (12 reps) | corrected (P37) |
+| decision-time flow, rt − t0 (`dt_s703_e167`) | re-run under way | corrected (P37) |
 
-Two findings from these are worth more than the builds:
+**What stands.** Fixing st0 at evaluation time does not fix t0 and makes `Z`
+worse, so "fix st0 and the artefact is safe" remains false. Those cells named
+st0 explicitly and are unaffected by what follows.
 
-1. **The analytic passes the st0 = 0 cell cleanly**, so st0 = 0 inference is not
-   intrinsically hard; the failure is entirely the flow's (P34).
-2. **The decision-time flow has no representation of t0 at all** — t0 enters
-   only as an exact shift with unit Jacobian, validated to 1e-11 — and t0 is
-   still displaced by +2.49 sd. So t0 is a *victim*: the distortion originates
-   in (a, Z, SZ) and reaches t0 through the Fisher coupling (t0–SZ +0.86,
-   a–Z −0.44), surfacing there because t0's posterior is 3–20x tighter than the
-   others' (P35). That reframes the shipped flow's +0.319 as probably secondary
-   too.
+**What was retracted, and why it matters more than the builds.** The st0 = 0 and
+decision-time cells were reported as catastrophic failures (t0 +3.14 and +2.49,
+coverage 0.000 and 0.002). They were not. `DDMnn`'s `p_types` default for `st0`
+is −2.996 on the sampled scale (= 0.05 s) where the analytic `DDM`'s is −Inf
+(= 0), so omitting `st0` from a formula **simulates data with a 50 ms
+non-decision smear under a flow design and without one under the analytic
+design**. Both cells fitted flows trained at st0 = 0 to data generated at
+st0 = 0.05. Correcting the default — and `DDMnn`'s bound, which confines st0 to
+[0.01, 0.49] with no exception at 0 — turns the same flow, same design, same
+priors into a pass.
 
-And one finding about the screen: `dt_s703_e167` had **the best total score
-bias of any DDM checkpoint measured** (0.0240, g_t0 −0.0034 against the shipped
-flow's −0.0620) and failed catastrophically. Screening on g selects confidently
-among models that may all be unusable, which is why step 4 of the recipe is not
-optional.
+The analytic control did not catch it because it used the `DDM` model and so
+simulated at st0 = 0: **the control differed from the cell in two respects, not
+one.** Four checks pin the cause down — `mapped_pars` (0.05 vs 0), simulated mean
+rt (0.4755 vs 0.4514, matching WienR at st0 = 0.05 and 0 respectively), a
+100k-trial KS test (max |ECDF − CDF| 0.0020 at st0 = 0.05 against 0.1453 at 0),
+and, most usefully for a reader, the fact that on that data the **analytic** MLE
+is displaced +13.4 ms in t0 where matched data give +1.0 ms.
 
----
+**The generalisable tell: when the exact likelihood and the approximation are
+displaced together, suspect the data, not the approximation.**
+
+Every 8-parameter DDM cell and every RDM cell in this document names all of its
+parameters in the formula, so no default is ever used, and none is affected.
 
 ## 4. Where an analytic exists: direct regression
 
@@ -429,48 +438,62 @@ came from comparing runs on different machines (P25). Sell it as
 
 ---
 
-## 6. What the cheap diagnostics cannot see
+## 6. What the diagnostics can and cannot do
 
-This is the section that most strengthens the paper, and it was learned the
-hard way on the builds in §3.7.
+### Score bias is necessary, not sufficient
 
-Four diagnostics were tested against the SBC verdict. All four fail to predict it:
+It ranks models **within one architecture** — across four DDM seeds, g_a
+correlates +0.980 with the SBC bias on `a` and −0.989 with the worst parameter's
+|bias|, and a registered ordering was confirmed (P11). It does **not** predict
+absolute SBC bias across architectures, and the first-order displacement
+δ = (N·I + Σ₀⁻¹)⁻¹N·g gets the *sign* wrong for `a` (0/2 cells, P9) and for t0
+(3/3 cells, P25) on the shipped flow, whose SBC curve is independently known.
+The reason is in P9b: 94.6% of the draw-to-draw variation in g_a is a smooth
+function of (v, sv, st0, t0) and essentially none of it comes from `a` itself.
+The error is a property of *where* in the space you are, and a derivative at one
+point cannot represent that.
 
-| diagnostic | what it measures | how it fails | ref |
-|---|---|---|---|
-| score bias | ∂/∂θ E[log f̂] at the truth | best-ever screen number on a flow that fails catastrophically; wrong sign on `a` and t0 across models | P9, P25, P35 |
-| joint MLE from the truth | the mode the optimiser reaches | t0 excess +0.37 ms against an SBC displacement of +12.6 ms | P33 |
-| multi-start MLE | better optima elsewhere | finds them (nll better by 0.86, at higher t0), but recovers only +4.4 of 12.6 ms | P33 |
-| 1D surface profiles | log L_flow − log L_analytic along each parameter | the *passing* flow has a larger `sv` peak shift (−1.80 prior sd) than a failing one (−1.35) | P36 |
+### A cheap diagnostic that does predict SBC
 
-**Every one of them conditions on the truth in the other parameters.** The
-flow's density is excellent *near* any given θ; what is wrong is how its error
-varies *across* θ for fixed data, which tilts the likelihood surface in
-directions that move several parameters together. A derivative at the truth, or
-a one-at-a-time profile, cannot reach those directions. The posterior does.
+`evaluation/test_posterior_shift.R` computes what SBC computes, without the
+sampler. On each fixed dataset it draws from a defensive mixture of the analytic
+and flow Laplace approximations and importance-weights the draws to **both**
+posteriors, so the prior is included and every parameter moves together. Over
+datasets drawn from the SBC prior it returns SBC's own statistic,
+mean(posterior mean − truth) / sd, for each likelihood. Cost: about a minute per
+flow for a 7-parameter model, 33 minutes for the 8-parameter one, against three
+to five hours for an SBC cell.
 
-That also explains the pattern in the score-bias results: it ranks checkpoints
-within one architecture because they share a surface shape, and fails across
-architectures because they do not. And it explains P9b: 94.6% of the
-draw-to-draw variation in g_a is a smooth function of (v, sv, st0, t0), with
-essentially none from `a` itself — the error was always a property of *where*
-in the space you are.
+| flow | predicted t0 | SBC t0 |
+|---|---|---|
+| `cap256w_c4` | +0.28 | +0.319 |
+| `z0_s503_e282` | +0.12 to +0.20 | +0.346 (corrected cell) |
 
-**Practical recommendation: run SBC, with its analytic control. Nothing cheaper
-substitutes.** Use score bias to *screen and localise* — it isolated the
-classifier share cleanly and ranks checkpoints reliably — never to certify.
+Its analytic column is its own control and reads ~0 (within ±0.13 at 60
+datasets). It is not a replacement for SBC — it approximates each posterior by
+importance sampling, which can miss mass a sampler would find — but it is
+accurate enough to screen with, and cheap enough to run before committing hours
+of cluster time.
 
-> **Pending (P37): a posterior-shift diagnostic.** `sbc/test_posterior_shift.R`
-> removes the conditioning: on each fixed dataset it reweights draws from the
-> analytic posterior by exp(log L_flow − log L_analytic) — with the prior and
-> all parameters moving together — and computes SBC's own statistic from the
-> flow's posterior. If it reproduces the pass/fail ordering of the three flows
-> in §3.4 and §3.7 in minutes rather than hours, it is the cheap diagnostic this
-> section says does not exist, and the recommendation above changes to "screen
-> with it, confirm with SBC". If not, it is a fifth failure and the
-> recommendation stands more firmly. *Result to be inserted here.*
+### The lesson that cost the most
 
----
+The diagnostic above was built because four others (score bias at the truth,
+joint MLE from the truth, multi-start MLE, 1D surface profiles) had all appeared
+to fail to predict an SBC verdict. **Two of those verdicts were wrong** (§3.7):
+the diagnostics were reporting, correctly, that flows were fine, while a
+mis-specified SBC cell said they were broken. The interpretation on offer at the
+time — that the flows' distortion was multivariate and invisible to anything
+local — was elaborate, plausible, and unnecessary.
+
+So the recommendation is not "nothing cheaper than SBC works". It is:
+
+- **run SBC, with a control that differs from the cell in exactly one respect.**
+  Name every parameter you are not sampling; do not let a default supply it. Our
+  analytic control silently changed the data-generating model as well as the
+  likelihood, and certified a broken cell for two weeks;
+- **when a cheap diagnostic contradicts an expensive one, investigate both.**
+  Here the cheap one was right, and the discrepancy — not the SBC result — was
+  the finding.
 
 ## 7. Bringing it into EMC2
 
@@ -521,7 +544,7 @@ by code and numbers in `../long-and-winding-road/`, indexed by phase.
 | Censoring the deep tail | the tail overshoots by +6 log units | only 0.34% of trials lie past 10 s; the tail's error is large but inert |
 | Larger batch to shift the bias | one run showed 5x | replicated: t = 0.10 on the mean; variance ratio 2.84x (p = 0.34), not 8.7x |
 | Distillation against the analytic | three arms ordered monotonically | replicated at β = 30: moves neither mean (t0 p = 0.91, a p = 0.87) |
-| Fixing st0, or training without it | removes t0's trading partner | t0 barely moves when st0 is fixed; st0 = 0 and rt − t0 builds fail catastrophically (§3.7) |
+| Fixing st0 at evaluation time | removes t0's trading partner | t0 barely moves (+0.319 → +0.269) and `Z` degrades from −0.032 to −0.148: the error relocates rather than going away |
 
 ### B. Ways to get a wrong number and not know it
 
@@ -543,7 +566,7 @@ of any team. Full checklist in `TRAPS.md`.
 | port guards sized on a small model | float32 drift trips them | report the distribution, check dz separately |
 | one dataset, one run | a confident claim | n = 1 sets hypotheses; it does not settle them |
 
-### C. Four claims we made and retracted
+### C. Five claims we made and retracted
 
 Each was published in the working notes as a finding, and each fell to the test
 that should have preceded it:
@@ -557,11 +580,22 @@ that should have preceded it:
    binds (P32b).
 4. **The t0 bias is a t0/st0 posterior trade-off** (P7) — fixing st0 left it
    essentially intact (P29).
+5. **The st0 = 0 and decision-time builds fail SBC catastrophically** (P32, P35),
+   and with them the account that the flows' distortion was global and invisible
+   to every local diagnostic (P33, P36) — the cells simulated at st0 = 0.05 and
+   evaluated at st0 = 0, and the analytic control differed from them in two
+   respects rather than one (§3.7, P37). This one stood for four phases because
+   the control appeared to exonerate the pipeline, and every cheap diagnostic
+   that contradicted it was filed as a failure of the diagnostic.
 
 ### D. What we would do differently
 
 Measure before transplanting hyperparameters between models. Replicate across
 ≥ 3 seeds before believing a training intervention. Register the prediction a
-mechanism makes and test it before writing it up. And treat the analytic
-control — for the estimator and for SBC — as part of the instrument, not as an
-optional check.
+mechanism makes and test it before writing it up. Treat the analytic control —
+for the estimator and for SBC — as part of the instrument, not as an optional
+check, and **check that it differs from the thing it controls in exactly one
+respect**: ours silently changed the data-generating model as well as the
+likelihood. Never let a default supply a parameter you are not sampling; name it
+and assert the mapped value. And when a one-minute diagnostic contradicts a
+five-hour one, find out why before deciding which to believe.

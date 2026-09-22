@@ -44,9 +44,15 @@ best member. Screen on draws independent of those used to report.
 ## 4. Confirm with SBC — and always run the analytic control
 
 Score bias ranks checkpoints *within* an architecture (ρ = −0.989 with SBC
-rank). It does **not** rank across architectures, and it cannot see likelihood-
-surface distortion away from the truth (see `TRAPS.md`). One artefact here had
-total |g| = 0.064 and SBC coverage of **0.000**.
+rank). It does **not** rank across architectures: the first-order displacement
+it implies has the wrong SIGN for `a` and for `t0` on the one flow whose SBC
+curve is independently known (see `TRAPS.md`).
+
+Before spending hours on a cell, run `evaluation/test_posterior_shift.R`
+(~1 min per 7-parameter flow): it importance-reweights analytic-posterior draws
+to the flow's posterior and returns SBC's own statistic. It reproduced the
+shipped flow's t0 bias (+0.28 predicted, +0.319 observed), and a disagreement
+between it and an SBC cell is how the st0 default bug was found.
 
 **Run the same SBC cell with the analytic likelihood.** It is the only thing
 that separates "the approximation is wrong" from "the inference problem is
@@ -79,7 +85,7 @@ replication mean).
 |---|---|---|
 | RDM `rdm_small` [64,32] | passes N=100 and N=400 | worst \|std bias\| 0.090, coverage 0.940–0.970 |
 | DDM `cap256w_c4` | passes N=100–800 | t0 carries a +0.28% offset; see below |
-| DDM st0=0 | **fails** | do not use — t0 coverage 0.000 |
+| DDM st0=0 | provisional pass | t0 +0.346 at 12 reps after the st0-default fix (`TRAPS.md`); needs a 500-replicate confirmation |
 
 **[64,32] captures 58% of the calibration gain of [256,128] for 18% of the
 cost** on the RDM. Do not transplant architecture between models without

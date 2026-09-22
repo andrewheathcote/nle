@@ -35,9 +35,14 @@ against the closed form.
 `g = d/dθ E_true[log f̂]` is a derivative *at the truth*. A model can have small
 `g` at every θ and still have a badly distorted likelihood *surface* between θs
 — which is what the posterior explores. This is why `g` ranks checkpoints within
-an architecture (ρ = −0.989) but not across architectures, and why one of our
-artefacts had total |g| = 0.064 and SBC coverage of 0.000. **Score bias is
-necessary, not sufficient. Only SBC probes the surface.**
+an architecture (ρ = −0.989) but not across architectures, and why the
+displacement it implies has the wrong sign for `a` and `t0` on the one flow with
+an independently known SBC curve. **Score bias is necessary, not sufficient.**
+
+What DOES track SBC cheaply is the posterior itself: reweight draws from the
+analytic posterior by exp(log L_flow − log L_analytic) on fixed data
+(`evaluation/test_posterior_shift.R`). Caution learned the hard way: when that
+estimator disagrees with an SBC cell, the cell may be the thing at fault.
 
 ---
 
@@ -91,7 +96,9 @@ classifier look 6× worse than it was.
 Checkpoints are retained by best validation loss, so a mismatched val set
 silently selects the wrong checkpoints. Training an st0 = 0 flow against a val
 set simulated with st0 > 0 would have actively preferred checkpoints that
-*over-smooth the leading edge* — the exact failure being studied.
+*over-smooth the leading edge* — the exact failure being studied. The same
+mismatch arrived from the other direction in the SBC cell itself (see the
+`DDMnn` defaults entry above), where it cost four phases.
 
 **Reading a log-scale quantity as natural units.**
 Label the scale on every table of parameter-space numbers. A t0 offset was

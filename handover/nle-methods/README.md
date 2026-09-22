@@ -89,7 +89,7 @@ rested on one run per condition was later retracted; none replicated across
 |---|---|---|
 | `rdm_small.rds` | passes N=100 and N=400 | worst \|std bias\| 0.090 |
 | `ddm_cap256w_c4.rds` | passes N=100–800 | `t0` carries a +0.28% offset; see `docs/RECIPE.md` |
-| `ddm_st0zero.rds` | **FAILS** | 7-parameter st0=0 build; t0 coverage 0.000 — kept as a negative example, do not use |
+| `ddm_st0zero.rds` | provisional pass | 7-parameter st0=0 build: t0 +0.346 at 12 reps once `st0` is named a constant (see `docs/TRAPS.md`); awaiting a 500-replicate cell |
 
 ## Provenance
 
