@@ -446,7 +446,7 @@ It ranks models **within one architecture** — across four DDM seeds, g_a
 correlates +0.980 with the SBC bias on `a` and −0.989 with the worst parameter's
 |bias|, and a registered ordering was confirmed (P11). It does **not** predict
 absolute SBC bias across architectures, and the first-order displacement
-δ = (N·I + Σ₀⁻¹)⁻¹N·g gets the *sign* wrong for `a` (0/2 cells, P9) and for t0
+`delta = (N I + Sigma0^-1)^-1 N g` gets the *sign* wrong for `a` (0/2 cells, P9) and for t0
 (3/3 cells, P25) on the shipped flow, whose SBC curve is independently known.
 The reason is in P9b: 94.6% of the draw-to-draw variation in g_a is a smooth
 function of (v, sv, st0, t0) and essentially none of it comes from `a` itself.
