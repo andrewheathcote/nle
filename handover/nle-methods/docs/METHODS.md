@@ -68,7 +68,7 @@ machinery is presented here once and the DDM section inherits it.
 ### 2.1 Training data
 
 Single-accumulator first-passage samples, with the analytic log-density stored
-per row. **16 × 10⁶ rows, one trial per parameter draw**, so the budget is pure
+per row. **16 million rows, one trial per parameter draw**, so the budget is pure
 θ-diversity (the race simulator supports one trial per draw; for the DDM we
 measured no gain beyond ~40 trials per draw). Parameters are drawn from a
 training box that strictly contains the prior region used for evaluation.
