@@ -118,6 +118,32 @@ and always print which artefact is installed at the start of a run. A killed job
 left a test bundle in place and every subsequent local evaluation used the wrong
 model.
 
+**A neural model's spec is not its analytic twin's — check defaults AND bounds.**
+EMC2's `DDMnn` carries the training box, not the DDM's parameter space, and two
+entries differ from `DDM` in ways that are silent and fatal:
+
+| | `DDM` | `DDMnn` |
+|---|---|---|
+| `p_types["st0"]` | `-Inf` (st0 = 0) | `-2.996` (**st0 = 0.05**) |
+| `bound$exception` | `c(sv = 0, SZ = 0, st0 = 0)` | none; `st0` bounded to [0.01, 0.49] |
+
+So omitting `st0` from a formula SIMULATES at st0 = 0.05 under a flow design and
+at st0 = 0 under the analytic design. Two SBC cells here were run that way
+against flows trained at st0 = 0, and both failed catastrophically (t0 +3.1 sd,
+coverage 0.000) — a model mismatch, not a flow defect. The analytic "control"
+used the `DDM` model, so it simulated at st0 = 0, passed, and appeared to
+exonerate the pipeline. Correcting the default and the bound turns the same
+flow, same data-generating design, into a PASS (t0 +0.35, a +0.04).
+
+**How to detect:** never rely on a default for a parameter you are not sampling
+— name it in `constants` — and assert the simulated value:
+`stopifnot(mapped_pars(des, pmean, remove_subjects = FALSE)[1, "st0"] == 0)`.
+Confirm empirically as well: 100k simulated trials from the design matched
+st0 = 0.05 at max |ECDF - CDF| = 0.002 against 0.145 for st0 = 0. And the tell
+that generalises — **when the analytic and the approximation are displaced
+TOGETHER, suspect the data, not the approximation.** On these datasets the
+analytic MLE was displaced +13.4 ms where matched data give +1.0 ms.
+
 **Priors passed by position.**
 EMC2's `prior()` takes `pmean` and `psd` positionally, and `sampled_pars()`
 returns parameters in *formula* order, not the canonical model order. Writing

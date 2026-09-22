@@ -21,7 +21,12 @@ des <- design(factors = list(subjects = 1, S = c("left", "right")),
               Rlevels = c("left", "right"),
               formula = list(v ~ 1, a ~ 1, t0 ~ 1, s ~ 1, Z ~ 1, SZ ~ 1, sv ~ 1),
               model = DDM, use_matchfun = FALSE,
-              constants = c(s = log(1)), verbose = FALSE)
+              # st0 MUST be named a constant. EMC2's DDMnn p_types default for
+              # st0 is -2.996 (= 0.05 s), NOT the DDM's -Inf (= 0): omitting st0
+              # from the formula therefore SIMULATES data at st0 = 0.05 while the
+              # flow is evaluated at st0 = 0. That mismatch, not the flow, produced
+              # the catastrophic Phase 32/35 verdicts (found 2026-09-23).
+              constants = c(s = log(1), st0 = -Inf), verbose = FALSE)
 # prior() takes pmean POSITIONALLY, and sampled_pars() order follows the
 # formula, not the canonical DDM order -- writing the formula as (Z, SZ, sv)
 # rather than (Z, sv, SZ) silently transposes two priors. So look the values up
@@ -34,6 +39,8 @@ stopifnot(all(sp %in% names(PM)), length(sp) == length(PM))
 pmean <- PM[sp]; psd <- PS[sp]
 cat("priors aligned to that order:",
     paste(sprintf("%s=%.3f", names(pmean), pmean), collapse = " "), "\n")
+stopifnot(mapped_pars(des, pmean, remove_subjects = FALSE)[1, "st0"] == 0)
+cat("simulation st0 = 0 confirmed via mapped_pars\n")
 prior_in <- prior(des, type = "single", pmean = pmean, psd = psd)
 
 # no flow bundle involved -- this is the control
