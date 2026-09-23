@@ -45,7 +45,13 @@ N <- as.integer(Sys.getenv("NTRIAL", "400"))
 REG <- grepl("^reg_", TAG)
 if (REG) {
   suppressPackageStartupMessages(library(jsonlite)); source("handover/regress/DDMreg.R")
-  RNET <- regnet_get(sprintf("results/model_states/%s_budget/regress.json", TAG))
+  RNET <- regnet_get(local({
+    cand <- c(sprintf("artefacts/%s_regress.json", TAG),                 # shipped
+              sprintf("results/model_states/%s_budget/regress.json", TAG))  # fresh
+    hit <- cand[file.exists(cand)]
+    if (!length(hit)) stop("no regression net for tag ", TAG, " at: ",
+                           paste(cand, collapse = ", "))
+    hit[1] }))
   ST0EST <- TRUE                          # the regression net is 8-parameter
 } else {
   fl <- ddm_load(sprintf("port/export/ddm_%s_weights.json", TAG))
