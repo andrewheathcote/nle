@@ -3282,10 +3282,25 @@ Same flow, same design, same priors, N = 400, laptop, 12 replicates:
 | st0 omitted (as Phase 32 ran it) | −0.16 | **+2.13** | **+5.44** | −0.45 | −0.57 | +1.19 | **0.000** |
 | st0 named a constant | −0.161 | **+0.038** | **+0.346** | −0.032 | +0.068 | −0.003 | **1.000** |
 
-**The st0 = 0 flow passes.** At 12 replicates the standard error on the
-standardised bias is ~0.29, so this is a provisional pass pending a 500-replicate
-confirmation, but the catastrophic verdict is gone and the corrected numbers are
-in the same range as the shipped flow's.
+**The st0 = 0 flow passes.** Confirmed at 500 replicates (tux26, 166.5 min):
+
+| par | std bias | coverage | mean rank | KS p |
+|---|---|---|---|---|
+| v | −0.089 | 0.946 | 0.526 | 0.036 |
+| a | +0.228 | 0.944 | 0.435 | 6.8e-07 |
+| t0 | +0.276 | 0.936 | 0.430 | 1.4e-07 |
+| Z | +0.282 | 0.956 | 0.426 | 1.2e-06 |
+| SZ | +0.065 | 0.960 | 0.481 | 0.129 |
+| sv | +0.003 | 0.960 | 0.502 | 0.72 |
+
+Every parameter is inside the gate, and coverage is nominal throughout
+(0.936-0.960 against 0.95, MC se 0.0097). Rank uniformity fails for `a`, `t0`
+and `Z` (mean ranks ~0.43, i.e. mild systematic OVERestimation), which is the
+same signature the shipped 8-parameter flow shows on t0 alone (+0.319,
+KS 1.8e-07, coverage nominal). So the honest verdict is: **intervals valid,
+point estimates carrying a small upward offset on three parameters** -- a
+usable artefact of the same character as the shipped one, and nothing like the
+retracted "coverage 0.000".
 
 ### What this retracts
 
