@@ -30,6 +30,25 @@ are the posteriors the true likelihood would produce.
 | DDM | series with precision control; 68.4 min per SBC cell (N=100, 500 reps) | 37.2 min | flow **4.0–5.8x** faster than EMC2's default-precision analytic, **59–86x** faster than a tight one (P23) |
 | RDM | closed-form Wald; 467 µs per 2000 accumulator-rows | 86,667 µs (`rdm_small`) | flow ~185x **slower** (P21c, P21d) |
 
+**And it pays most where the model is fullest.** The seven-parameter DDM has no
+LAN in the published library — HSSM's `full_ddm` (v, a, z, t, sz, sv, st) ships a
+**blackbox** likelihood only, `hddm_wfpt`'s numerical integration — so that, not a
+network, is what our flow replaces at this parameterisation. Milliseconds per
+1000 trials, one core, conventions verified against WienR to 4.3e-07
+(`evaluation/bench_fullddm.R`):
+
+| setting | HSSM `full_ddm` | WienR 1e-8 | EMC2 default 5e-3 | **our flow** |
+|---|---|---|---|---|
+| sv .01, SZ .05, st0 .10 (our box floors) | 24.0 | 13.9 | 3.3 | **1.50** |
+| sv .50, SZ .20, st0 .20 | 178.0 | 105.2 | 3.6 | **1.25** |
+| sv 1.5, SZ .40, st0 .30 | 560.9 | 280.6 | 5.7 | **1.25** |
+
+The integration cost rises 23x across these settings and **the flow's does not
+move**: it is 16x to 449x faster than the likelihood HSSM would use, 9x to 225x
+faster than a tight analytic, and 2.2x to 4.5x faster than EMC2's default
+precision. A neural likelihood's advantage is largest exactly where the model
+carries the trial-to-trial variability that makes the density expensive.
+
 The DDM density is an infinite series whose cost scales with the precision
 demanded; the flow's cost is fixed. Race models have closed-form first-passage
 densities that are already cheap. So the DDM is the speed case, and the RDM
