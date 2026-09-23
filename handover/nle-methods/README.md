@@ -18,7 +18,7 @@ are opposite, because what matters is **where** the error sits, not how big it i
 | `simulation/` | regenerates every training input from a fixed seed |
 | `flow/` | JAX/Flax training and export (Python) |
 | `port/` | float64 R + C++ reference evaluators, and their golden-vector tests |
-| `evaluation/` | **the diagnostics** — score bias, its analytic control, SBC harness |
+| `evaluation/` | **the diagnostics** — score bias, its analytic control, the posterior-shift screen, SBC harness |
 | `artefacts/` | the selected flows, as weights JSON and EMC2-loadable bundles |
 | `results/` | the SBC and score-bias objects backing every number we report |
 | `docs/` | the methods document, the recipe, EMC2 integration, and the traps checklist |
@@ -64,6 +64,7 @@ replacing the file, not adding one.
 ```r
 Rscript evaluation/score_bias_draws.R 200 <export_tag>   # g, six parameters
 Rscript evaluation/score_bias_t0.R    200 <export_tag>   # g_t0, restricted region
+Rscript evaluation/test_posterior_shift.R <export_tag> 60 2000   # predicted SBC bias
 ```
 Both print an **analytic control** first. If the control is not ~0, the
 estimator is wrong and its numbers mean nothing — this is not optional, and ours
