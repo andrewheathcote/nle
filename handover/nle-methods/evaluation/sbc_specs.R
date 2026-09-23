@@ -23,7 +23,7 @@ make_sbc_cell <- function(model_name) {
       constants = c(s = log(1)), use_matchfun = TRUE,
       pmean = c(log(1.5), .4, log(1), log(.3), log(.2)),
       psd = c(.1, .1, .1, .1, .1)),
-    DDM = , DDMnn = list(
+    DDM = , DDMnn = , DDMreg = list(
       model = get(model_name),
       formula = list(v ~ 1, a ~ 1, t0 ~ 1, s ~ 1, Z ~ 1, sv ~ 1,
                      SZ ~ 1, st0 ~ 1),

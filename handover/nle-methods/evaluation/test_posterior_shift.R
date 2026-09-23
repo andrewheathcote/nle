@@ -40,8 +40,17 @@ KMS <- as.integer(Sys.getenv("MULTISTART", "0"))
 # instead of inverse-CDF on a 3000-point log grid.
 SIMEMC <- Sys.getenv("SIM", "grid") == "emc2"
 N <- as.integer(Sys.getenv("NTRIAL", "400"))
-fl <- ddm_load(sprintf("port/export/ddm_%s_weights.json", TAG))
-ST0EST <- "st0" %in% fl$context_names     # context, not context_encoding (Phase 36)
+# TAG beginning "reg_" selects the direct-regression baseline (an MLP over
+# (theta, log rt, R)) instead of a flow export. Same estimator either way.
+REG <- grepl("^reg_", TAG)
+if (REG) {
+  suppressPackageStartupMessages(library(jsonlite)); source("evaluation/DDMreg.R")
+  RNET <- regnet_get(sprintf("results/model_states/%s_budget/regress.json", TAG))
+  ST0EST <- TRUE                          # the regression net is 8-parameter
+} else {
+  fl <- ddm_load(sprintf("port/export/ddm_%s_weights.json", TAG))
+  ST0EST <- "st0" %in% fl$context_names   # context, not context_encoding (Phase 36)
+}
 
 FULL <- if (ST0EST) c("v","a","t0","s","Z","SZ","sv","st0") else
                     c("v","a","t0","s","Z","SZ","sv")
@@ -57,7 +66,12 @@ an_l <- function(th, rt, R) { w <- pnorm(th[["Z"]])
     a = exp(th[["a"]]), v = th[["v"]], w = w, t0 = exp(th[["t0"]]),
     sv = exp(th[["sv"]]), sw = 2 * pnorm(th[["SZ"]]) * min(w, 1 - w),
     st0 = if (ST0EST) exp(th[["st0"]]) else 0, precision = 1e-8)$logvalue }
-fl_l <- function(th, rt, R) ddm_eval(fl, th, rt, R)$log_pdf
+fl_l <- if (REG) function(th, rt, R) {
+  pars <- cbind(v = th[["v"]], a = exp(th[["a"]]), t0 = exp(th[["t0"]]), s = 1,
+                Z = pnorm(th[["Z"]]), SZ = pnorm(th[["SZ"]]), sv = exp(th[["sv"]]),
+                st0 = exp(th[["st0"]]))[rep(1, length(rt)), , drop = FALSE]
+  reg_log_pdf(rt, R, pars, RNET)
+} else function(th, rt, R) ddm_eval(fl, th, rt, R)$log_pdf
 totll <- function(f, th, rt, R) {
   s <- 0
   for (r in 1:2) { k <- R == r; if (!any(k)) next
@@ -129,8 +143,8 @@ one <- function(i) {
        d_map_t0 = unname(lf$m["t0"] - la$m["t0"]))
 }
 
-cat(sprintf("flow %s   %d datasets x %d trials, %d draws, cores %d\n",
-            TAG, ND, N, M, CORES))
+cat(sprintf("%s %s   %d datasets x %d trials, %d draws, cores %d\n",
+            if (REG) "regression net" else "flow", TAG, ND, N, M, CORES))
 t_start <- proc.time()[3]
 res <- Filter(Negate(is.null), mclapply(seq_len(ND), one, mc.cores = CORES))
 cat(sprintf("usable datasets %d / %d   %.1f min\n\n", length(res), ND,
