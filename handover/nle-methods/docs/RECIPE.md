@@ -85,6 +85,7 @@ replication mean).
 |---|---|---|
 | RDM `rdm_small` [64,32] | passes N=100 and N=400 | worst \|std bias\| 0.090, coverage 0.940–0.970 |
 | DDM `cap256w_c4` | passes N=100–800 | t0 carries a +0.28% offset; see below |
+| DDM regression baseline | **SBC running** (250 reps, launched 2026-09-23; `OPEN_ITEMS.md`) | screen predicts t0 +0.08, `Z` +0.35 |
 | DDM st0=0 | passes the gate | worst +0.282 at 500 reps after the st0-default fix (`TRAPS.md`); ranks non-uniform on a, t0, Z, coverage nominal |
 
 **[64,32] captures 58% of the calibration gain of [256,128] for 18% of the

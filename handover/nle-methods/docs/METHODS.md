@@ -1,7 +1,9 @@
 # Calibration-grade neural likelihoods for evidence accumulation models
 
 *Methods document, revised 2026-09-23 after Phase 37 retracted the st0 = 0 and
-decision-time SBC verdicts (§3.7). Companion to `RECIPE.md` (the five steps, condensed),
+decision-time SBC verdicts (§3.7). One result is outstanding — the
+direct-regression baseline's SBC cell, still running; see §4 and
+`docs/OPEN_ITEMS.md`. Companion to `RECIPE.md` (the five steps, condensed),
 `TRAPS.md` (the checklist) and `EMC2_INTEGRATION.md` (the how-to). Every number
 here is backed by an object under `results/` or, for the dead ends, under
 `../long-and-winding-road/`. The full audit trail is `SBC_PLAN.md` in the parent
@@ -391,14 +393,50 @@ density.** But regression is not a free substitute:
   already have — useless for a genuinely intractable model, which is what
   neural likelihood estimation exists for;
 - it gives no CDF, so race likelihoods (f · ΠS) and censoring are out of reach;
-- it has **not been through SBC**. Given §3.7 and §6, its score bias is not
-  grounds to ship it; one SBC cell is the next step if it is to be offered.
+- it is **slow to evaluate in R**. The 256-wide MLP costs 43 ms per 400-trial
+  call against 0.80 ms for the compiled flow (same machine, reference BLAS) — a
+  53x penalty that makes an SBC cell a multi-day job rather than a three-hour
+  one. A compiled evaluator would remove this; none is written.
 
-**Recommendation: give this its own short section, framed as a division of
-labour.** Where an analytic exists but is slow, regression is the better
-artefact — simpler, better calibrated on the screen, one forward pass. Where no
-analytic exists, or a CDF is needed, the flow is the only option and its
-residual is the price.
+### What the screen says, and the cell that is still running
+
+The posterior-shift screen (§6) on the selected net `reg_s402`, 60 datasets,
+run under both simulators (the two agree on every shift to within 0.006):
+
+| par | predicted std bias | displacement vs analytic (sd) | the shipped flow, for contrast |
+|---|---|---|---|
+| **t0** | **+0.08** | −0.06 | flow predicted +0.28, measured +0.319 |
+| **Z** | **+0.35** | **+0.22** | flow −0.04 |
+| v | −0.18 | −0.17 | +0.04 |
+| sv | +0.11 | +0.16 | — |
+| SZ | −0.10 | −0.12 | — |
+| st0 | −0.08 | +0.13 | — |
+| a | −0.05 | +0.00 | — |
+
+So the screen says the regression net **trades the flow's t0 problem for a
+smaller `Z` problem**, with nothing predicted outside the gate. That sharpens
+the division of labour below, and it is a prediction, not a verdict.
+
+**The SBC cell is running and its result is NOT in this document.** `reg_s402`,
+N = 400, 250 replicates, launched on tux26 on 2026-09-23 at 48 cores; at the
+observed rate (0.55 h per replicate on a contended machine) it lands about five
+days later. 250 rather than 500 replicates because of the 53x evaluation
+penalty; se on the standardised bias is 0.063, enough for the gate and for rank
+uniformity. The driver is `evaluation/SBCddmreg.R` and the wrapper
+`evaluation/DDMreg.R`; `docs/OPEN_ITEMS.md` says how to collect the result and
+which four places to write it.
+
+**Until that cell reports, the honest statement is: the regression baseline is
+better on the screen and unverified by SBC.** Given §3.7 — where two flows were
+convicted by a mis-specified cell and exonerated by this same screen — neither
+number should be quoted as settled without the other.
+
+**Recommendation: keep this as its own short section, framed as a division of
+labour.** Where an analytic exists but is slow, regression is the simpler
+artefact and looks better calibrated on the parameter that matters most for the
+DDM (t0), at the cost of a slower evaluator and a weaker `Z`. Where no analytic
+exists, or a CDF is needed, the flow is the only option and its residual is the
+price.
 
 ---
 

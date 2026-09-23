@@ -21,7 +21,7 @@ are opposite, because what matters is **where** the error sits, not how big it i
 | `evaluation/` | **the diagnostics** — score bias, its analytic control, the posterior-shift screen, SBC harness |
 | `artefacts/` | the selected flows, as weights JSON and EMC2-loadable bundles |
 | `results/` | the SBC and score-bias objects backing every number we report |
-| `docs/` | the methods document, the recipe, EMC2 integration, and the traps checklist |
+| `docs/` | the methods document, the recipe, EMC2 integration, the traps checklist, and the open items |
 
 ## Data is regenerated, not deposited
 
@@ -90,7 +90,15 @@ rested on one run per condition was later retracted; none replicated across
 |---|---|---|
 | `rdm_small.rds` | passes N=100 and N=400 | worst \|std bias\| 0.090 |
 | `ddm_cap256w_c4.rds` | passes N=100–800 | `t0` carries a +0.28% offset; see `docs/RECIPE.md` |
+| `reg_s402` (regression net) | **SBC running** | see `docs/OPEN_ITEMS.md`; screen predicts worst +0.35 on `Z` |
 | `ddm_st0zero.rds` | passes N=400 | 7-parameter st0=0 build, once `st0` is named a constant (see `docs/TRAPS.md`): worst std bias +0.282, coverage 0.936-0.960, ranks non-uniform on a, t0, Z |
+
+## One result is outstanding
+
+The direct-regression baseline's SBC cell (N = 400, 250 replicates) was launched
+on 2026-09-23 and takes about 5.7 days. Everything else here is complete.
+`docs/OPEN_ITEMS.md` says how to check it, collect it, and which four files to
+write it into — with the screen's prediction recorded in advance.
 
 ## Provenance
 

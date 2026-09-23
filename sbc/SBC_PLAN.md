@@ -3374,3 +3374,53 @@ recorded as a failure of the diagnostic.
 The corollary is worth stating positively: **when a cheap diagnostic disagrees
 with an expensive one, do not assume the cheap one is wrong.** The posterior-shift
 estimator was right and cost one minute per flow against three to five hours.
+
+## Phase 38 (RUNNING) — SBC for the direct-regression baseline
+
+The one calibration question the project never asked of the route that looked
+best on score bias. Phase 31 measured it; Phase 37 is why measuring is not
+enough.
+
+**Registered before the fact.** The posterior-shift screen on `reg_s402`
+(selected of four seeds on |g_a| + |g_t0| = 0.0072), 60 datasets, run under both
+simulators, whose shift columns agree to within 0.006:
+
+| par | predicted std bias | displacement vs analytic (sd) |
+|---|---|---|
+| t0 | +0.08 | −0.06 |
+| **Z** | **+0.35** | **+0.22** |
+| v | −0.18 | −0.17 |
+| sv | +0.11 | +0.16 |
+| SZ | −0.10 | −0.12 |
+| st0 | −0.08 | +0.13 |
+| a | −0.05 | +0.00 |
+
+The prediction, in words: **the regression net trades the flow's t0 problem for
+a smaller `Z` problem**, and nothing lands outside the gate. `Z` at +0.35 is the
+largest displacement screened for any model here, and the test of the screen:
+it has been right on `cap256w_c4`, `z0_s503_e282` and `dt_s703_e167` (within
+~0.1 on t0 each time), and on `v` for the decision-time flow where a
+12-replicate SBC was not.
+
+**The cell.** N = 400, 250 replicates, tux26, 48 cores, launched 2026-09-23
+05:36. 250 rather than 500 because the regression net costs 43 ms per 400-trial
+call against the flow's 0.80 ms on the same machine (reference BLAS, 53x): se on
+the standardised bias is 0.063, enough for the gate and for rank uniformity.
+Observed rate 0.55 h per replicate on a contended machine, so ~5.7 days. An
+earlier estimate of 44 h assumed linear scaling from the 24-core flow cell and
+was 3x optimistic.
+
+**Machinery.** `handover/regress/DDMreg.R` wraps the net as an EMC2 model,
+density only -- its `pfun` errors rather than falling through to whatever flow
+is installed, which is the Phase 37 lesson applied prospectively. The driver
+asserts the wrapper reproduces `score_bias_regress.R`'s evaluation exactly
+(max |diff| = 0) before any replicate runs, and declares the selection.
+
+**Reading the result.** If it matches the screen, the division of labour in the
+paper's baseline section becomes specific: regression is better on the boundary
+parameter and worse on start-point bias. If it does not, check the cell's
+specification before the net's -- `mapped_pars` on every non-sampled parameter,
+and whether the control differs from the cell in exactly one respect. That is
+what Phase 37 cost four phases to learn.
+
+Collection and write-up instructions: `handover/nle-methods/docs/OPEN_ITEMS.md`.
