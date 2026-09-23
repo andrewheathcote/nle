@@ -298,6 +298,12 @@ at N = 200/400/800) while coverage stays nominal (0.953 at N = 800). So:
 decelerates (+0.131, +0.070, +0.052 per doubling), so the gate is not reached
 before N ~ 5000 on trend.
 
+![The t0 rank distribution of the shipped flow against its analytic control.](figures/rank_ecdf_t0.png)
+
+The figure is the case for the correction below, and for reporting rank
+uniformity rather than coverage alone: the two curves come from the same design,
+the same prior and the same 500 replicates, and differ only in the likelihood.
+
 ### 3.5 The t0 correction
 
 The offset is constant on the **log** scale — +0.0028, i.e. 0.28%, or 0.83 ms at
@@ -517,6 +523,14 @@ Three flows, three architectures, three independent cells, agreement within
 a 12-replicate SBC of the same cell reported −0.934: **a small SBC cell is not a
 cheap SBC cell**, and at 12 replicates the standardised bias is too noisy to act
 on even when its t-test reads p = 0.008.
+
+![Predicted versus observed standardised bias for every parameter of three DDM flows.](figures/screen_vs_sbc.png)
+
+Across all 19 parameter-by-flow points the correlation is 0.70 with a mean
+absolute error of 0.093 — the scatter is wider off t0, where both quantities are
+small and the SBC estimate itself carries a Monte Carlo error of 0.045. The
+claim the figure supports is that the screen puts models in the right place on
+the parameter that decides the verdict, not that it reproduces every number.
 
 Its analytic column is its own control and reads ~0 (within ±0.13 at 60
 datasets, the Monte Carlo limit at that sample size).
