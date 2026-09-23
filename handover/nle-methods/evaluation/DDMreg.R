@@ -17,8 +17,12 @@ suppressPackageStartupMessages(library(EMC2))
 
 .regnet_cache <- new.env(parent = emptyenv())
 
-regnet_get <- function(path = Sys.getenv("REG_JSON",
-                         "results/model_states/reg_s402_budget/regress.json")) {
+# Default to the SHIPPED copy; fall back to the training output if a freshly
+# trained net is being tested in the source tree.
+regnet_get <- function(path = Sys.getenv("REG_JSON", NA_character_)) {
+  if (is.na(path)) path <- if (file.exists("artefacts/reg_s402_regress.json"))
+    "artefacts/reg_s402_regress.json" else
+    "results/model_states/reg_s402_budget/regress.json"
   net <- .regnet_cache[[path]]
   if (is.null(net)) {
     stopifnot(file.exists(path))
