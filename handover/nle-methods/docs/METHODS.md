@@ -461,24 +461,38 @@ and flow Laplace approximations and importance-weights the draws to **both**
 posteriors, so the prior is included and every parameter moves together. Over
 datasets drawn from the SBC prior it returns SBC's own statistic,
 mean(posterior mean − truth) / sd, for each likelihood. Cost: about a minute per
-flow for a 7-parameter model, 33 minutes for the 8-parameter one, against three
-to five hours for an SBC cell.
+flow for a 7-parameter model and 33 minutes for the 8-parameter one, against
+roughly three hours for a 500-replicate SBC cell.
 
-| flow | predicted t0 | SBC t0 (500 reps) |
-|---|---|---|
-| `cap256w_c4` | +0.28 | +0.319 |
-| `z0_s503_e282` | +0.12 to +0.20 | +0.276 |
-| `dt_s703_e167` | +0.27 to +0.55 | +0.392 |
+Validated against every DDM cell in this document for which a 500-replicate SBC
+verdict exists, on `t0`, the parameter that drives all three:
 
-It also called `v` correctly for the decision-time flow (+0.02 to +0.11
-predicted, +0.050 at 500 replicates) where a 12-replicate SBC of the same cell
-reported −0.934 — a reminder that a small SBC cell is not a cheap SBC cell.
+| flow | predicted t0 | SBC t0 (500 reps) | error |
+|---|---|---|---|
+| `cap256w_c4` (8 parameters) | +0.28 | +0.319 | 0.04 |
+| `z0_s503_e282` (st0 = 0) | +0.12 to +0.20 | +0.276 | 0.08–0.16 |
+| `dt_s703_e167` (decision time) | +0.27 to +0.55 | +0.392 | within range |
+
+Three flows, three architectures, three independent cells, agreement within
+~0.1 throughout — where score bias gets the sign wrong (§ above). It also called
+`v` for the decision-time flow (+0.02 to +0.11 predicted, +0.050 observed) where
+a 12-replicate SBC of the same cell reported −0.934: **a small SBC cell is not a
+cheap SBC cell**, and at 12 replicates the standardised bias is too noisy to act
+on even when its t-test reads p = 0.008.
 
 Its analytic column is its own control and reads ~0 (within ±0.13 at 60
-datasets). It is not a replacement for SBC — it approximates each posterior by
-importance sampling, which can miss mass a sampler would find — but it is
-accurate enough to screen with, and cheap enough to run before committing hours
-of cluster time.
+datasets, the Monte Carlo limit at that sample size).
+
+**Use it to screen, not to certify.** It approximates each posterior by
+importance sampling from Laplace proposals, so it can miss mass a sampler finds,
+and it has been validated on one model family. The recommendation is to run it
+before committing cluster time — it is accurate enough to rank candidates and to
+catch a broken flow — and to confirm the selected artefact with one SBC cell at
+500 replicates, with a matched analytic control.
+
+And the corollary that this project paid for: **when it disagrees with an SBC
+cell, that is a finding, not a failure of the diagnostic.** Every time the two
+disagreed here, the cell was at fault (§3.7).
 
 ### The lesson that cost the most
 
