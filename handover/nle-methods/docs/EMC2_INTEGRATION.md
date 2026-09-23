@@ -124,3 +124,56 @@ install. Folding it in (as `DDMnn7` / `.theta_DDMnn7` / `pDDMnn7` plus a
 `ddm_st0zero.rds` bundle name) is a small PR onto `dev-nn` and is the natural
 home for it. The same applies to any decision-time (`rt - t0`) variant, which
 additionally needs the shift applied in the evaluator before the flow is called.
+
+
+---
+
+## 8. An ONNX build, for HSSM
+
+`artefacts/ddm_cap256w_c4.onnx` is the same flow as a single ONNX graph, built
+by `flow/scripts/export_onnx_ddm.py` (with the `onnx` helper API; no torch
+needed). It exists so the artefact can be offered to HSSM, whose likelihood
+interface is exactly this: a graph from (parameters, rt, choice) to a joint
+log-likelihood.
+
+**Interface.** One input, float64 `[N, 10]`:
+
+| columns | contents |
+|---|---|
+| 0-7 | the context on the **sampled** scale, in the export's order: `v`, `log a`, `log t0`, `log s`, `probit Z`, `probit SZ`, `log sv`, `log st0` |
+| 8 | `rt` in seconds |
+| 9 | `choice`, −1 = lower boundary, +1 = upper (our R = 1, 2) |
+
+Output `[N]`: `log p(rt, choice | theta)`, the joint defective log-density — the
+same quantity a LAN returns, so it drops into the same slot.
+
+**Why the sampled scale.** The probit transform has no exact ONNX op. Taking
+natural-scale `Z` and `SZ` would mean baking in a polynomial approximation;
+instead the caller applies `log()` and `qnorm()`, where they are exact. Given
+how much a silently mis-wired context has cost this project, an explicit
+transform outside the graph is the safer contract.
+
+**Verified**, `flow/scripts/onnx_check.py` against cases from the R port
+(`flow/scripts/onnx_cases.R`): **max |diff| 2.4e-12, median 1.7e-14** over 400
+random draws. The only deliberate difference is out of the training box, where
+the port returns `-Inf` and the graph returns `ll_floor_log` (−23.03) — which is
+also what EMC2's `log_likelihood_ddm` floors to.
+
+**Speed: use the compiled port, not the ONNX.** In onnxruntime at float64 the
+graph runs at 14.5 ms per 1000 trials against 1.70 ms for the compiled C++ port
+— a 200-node double-precision graph with many small ops is not the fast path.
+The ONNX build is for interoperability; keep the compiled evaluator for fitting.
+
+**A note for anyone benchmarking against a published LAN.** Those files are
+exported with a **rank-1 signature** (shape `[7]`, one trial per call) and HSSM
+batches by converting the graph, not by calling onnxruntime per trial. So a
+like-for-like batched timing between the two ONNX files is not available: our
+graph takes `[N, 10]`, theirs takes `[7]`. Timing theirs per call gives 8.0 ms
+per 1000, which is call-overhead dominated and should not be quoted as a
+comparison. The honest speed comparison remains the one in `METHODS.md` §3.8,
+where both networks were re-implemented identically in R.
+
+**What a contribution would still need**: a `ddm_full` model config in HSSM with
+`list_params` `["v", "a", "z", "t", "sz", "sv", "st"]`, the transform wrapper
+above, bounds taken from `bounds_natural`, and — the part this project would
+insist on — an SBC cell run through HSSM's own sampler rather than EMC2's.

@@ -457,6 +457,14 @@ Architecturally: the LAN is 7 inputs → three tanh layers of 100 → 1 output w
 a log-likelihood floor at −16.12; ours is 9 inputs → [256, 128] → a 64-bin
 spline, plus a separate [8, 256, 256, 256, 1] choice classifier.
 
+**Our flow is now also an ONNX graph**, `artefacts/ddm_cap256w_c4.onnx`, with a
+LAN-shaped interface — (parameters, rt, choice) in, joint log-likelihood out —
+so it could be offered to HSSM. It reproduces the R port to 2.4e-12
+(`docs/EMC2_INTEGRATION.md` §8). Note that it is an interoperability artefact,
+not the fast path: in onnxruntime at float64 it runs 8.5x slower than the
+compiled C++ evaluator, and a batched timing against the published LAN's ONNX is
+not possible because that file has a rank-1, one-trial-per-call signature.
+
 ## 4. Where an analytic exists: direct regression
 
 A plain MLP regressing the analytic log-density on (θ, rt, R) — no classifier,
