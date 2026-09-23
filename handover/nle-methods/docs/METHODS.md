@@ -49,6 +49,12 @@ faster than a tight analytic, and 2.2x to 4.5x faster than EMC2's default
 precision. A neural likelihood's advantage is largest exactly where the model
 carries the trial-to-trial variability that makes the density expensive.
 
+Quote that range, not a single multiplier: **the speedup is a function of where
+you evaluate it**, and the most honest comparison against everyday practice is
+the EMC2-default column, where it is 2-5x rather than hundreds. Against a
+published LAN, and on the implementation caveats that a cross-library timing
+carries, see §3.8.
+
 The DDM density is an infinite series whose cost scales with the precision
 demanded; the flow's cost is fixed. Race models have closed-form first-passage
 densities that are already cheap. So the DDM is the speed case, and the RDM
@@ -392,6 +398,64 @@ displaced together, suspect the data, not the approximation.**
 
 Every 8-parameter DDM cell and every RDM cell in this document names all of its
 parameters in the formula, so no default is ever used, and none is affected.
+
+### 3.8 Against a published LAN
+
+The field's reference artefact is a **likelihood approximation network** (LAN;
+Fengler et al., `lnccbrown/LANfactory`), distributed as ONNX and consumed by
+HSSM. We scored `ddm_uniform_st` — the LAN closest to our model — with **our
+estimator, unchanged**, so this compares two models with one instrument rather
+than two instruments (`evaluation/compare_lan.R`).
+
+Score bias, 80 draws, on our sampled scales, over a region inside both training
+boxes. Both analytic controls are exactly 0.
+
+| | v | log a | probit w | log st0 |
+|---|---|---|---|---|
+| **LAN `ddm_uniform_st`** | +0.0038 (0.0024) | **−0.1221 (0.0063)** | +0.0025 (0.0043) | −0.0152 (0.0016) |
+| **our flow `cap256w_c4`** | −0.0142 (0.0033) | **+0.0706 (0.0121)** | −0.0126 (0.0057) | +0.0032 (0.0017) |
+
+On `a` the LAN's bias is 1.7x ours and opposite in sign; on `st0` we are ~5x
+better; on `v` and `w` the LAN is slightly better. Neither is clean, and
+**neither has been through SBC at this parameterisation**, which after §3.7 is
+the only verdict either number would settle.
+
+**Four caveats, and they are the substance of this comparison.**
+
+1. **The models are not nested.** `ddm_uniform_st` has drift variability and
+   start-point variability fixed at **zero by construction**; our training box
+   floors them at sv = 0.01 and SZ = 0.05. Each model is therefore scored
+   against ITS OWN exact truth. No LAN exists for the full seven-parameter DDM:
+   HSSM's `full_ddm` ships a blackbox numerical integration only (§1).
+2. **The region decides the number.** Our flow's score bias on `a` is +0.0136
+   over the SBC prior and **+0.0706 here** — the same model, five times worse,
+   because this region is much wider and pins sv and SZ at our box floors, which
+   Phase 29 identified as our worst corner. A score bias is a statement about a
+   model *and a region*; quoting one without the other is meaningless.
+3. **The training boxes differ in shape, not just size** (§ table below): the
+   LAN covers non-decision times to 2.25 s where we stop at 1.0, and we cover
+   drift and start point more widely. The comparison lives in the overlap.
+4. **The speed comparison is implementation-bound.** Our R port of the LAN runs
+   at 10.5 ms per 1000 trials against our flow's 3.35 ms in R and 1.70 ms
+   compiled. That is a faithful port against our own implementation, **not**
+   against HSSM's deployment, which runs the LAN through the ONNX runtime. Read
+   it as "a spline flow with a classifier is not inherently slower than a
+   3x100 tanh MLP", not as a benchmark of the two libraries.
+
+| parameter (WienR convention) | LAN `ddm_uniform_st` | ours `cap256w_c4` |
+|---|---|---|
+| v | [−3.00, 3.00] | [−6.00, 6.00] |
+| a | [0.60, 5.00] | [0.05, 5.00] |
+| w | [0.30, 0.70] | [0.10, 0.90] |
+| t0 | [0.00, 2.25] | [0.05, 1.00] |
+| st0 | [0.002, 0.50] | [0.01, 0.49] |
+| sv | **0, fixed** | [0.01, 4.00] |
+| SZ | **0, fixed** | [0.05, 0.99] |
+| s | 1, fixed | [0.10, 2.00] |
+
+Architecturally: the LAN is 7 inputs → three tanh layers of 100 → 1 output with
+a log-likelihood floor at −16.12; ours is 9 inputs → [256, 128] → a 64-bin
+spline, plus a separate [8, 256, 256, 256, 1] choice classifier.
 
 ## 4. Where an analytic exists: direct regression
 
