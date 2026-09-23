@@ -132,7 +132,9 @@ additionally needs the shift applied in the evaluator before the flow is called.
 
 `artefacts/ddm_cap256w_c4.onnx` is the same flow as a single ONNX graph, built
 by `flow/scripts/export_onnx_ddm.py` (with the `onnx` helper API; no torch
-needed). It exists so the artefact can be offered to HSSM, whose likelihood
+needed); `artefacts/ddm_cap256w_c4_shared.onnx` is the same model with a
+shared-theta signature, 25x faster, built by passing `shared` as the third
+argument. It exists so the artefact can be offered to HSSM, whose likelihood
 interface is exactly this: a graph from (parameters, rt, choice) to a joint
 log-likelihood.
 
@@ -159,10 +161,29 @@ random draws. The only deliberate difference is out of the training box, where
 the port returns `-Inf` and the graph returns `ll_floor_log` (−23.03) — which is
 also what EMC2's `log_likelihood_ddm` floors to.
 
-**Speed: use the compiled port, not the ONNX.** In onnxruntime at float64 the
-graph runs at 14.5 ms per 1000 trials against 1.70 ms for the compiled C++ port
-— a 200-node double-precision graph with many small ops is not the fast path.
-The ONNX build is for interoperability; keep the compiled evaluator for fitting.
+**Two builds, because the interface decides the speed.**
+
+| build | signature | ms / 1000 trials, one core |
+|---|---|---|
+| `ddm_cap256w_c4.onnx` | `[N, 10]`, LAN-compatible | 14.5 |
+| `ddm_cap256w_c4_shared.onnx` | `theta [8]`, `rt [N]`, `choice [N]` | **0.58** |
+| compiled C++ port, via EMC2 | — | 1.70 |
+
+The 25x between the two ONNX builds is **not** an ONNX inefficiency: it is what
+the LAN-style interface costs. A trial-wise graph re-runs the whole network for
+every trial — 59,776 MACs of conditioner plus 133,376 of classifier, so 193
+MMACs per 1000 trials. When the trials share one theta, as they do inside any
+likelihood call, the conditioner needs to run twice (once per response) and the
+classifier once: 0.25 MMACs, then a 64-bin spline inversion per trial. That is
+**764x less network work**, and it is why the compiled port was always faster
+than the trial-wise graph.
+
+So: use `_shared` for fitting (it is faster than our own compiled path, since it
+also avoids re-deriving theta per row and the R-to-C++ marshalling), and ship
+the trial-wise build only where a LAN-shaped interface is required.
+
+float32 was tested and rejected: 0.51 ms against 0.57, an 11% gain for a max
+error of 1.9e-04 against the R port instead of 2.4e-12.
 
 **A note for anyone benchmarking against a published LAN.** Those files are
 exported with a **rank-1 signature** (shape `[7]`, one trial per call) and HSSM

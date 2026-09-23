@@ -42,7 +42,12 @@ def main(model, cases, lan=None):
     X = np.column_stack([d[c] for c in COLS]).astype(np.float64)
     ref = d["logp"]
     s = sess(model)
-    got = s.run(None, {s.get_inputs()[0].name: X})[0]
+    shared = len(s.get_inputs()) == 3          # theta [8], rt [N], choice [N]
+    if shared:
+        got = np.array([s.run(None, {"theta": X[i, :8], "rt": X[i, 8:9],
+                                     "choice": X[i, 9:10]})[0][0] for i in range(len(X))])
+    else:
+        got = s.run(None, {s.get_inputs()[0].name: X})[0]
 
     fin = np.isfinite(ref) & np.isfinite(got)
     err = np.abs(got[fin] - ref[fin])
@@ -57,8 +62,18 @@ def main(model, cases, lan=None):
     n = 1000
     rows = np.tile(X[fin][:1], (n, 1))
     rows[:, 8] = np.random.default_rng(1).uniform(rows[0, 8] * 0.7, rows[0, 8] * 2.0, n)
-    ms = bench(s, rows)
-    print(f"\nspeed, one core, ms per 1000 trials\n  our flow (ONNX)   {ms:8.2f}")
+    rows[:, 9] = np.random.default_rng(2).choice([-1.0, 1.0], n)
+    if shared:
+        th, rtv, chv = rows[0, :8], rows[:, 8], rows[:, 9]
+        s.run(None, {"theta": th, "rt": rtv, "choice": chv})
+        t0 = time.perf_counter()
+        for _ in range(20):
+            s.run(None, {"theta": th, "rt": rtv, "choice": chv})
+        ms = (time.perf_counter() - t0) / 20 * 1000
+    else:
+        ms = bench(s, rows)
+    print(f"\nspeed, one core, ms per 1000 trials\n  our flow (ONNX, "
+          f"{'shared-theta' if shared else 'trial-wise'})   {ms:8.2f}")
     if lan:
         sl = sess(lan)
         i0 = sl.get_inputs()[0]

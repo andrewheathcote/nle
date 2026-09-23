@@ -35,9 +35,13 @@ import onnx
 from onnx import TensorProto, helper, numpy_helper
 
 FT = TensorProto.DOUBLE
+NP = np.float64
 
 
-def main(src: str, dst: str) -> None:
+def main(src: str, dst: str, mode: str = "trialwise", dtype: str = "float64") -> None:
+    global FT, NP
+    FT = TensorProto.DOUBLE if dtype == "float64" else TensorProto.FLOAT
+    NP = np.float64 if dtype == "float64" else np.float32
     fl = json.load(open(src))
     sp = fl["spline"]
     K = int(sp["num_bins"])
@@ -49,7 +53,7 @@ def main(src: str, dst: str) -> None:
     init, nodes = [], []
 
     def const(name, arr):
-        init.append(numpy_helper.from_array(np.asarray(arr, dtype=np.float64), name))
+        init.append(numpy_helper.from_array(np.asarray(arr, dtype=NP), name))
         return name
 
     def iconst(name, arr):
@@ -65,8 +69,8 @@ def main(src: str, dst: str) -> None:
         h = x
         L = spec["layers"]
         for i, lyr in enumerate(L):
-            W = const(f"{tag}_W{i}", np.array(lyr["W"], dtype=np.float64))
-            b = const(f"{tag}_b{i}", np.array(lyr["b"], dtype=np.float64))
+            W = const(f"{tag}_W{i}", np.array(lyr["W"], dtype=NP))
+            b = const(f"{tag}_b{i}", np.array(lyr["b"], dtype=NP))
             z = node("MatMul", [h, W], [f"{tag}_mm{i}"])
             h = node("Add", [z, b], [f"{tag}_add{i}"])
             if i < len(L) - 1:                      # 0.5x(1+tanh(c(x+0.044715x^3)))
@@ -85,22 +89,38 @@ def main(src: str, dst: str) -> None:
         return node("Slice", [x, iconst(f"{tag}_s", [lo]), iconst(f"{tag}_e", [hi]),
                               iconst(f"{tag}_a", [1])], [f"{tag}_out"])
 
-    inp = helper.make_tensor_value_info("input", FT, ["N", 10])
+    if mode == "trialwise":
+        inputs = [helper.make_tensor_value_info("input", FT, ["N", 10])]
+        theta = slice_cols("input", 0, 8, "theta")        # [N,8] sampled scale
+        rt = slice_cols("input", 8, 9, "rt")              # [N,1]
+        choice = slice_cols("input", 9, 10, "choice")     # [N,1]
+    else:
+        # shared-theta: one parameter vector, many trials. The conditioner and
+        # the classifier then run ONCE (twice for the flow, once per response)
+        # instead of once per trial -- which is what the compiled port does, and
+        # why it is ~8x faster than the trial-wise graph.
+        inputs = [helper.make_tensor_value_info("theta", FT, [8]),
+                  helper.make_tensor_value_info("rt", FT, ["N"]),
+                  helper.make_tensor_value_info("choice", FT, ["N"])]
+        theta = node("Reshape", ["theta", iconst("th_shape", [1, 8])], ["theta_row"])
+        rt = node("Reshape", ["rt", iconst("rt_shape", [-1, 1])], ["rt_col"])
+        choice = node("Reshape", ["choice", iconst("ch_shape", [-1, 1])], ["choice_col"])
     out = helper.make_tensor_value_info("log_likelihood", FT, ["N"])
 
-    theta = slice_cols("input", 0, 8, "theta")            # [N,8] sampled scale
-    rt = slice_cols("input", 8, 9, "rt")                  # [N,1]
-    choice = slice_cols("input", 9, 10, "choice")         # [N,1]
-
     # ---- standardise, append raw R (1 or 2), run the conditioner -------------
-    mu = const("scaler_mean", np.array(fl["scaler"]["mean"], dtype=np.float64))
-    sd = const("scaler_scale", np.array(fl["scaler"]["scale"], dtype=np.float64))
+    mu = const("scaler_mean", np.array(fl["scaler"]["mean"], dtype=NP))
+    sd = const("scaler_scale", np.array(fl["scaler"]["scale"], dtype=NP))
     ctx = node("Sub", [theta, mu], ["ctx_c"])
     ctx = node("Div", [ctx, sd], ["ctx_std"])
-    R = node("Add", [choice, const("three", 3.0)], ["R_a"])       # -1 -> 1, +1 -> 2
-    R = node("Mul", [R, const("half", 0.5)], ["R"])
-    flow_in = node("Concat", [ctx, R], ["flow_in"], axis=1)
-    raw = mlp(flow_in, fl["flow_mlp"], "flow")                    # [N, 3K+1]
+    if mode == "trialwise":
+        R = node("Add", [choice, const("three", 3.0)], ["R_a"])   # -1 -> 1, +1 -> 2
+        R = node("Mul", [R, const("half", 0.5)], ["R"])
+        flow_in = node("Concat", [ctx, R], ["flow_in"], axis=1)
+    else:
+        ctx2 = node("Tile", [ctx, iconst("tile2", [2, 1])], ["ctx2"])
+        flow_in = node("Concat", [ctx2, const("R_rows", np.array([[1.0], [2.0]]))],
+                       ["flow_in"], axis=1)                       # [2, 9]
+    raw = mlp(flow_in, fl["flow_mlp"], "flow")                    # [rows, 3K+1]
 
     # ---- spline knots --------------------------------------------------------
     def knots(raw_slice, tag):
@@ -131,7 +151,18 @@ def main(src: str, dst: str) -> None:
                                                        iconst("sl_1a", [1])], ["sl_first"]),
                                         const("zero_m", 0.0)], ["sl_zero"]),
                            const("one_c", 1.0)], ["ones_col"])
-    slopes = node("Concat", [one_col, mid, one_col], ["slopes"], axis=1)   # [N, K+1]
+    slopes = node("Concat", [one_col, mid, one_col], ["slopes_rows"], axis=1)
+
+    if mode == "shared":
+        # pick each trial's response row: choice -1 -> row 0, +1 -> row 1
+        sel = node("Cast", [node("Greater", [choice, const("zero_sel", 0.0)], ["is_up"])],
+                   ["sel_i"], to=TensorProto.INT64)
+        sel = node("Reshape", [sel, iconst("sel_shape", [-1])], ["sel_flat"])
+        x_pos = node("Gather", [x_pos, sel], ["x_pos_t"], axis=0)
+        y_pos = node("Gather", [y_pos, sel], ["y_pos_t"], axis=0)
+        slopes = node("Gather", ["slopes_rows", sel], ["slopes"], axis=0)
+    else:
+        slopes = node("Identity", ["slopes_rows"], ["slopes"])
 
     # ---- locate the bin, then invert the RQS --------------------------------
     u = node("Log", [rt], ["u"])                                   # [N,1]
@@ -163,7 +194,7 @@ def main(src: str, dst: str) -> None:
                         node("Mul", [node("Mul", [aa, cc], ["ac"]), const("four", 4.0)], ["ac4"])],
                 ["disc"])
     pos_disc = node("Greater", [disc, const("zero_d", 0.0)], ["pos_disc"])
-    safe = node("Sqrt", [node("Where", [pos_disc, disc, const("tiny", np.finfo(np.float64).tiny)],
+    safe = node("Sqrt", [node("Where", [pos_disc, disc, const("tiny", np.finfo(NP).tiny)],
                               ["disc_safe"])], ["sqrt_raw"])
     safe = node("Where", [pos_disc, safe, const("zero_s", 0.0)], ["safe_sqrt"])
     bb_nonneg = node("GreaterOrEqual", [bb, const("zero_b", 0.0)], ["bb_nonneg"])
@@ -216,8 +247,8 @@ def main(src: str, dst: str) -> None:
               ["ll_raw"])
 
     # ---- box check: refuse to extrapolate ------------------------------------
-    lo = const("box_lo", np.array(fl["bounds_sampled"]["lower"], dtype=np.float64))
-    hi = const("box_hi", np.array(fl["bounds_sampled"]["upper"], dtype=np.float64))
+    lo = const("box_lo", np.array(fl["bounds_sampled"]["lower"], dtype=NP))
+    hi = const("box_hi", np.array(fl["bounds_sampled"]["upper"], dtype=NP))
     okl = node("GreaterOrEqual", [theta, lo], ["ok_lo"])
     okh = node("LessOrEqual", [theta, hi], ["ok_hi"])
     okb = node("And", [okl, okh], ["ok_both"])
@@ -227,18 +258,22 @@ def main(src: str, dst: str) -> None:
     ll = node("Where", [in_box, ll, const("floor", float(fl["ll_floor_log"]))], ["ll_boxed"])
     node("Squeeze", [ll, iconst("sq_ax", [1])], ["log_likelihood"])
 
-    graph = helper.make_graph(nodes, "ddm_flow", [inp], [out], initializer=init)
+    graph = helper.make_graph(nodes, "ddm_flow", inputs, [out], initializer=init)
     model = helper.make_model(graph, producer_name="nle-methods",
                               opset_imports=[helper.make_opsetid("", 18)])
     # onnxruntime 1.30 caps IR at 10; onnx 1.23 defaults to 14. Pin it so the
     # artefact loads in the runtime HSSM actually uses.
     model.ir_version = 10
+    iface = ("Input [N,10]: 8 context values on the sampled scale (v, log a, "
+             "log t0, log s, probit Z, probit SZ, log sv, log st0), rt, choice in "
+             "{-1,+1}." if mode == "trialwise" else
+             "Inputs: theta [8] on the sampled scale (v, log a, log t0, log s, "
+             "probit Z, probit SZ, log sv, log st0), rt [N], choice [N] in {-1,+1}. "
+             "The conditioner and classifier run once, not per trial.")
     model.doc_string = (
-        "DDM neural likelihood (spline flow + choice classifier). Input [N,10]: "
-        "8 context values on the sampled scale (v, log a, log t0, log s, probit Z, "
-        "probit SZ, log sv, log st0), rt, choice in {-1,+1}. Output: joint "
-        "log-density log p(rt, choice | theta). Outside the training box the "
-        "output is the floor " + str(fl["ll_floor_log"]) + "."
+        "DDM neural likelihood (spline flow + choice classifier). " + iface +
+        " Output: joint log-density log p(rt, choice | theta). Outside the "
+        "training box the output is the floor " + str(fl["ll_floor_log"]) + "."
     )
     onnx.checker.check_model(model, full_check=True)
     onnx.save(model, dst)
@@ -246,4 +281,4 @@ def main(src: str, dst: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:])
