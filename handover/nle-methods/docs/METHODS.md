@@ -335,7 +335,7 @@ badly wrong until 2026-09-23 and is now this:
 | shipped flow, st0 *fixed* at 0.05 at evaluation time | t0 +0.269, Z degrades to −0.148 | stands (P29) |
 | shipped flow, st0 *fixed* at 0.01 | a +0.448, Z −0.405, t0 +0.293; confounded with the training-box floor | stands (P29) |
 | dedicated st0 = 0 flow (`z0_s503_e282`) | **passes the gate** at 500 reps: worst +0.282 (Z), coverage 0.936-0.960; ranks non-uniform on a, t0, Z (KS ~1e-6) | corrected (P37) |
-| decision-time flow, rt − t0 (`dt_s703_e167`) | re-run under way | corrected (P37) |
+| decision-time flow, rt − t0 (`dt_s703_e167`) | **passes the gate** at 500 reps: worst t0 +0.392, but t0 coverage 0.816 against nominal 0.95 | corrected (P37) |
 
 **What stands.** Fixing st0 at evaluation time does not fix t0 and makes `Z`
 worse, so "fix st0 and the artefact is safe" remains false. Those cells named
@@ -464,10 +464,15 @@ mean(posterior mean − truth) / sd, for each likelihood. Cost: about a minute p
 flow for a 7-parameter model, 33 minutes for the 8-parameter one, against three
 to five hours for an SBC cell.
 
-| flow | predicted t0 | SBC t0 |
+| flow | predicted t0 | SBC t0 (500 reps) |
 |---|---|---|
 | `cap256w_c4` | +0.28 | +0.319 |
-| `z0_s503_e282` | +0.12 to +0.20 | +0.276 (corrected cell, 500 reps) |
+| `z0_s503_e282` | +0.12 to +0.20 | +0.276 |
+| `dt_s703_e167` | +0.27 to +0.55 | +0.392 |
+
+It also called `v` correctly for the decision-time flow (+0.02 to +0.11
+predicted, +0.050 at 500 replicates) where a 12-replicate SBC of the same cell
+reported −0.934 — a reminder that a small SBC cell is not a cheap SBC cell.
 
 Its analytic column is its own control and reads ~0 (within ±0.13 at 60
 datasets). It is not a replacement for SBC — it approximates each posterior by

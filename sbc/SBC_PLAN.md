@@ -3302,6 +3302,45 @@ point estimates carrying a small upward offset on three parameters** -- a
 usable artefact of the same character as the shipped one, and nothing like the
 retracted "coverage 0.000".
 
+### The decision-time cell, also at 500 replicates
+
+tux26, 168.2 min, same correction (`st0` named a constant):
+
+| par | std bias | coverage | mean rank | KS p |
+|---|---|---|---|---|
+| v | +0.050 | 0.966 | 0.491 | 0.57 |
+| a | −0.073 | 0.928 | 0.520 | 0.12 |
+| **t0** | **+0.392** | **0.816** | 0.423 | 8.5e-13 |
+| Z | −0.108 | 0.952 | 0.537 | 0.0029 |
+| SZ | −0.005 | 0.952 | 0.505 | 0.88 |
+| sv | +0.050 | 0.950 | 0.487 | 0.47 |
+
+Against the retracted +2.490 / coverage 0.002, t0 is now +0.392 -- inside the
+gate, but with **coverage 0.816 against nominal 0.95** (MC se 0.0097), which is
+lower than the displacement alone predicts (0.932), so the t0 posterior is too
+narrow as well as displaced. The build is therefore calibrated at the gate level
+and still the weakest of the three on t0; it does not supersede the shipped flow.
+
+**A 12-replicate preview of this cell showed v at −0.934 (t = −3.24, p = 0.008)
+and it did not survive**: v is +0.050 at 500 replicates, with KS p 0.57 and
+coverage 0.966. Twelve replicates estimate the standardised bias too poorly to
+act on, even when the accompanying t-test looks decisive -- the same lesson as
+Phases 22/30 in yet another costume, and it was caught this time only because
+the confirmation was already queued.
+
+### The cheap diagnostic, scored against all three corrected cells
+
+| flow | posterior-shift prediction for t0 | SBC t0 (500 reps) |
+|---|---|---|
+| `cap256w_c4` | +0.28 | +0.319 |
+| `z0_s503_e282` | +0.12 to +0.20 | +0.276 |
+| `dt_s703_e167` | +0.27 to +0.55 | +0.392 |
+
+Three flows, three cells, agreement within ~0.1 on every one -- and on `v` for
+the decision-time flow (+0.02 to +0.11 predicted, +0.050 observed) where a
+12-replicate SBC said −0.934. At one minute per 7-parameter flow against ~168
+minutes per cell, this is the screening instrument the project lacked.
+
 ### What this retracts
 
 - **Phase 32** (st0 = 0 "fails catastrophically", "a density can be correct to
