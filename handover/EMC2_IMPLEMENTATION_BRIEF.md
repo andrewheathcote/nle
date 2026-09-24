@@ -270,3 +270,42 @@ validation kit that runs from the registration object:
 - The risk to manage is support burden: publish the contract as a short document
   with a worked example, and make the validation kit the price of admission
   rather than an optional extra.
+
+
+---
+
+## 4. After it lands: this project migrates onto it
+
+Not optional, and worth stating in the plan now, because it is also the only
+honest test of §3. The NLE project currently carries its own versions of
+everything the new interface is meant to provide, and each one becomes a test
+case:
+
+| what this project has now | what it becomes |
+|---|---|
+| `evaluation/DDMnn7.R`, `DDMnn6.R`, `DDMreg.R` — hand-written model functions, one per parameterisation | one `register_nn_model()` call each; if the registry cannot express them, the contract is wrong |
+| `evaluation/permute_context.R` — re-expresses a flow to match a hardcoded context order | deleted: a generic theta builder reads `context_names` |
+| the `.theta_DDMnn` family's literal `cbind()` | deleted |
+| `evaluation/score_bias_draws.R`, `score_bias_t0.R`, `score_bias_race.R`, `score_bias_regress.R`, `test_posterior_shift.R` | the validation kit, generalised to any registered model |
+| `evaluation/sbc_specs.R` + `run_sbc_cell` | the kit's SBC harness, with the cell taken from the registration object |
+| `evaluation/make_bundle_st0zero.R` and the swap-a-file dance | a path in a registry |
+
+**The acceptance test for the whole exercise** is that the four artefacts in
+`handover/nle-methods/artefacts/` — `cap256w_c4`, `st0zero`, `rdm_small`, and
+the regression net — load through the new interface and reproduce their recorded
+numbers: the same log-densities as the R port (~1e-14), the same score bias to
+1e-6, and the same SBC standardised biases within Monte Carlo error on a
+re-run cell. Those numbers are in `results/` and in `METHODS.md`, so the test is
+already written down; nothing new has to be invented to check it.
+
+Two consequences worth planning for:
+
+- **The migration will find contract gaps.** `DDMreg` has no CDF, the
+  decision-time flow needs `rt - t0` applied before the network sees it, and the
+  st0 = 0 build needs a bound exception at zero. Any interface that cannot carry
+  those three will not carry a stranger's model either.
+- **The documentation for the validation kit should be this project's methods
+  document, condensed.** `docs/TRAPS.md` is already the checklist a user needs,
+  and `METHODS.md` §6 is the argument for why loading a network is not the same
+  as being able to infer with it. Point at them rather than writing something
+  new and thinner.
