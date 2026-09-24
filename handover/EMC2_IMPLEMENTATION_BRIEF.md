@@ -71,6 +71,16 @@ and the call takes **839 ms per 1000 trials** against 1.28 ms shared. A batched
 GEMM over the unique rows is the same arithmetic: our ONNX graph does exactly
 that and takes 14.6 ms. So this is worth ~57x on trial-varying designs.
 
+Concretely, the evaluator already finds unique theta rows in order to cache
+them; the change is to stop conditioning them one at a time. Collect the U
+unique rows into a U x n_ctx matrix, run each MLP layer as ONE `dgemm_` call
+(U x n_in by n_in x n_out) instead of U `dgemv_` calls, apply the activation
+over the whole block, build the U x 2 sets of spline knots from the result, then
+scatter to trials as now. The per-trial spline inversion is untouched, and with
+U = 1 the code path is identical to today's. Do (a) and (b) together: the same
+`mlp_forward` rewrite serves both, with U = 1 for the shared-theta case and
+U = number of unique rows otherwise.
+
 ### Acceptance tests
 
 - `port/tests/validate_ddm.R` — the golden vectors, exported from JAX. Must pass
@@ -157,6 +167,11 @@ script is `flow/scripts/export_onnx_ddm.py` and the checker is
 `flow/scripts/onnx_check.py` (float64 throughout; float32 was tested and
 rejected — 11% faster for a max error of 1.9e-04).
 
+### A note on scope
+
+(a) and (b) are internal to the evaluator and change no interface. The reader in
+§2 adds one. Section 3 is a larger proposal and should be costed separately.
+
 ### The warning that must travel with any LAN exposed this way
 
 Their calibration is unknown, and the one we measured is not good. Scored with
@@ -167,3 +182,91 @@ score bias, not about SBC, and this project has learned the hard way that only
 SBC settles a calibration question. So: expose them, and document that any
 network reached this way needs its own SBC cell with a matched analytic control
 before it is used for inference.
+
+
+---
+
+## 3. "Bring your own network" — a contract, not a special case
+
+Worth considering for the plan, because everything below already exists in some
+form and is currently hardcoded per model.
+
+### Why it is viable
+
+Our export JSON already carries everything a generic loader needs:
+`context_names`, `context_transforms` (identity/log/probit per parameter),
+`parameter_scale`, the standardiser, `bounds_natural` and `bounds_sampled`,
+`response_coding`, the spline geometry, and `ll_floor_log`. That is a model
+card. What makes EMC2 model-specific today is not the maths but three hardcoded
+things:
+
+1. `.theta_DDMnn()` builds the context with a literal `cbind(...)` in a fixed
+   order, ignoring the export's own `context_names` (the same is true of
+   `dRDMnn`). A generic builder driven by `context_names` + `context_transforms`
+   replaces every one of these, and removes the mis-wiring trap in §0 entirely.
+2. Bundle filenames are hardcoded in the `*_get()` functions, so a model is
+   swapped by overwriting a file. A registry keyed by a user-supplied path
+   removes that.
+3. The evaluator assumes the DDM's 8-column layout. The compiled port is already
+   dimension-generic (verified: it accepts 7- and 6-column bundles unchanged);
+   only the R-level builders assume a width.
+
+So the work is mostly deletion of assumptions, not new machinery.
+
+### Suggested shape
+
+```r
+m <- register_nn_model(
+  path      = "my_flow.json",        # or .onnx + a sidecar model card
+  pars      = c("v", "B", "A", "t0"),# EMC2 parameter names, in the net's order
+  transforms= c("identity", "log", "log", "log"),
+  bounds    = list(lower = ..., upper = ...),
+  response  = "joint",               # joint density, or "conditional" + a classifier
+  cdf       = FALSE                  # no survivor -> race assembly unavailable
+)
+design(..., model = m)
+```
+
+with three tiers of what a network can be:
+
+| tier | interchange | what it buys |
+|---|---|---|
+| A | our flow JSON | any flow trained with this project's exporter, any parameter count |
+| B | ONNX + model card | any architecture, including the HSSM LANs (§2) and plain regression MLPs |
+| C | an R closure | an escape hatch for anything else, at R speed |
+
+Tier A is the smallest step and covers "a user retrained our recipe on their own
+model". Tier B is the general one and shares all its machinery with §2. Tier C
+costs nothing and makes the contract testable.
+
+### What must come with it, or it does harm
+
+A likelihood that loads silently and fits silently is exactly the failure mode
+this project spent months documenting. Any such interface should ship a
+validation kit that runs from the registration object:
+
+- **total mass** — `integral over rt of sum over R exp(f_hat)` should be 1. A flow
+  gets this by construction; a regression net does not, and what matters is not
+  the offset but its variation with theta.
+- **in-box check** — refuse, loudly, outside the declared training box rather
+  than extrapolating.
+- **score bias with its analytic control**, where an analytic exists
+  (`evaluation/score_bias_draws.R` generalises: it needs only the model's own
+  density and a reference).
+- **the posterior-shift screen** (`evaluation/test_posterior_shift.R`), ~1 minute
+  per model, which predicted SBC within ~0.1 on every DDM flow tested.
+- **an SBC cell with a matched analytic control**, which is the only verdict.
+  The harness (`evaluation/sbc_specs.R`, `run_sbc_cell`) is already generic over
+  models; it needs the cell definition to come from the registration object.
+
+### Cost and risk, honestly
+
+- Tier A plus the generic theta builder: small, and it deletes more code than it
+  adds.
+- Tier B: the ONNX reader from §2, plus a model-card schema. Moderate.
+- The validation kit: this is the real work, and it is also the part with
+  research value — it is the difference between "EMC2 can load your network" and
+  "EMC2 can tell you whether your network is fit to infer with".
+- The risk to manage is support burden: publish the contract as a short document
+  with a worked example, and make the validation kit the price of admission
+  rather than an optional extra.
