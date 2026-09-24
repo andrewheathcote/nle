@@ -3424,3 +3424,30 @@ and whether the control differs from the cell in exactly one respect. That is
 what Phase 37 cost four phases to learn.
 
 Collection and write-up instructions: `handover/nle-methods/docs/OPEN_ITEMS.md`.
+
+## Phase 39 — the t0 correction, confirmed out of sample
+
+Phase 27's multiplicative correction was calibrated and tested on the same four
+cells (N = 100, 200, 400, 800), leave-one-out only. That caveat has travelled
+with it ever since. This closes it: a cell at **N = 250**, 300 replicates,
+`cap256w_c4`, laptop, 834 min, at an N that played no part in the calibration.
+
+    delta from the four calibrating cells   0.002764
+    observed at N = 250                     0.002765   (se 0.000729, n = 300)
+    difference                              +0.000001  (0.00 se)
+
+| N = 250 | std bias | mean rank | KS p |
+|---|---|---|---|
+| uncorrected | +0.219 | 0.449 | 2.6e-02 |
+| corrected, out of sample | **+0.000** | 0.518 | **0.22** |
+
+The six-decimal agreement is luck -- the Monte Carlo se is 0.00073, so anything
+within about ±0.0015 would have been consistent -- but the correction is now
+confirmed on a cell it was not fitted to, which is what the caveat asked for.
+
+Full cell (coverage / mean bias): v 0.960 / +0.0092, a 0.947 / +0.0010,
+t0 0.940 / +0.0028, Z 0.953 / +0.0003, sv 0.940 / +0.0119, SZ 0.940 / -0.0074,
+st0 0.967 / -0.0028. Coverage is nominal on every parameter.
+
+Script: `sbc/test_t0_correction_oos.R`. Result:
+`sbc/nci/results_c4single_N250/DDMnn_N250_R300.rds`.

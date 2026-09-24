@@ -85,9 +85,9 @@ in exactly one respect.
   st0 = 0 build (`z0_s503_e282`) is now a real alternative: it passes the gate
   at 500 replicates with nominal coverage, and fails rank uniformity on `a`, t0
   and `Z` where the shipped flow fails on t0 alone. Neither is clean.
-- **An independent cell for the t0 correction.** Phase 27's multiplicative
-  correction is still calibrated and tested on the same four N values,
-  leave-one-out only. A cell at an N outside {100, 200, 400, 800} closes it.
+- ~~An independent cell for the t0 correction.~~ **DONE** (2026-09-24): N = 250,
+  300 replicates, predicted delta 0.002764 against observed 0.002765; corrected
+  standardised bias +0.000, KS p 0.22. Phase 27 is closed.
 - **`mlp_forward` through BLAS, at the next EMC2 rebase.** The evaluator's
   fixed cost is ~0.87 ms per call, all of it scalar-loop matrix multiplication
   in `port/src/flow_ddm.cpp` (§9 of `EMC2_INTEGRATION.md`); `dgemv_` should take
