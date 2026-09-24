@@ -244,3 +244,45 @@ once per unique row. That is a 700x cliff, and it is invisible in single-subject
 fitting where every trial shares one theta. Before using a flow likelihood with
 a continuous trial-level regressor, budget for it: the cost becomes
 (unique theta count) x 0.87 ms.
+
+
+---
+
+## 10. Trial-varying designs: where the flow stops winning
+
+Measured, n = 1000, one core, drift varying per trial (a continuous trial-level
+covariate) against the same call with one shared theta. Parameters
+sv = 0.1, SZ = 0.2, st0 = 0.05:
+
+| evaluator | shared theta | theta varying per trial |
+|---|---|---|
+| flow, EMC2 C++ path | **1.28** | **839.40** |
+| flow, ONNX (trial-wise graph) | 0.58 (shared graph) | **14.58** |
+| WienR analytic, precision 1e-8 | 5.20 | 5.20 |
+| WienR analytic, EMC2 default 5e-3 | 3.05 | 3.05 |
+
+Three things follow.
+
+**1. The analytic has nothing to amortise, so it does not care.** Its cost is
+per trial either way. The flow's advantage in normal designs comes entirely from
+conditioning once per likelihood call; take that away and the advantage goes
+with it.
+
+**2. At these settings the flow LOSES on a trial-varying design** — 14.6 ms
+against 5.2 ms even with the best implementation we have, and 839 ms through
+EMC2's current evaluator. Do not put a flow likelihood behind a continuous
+trial-level regressor at modest variability and expect a speedup.
+
+**3. But it depends where in parameter space you are.** The analytic's cost
+rises steeply with the variability parameters (§1: 105 ms per 1000 at sv = 0.5,
+281 ms at sv = 1.5, precision 1e-8) while the flow's does not move. So on a
+trial-varying design with substantial sv/SZ/st0 the flow wins again — 14.6 ms
+against 105-281 ms. The crossover is real and sits inside the parameter space
+people use, which is why this is a table rather than a multiplier.
+
+**The 839 vs 14.6 ms gap is ours to close, and it is not an ONNX-versus-C++
+story.** EMC2's evaluator conditions once per unique row, so with 1000 unique
+rows it pays 1000 scalar-loop conditionings; the trial-wise ONNX graph does the
+same arithmetic as batched GEMM. Either batching the conditioner in
+`flow_ddm.cpp` or routing those matmuls through BLAS (§9) would recover most of
+the 57x, and both are the same fix.

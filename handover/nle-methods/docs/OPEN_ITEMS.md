@@ -88,6 +88,28 @@ in exactly one respect.
 - **An independent cell for the t0 correction.** Phase 27's multiplicative
   correction is still calibrated and tested on the same four N values,
   leave-one-out only. A cell at an N outside {100, 200, 400, 800} closes it.
+- **`mlp_forward` through BLAS, at the next EMC2 rebase.** The evaluator's
+  fixed cost is ~0.87 ms per call, all of it scalar-loop matrix multiplication
+  in `port/src/flow_ddm.cpp` (§9 of `EMC2_INTEGRATION.md`); `dgemv_` should take
+  it toward ~0.2 ms, and batching the conditioner would also close most of the
+  57x gap on trial-varying designs (§10). **Deliberately deferred**: the flow
+  integration is to be redone against the current `dev` EMC2, and this change
+  needs both compiled copies rebuilt and the golden vectors re-run, so it
+  belongs in that step rather than as a patch to the present build.
+- **An ONNX path in EMC2 — for the published LANs, not for our flows.** Our
+  flows do not need it (§9: the ONNX marginal cost equals the C++ port's, so it
+  would buy only the fixed overhead that the BLAS fix addresses anyway). The
+  real argument is capability: `lnccbrown/HSSM` ships LANs for `angle`, `levy`,
+  `ornstein`, `weibull`, `gamma_drift`, `ddm_sdv`, `ddm_uniform_st` and several
+  race and LBA variants, and EMC2 has analytic likelihoods for almost none of
+  them. An ONNX reader would make all of those available to EMC2 designs at
+  once. Two things to know before starting: those files have a **rank-1
+  signature** (one trial per call), so they need either a per-call loop
+  (measured: 8.0 ms per 1000 trials, call-overhead dominated) or a small graph
+  edit to accept a batch dimension; and **their calibration is unknown** — the
+  one we scored carries g on log a of −0.122, an order of magnitude worse than
+  our flow's over the same region (`METHODS.md` §3.8), so anything reached this
+  way needs its own SBC before it is trusted.
 - **A compiled evaluator for the regression net.** Would turn a 5-day cell into
   a 3-hour one and make the baseline a practical artefact rather than a
   comparison. Note that a naive C++ loop will not beat reference BLAS by much;
