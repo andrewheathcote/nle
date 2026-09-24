@@ -99,11 +99,18 @@ in exactly one respect.
 - **An ONNX path in EMC2 — for the published LANs, not for our flows.** Our
   flows do not need it (§9: the ONNX marginal cost equals the C++ port's, so it
   would buy only the fixed overhead that the BLAS fix addresses anyway). The
-  real argument is capability: `lnccbrown/HSSM` ships LANs for `angle`, `levy`,
+  There are two real arguments. **Capability**: `lnccbrown/HSSM` ships LANs for `angle`, `levy`,
   `ornstein`, `weibull`, `gamma_drift`, `ddm_sdv`, `ddm_uniform_st` and several
   race and LBA variants, and EMC2 has analytic likelihoods for almost none of
   them. An ONNX reader would make all of those available to EMC2 designs at
-  once. Two things to know before starting: those files have a **rank-1
+  once. **And trial-varying designs where no analytic exists**: a batched
+  runtime evaluates a per-trial network at 14.6 ms per 1000 trials where a
+  scalar per-row loop takes 839 (§10 of `EMC2_INTEGRATION.md`). For the DDM that
+  is moot — WienR costs 5.2 ms — but for `angle`, `weibull` or any future flow
+  for an intractable model there is nothing to fall back on, and this is the
+  difference between a usable regression design and an unusable one. Batching
+  the conditioner in `flow_ddm.cpp` wins the same thing for our own models; ONNX
+  gets it for free for models we did not build. Two things to know before starting: those files have a **rank-1
   signature** (one trial per call), so they need either a per-call loop
   (measured: 8.0 ms per 1000 trials, call-overhead dominated) or a small graph
   edit to accept a batch dimension; and **their calibration is unknown** — the
