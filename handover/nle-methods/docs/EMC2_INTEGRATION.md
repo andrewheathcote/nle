@@ -198,3 +198,49 @@ where both networks were re-implemented identically in R.
 `list_params` `["v", "a", "z", "t", "sz", "sv", "st"]`, the transform wrapper
 above, bounds taken from `bounds_natural`, and — the part this project would
 insist on — an SBC cell run through HSSM's own sampler rather than EMC2's.
+
+
+---
+
+## 9. Where the time goes in `dDDMnn` (profiled 2026-09-24)
+
+Milliseconds per call, one core, `cap256w_c4`:
+
+| stage | n = 1 | n = 1000 | n = 10000 |
+|---|---|---|---|
+| `ddmnn_get()` (pointer cache) | 0.000 | 0.000 | 0.000 |
+| `.theta_DDMnn()` (R: log/qnorm/cbind) | 0.005 | 0.065 | 0.600 |
+| **`ddm_ens_eval_trials_cpp`** | **0.865** | 1.220 | 4.500 |
+| `dDDMnn()` total | 0.845 | 1.300 | 5.250 |
+
+So a call costs **~0.87 ms fixed plus ~0.36 ms per 1000 trials**, and the fixed
+part is entirely inside the C++ evaluator. The R side is negligible.
+
+**The fixed cost is the per-theta conditioning, and it is scalar code.**
+Conditioning one theta is 0.25 MMACs (the conditioner twice, once per response,
+plus the classifier once). Taking 0.87 ms for that is ~0.6 GFLOP/s, which is
+what a hand-written triple loop gives: `mlp_forward` in `port/src/flow_ddm.cpp`
+multiplies with nested `for` loops and no BLAS call. The same arithmetic runs in
+0.13 ms under onnxruntime.
+
+**The fix is local, and it is not "switch to ONNX".** Route `mlp_forward`'s
+matrix products through BLAS (`R_ext/BLAS.h`'s `dgemv_`, already linked in every
+R package) instead of scalar loops. On these sizes that should take the fixed
+cost from ~0.87 ms toward ~0.2 ms, i.e. **roughly a third off a typical N = 400
+likelihood call**, with no new dependency and no second evaluation path to keep
+in sync. An ensemble bundle gains proportionally more, since it conditions once
+per member.
+
+For the record, the ONNX alternative was measured rather than assumed: its
+marginal cost is the same as the C++ port's (0.45 vs 0.43 ms per 1000 trials),
+so the only thing it would buy is that fixed overhead — and calling it from R
+needs either reticulate or an Rcpp binding to the ORT C API, either of which
+gives some of it back. Fix the loop instead.
+
+**A trap this profiling exposed.** With a DISTINCT theta per row — any design
+with a trial-varying continuous covariate — the same call takes **855 ms per
+1000 trials** against 1.22 ms with a shared theta, because the conditioning runs
+once per unique row. That is a 700x cliff, and it is invisible in single-subject
+fitting where every trial shares one theta. Before using a flow likelihood with
+a continuous trial-level regressor, budget for it: the cost becomes
+(unique theta count) x 0.87 ms.

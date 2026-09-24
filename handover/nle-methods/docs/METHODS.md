@@ -55,6 +55,22 @@ the EMC2-default column, where it is 2-5x rather than hundreds. Against a
 published LAN, and on the implementation caveats that a cross-library timing
 carries, see §3.8.
 
+**One architectural difference matters more for speed than any of these
+numbers, and it favours the flow.** In a LAN, `rt` enters at the *first layer*,
+so every layer depends on it and the whole network must run once per trial. In
+our flow the network sees only theta and the response — it emits spline knots,
+and `rt` enters only at the spline evaluation. So inside a likelihood call,
+where every trial shares one theta, the expensive part runs **once** and each
+trial costs only a spline inversion. Measured on our own artefact: 193 MMACs per
+1000 trials if the network is re-run per trial, against 0.25 MMACs plus 1000
+spline inversions if it is not — **764x less network work**, for the same
+numbers to 2.4e-12. A per-trial ONNX interface hides this; our exports ship both
+signatures so it is visible (`docs/EMC2_INTEGRATION.md` §8).
+
+This is why a like-for-like "flow versus LAN" speed claim is not a single
+number: in the many-trials-one-theta regime that fitting actually uses, the
+flow's conditioner amortises and a LAN's cannot.
+
 The DDM density is an infinite series whose cost scales with the precision
 demanded; the flow's cost is fixed. Race models have closed-form first-passage
 densities that are already cheap. So the DDM is the speed case, and the RDM
