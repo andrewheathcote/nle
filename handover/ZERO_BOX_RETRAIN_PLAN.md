@@ -204,7 +204,40 @@ the laptop.
 
 ---
 
-## 7. Risks
+## 7. Speed expectations — measured, so the paper does not overclaim
+
+The architecture is unchanged, so the flow's cost per call is the same in every
+regime: the transform is applied once per theta and is negligible. What changes
+is the **analytic's** cost, which collapses when a variability parameter is
+exactly zero because WienR takes its special-case branch and skips an
+integration. ms per 1000 trials, one core (flow timed with the current artefact
+as a stand-in):
+
+| regime | WienR 1e-8 | EMC2 default 5e-3 | flow | flow advantage |
+|---|---|---|---|---|
+| full (sv .1, SZ .2, st0 .05) | 6.20 | 2.80 | 1.10 | 5.6x / 2.5x |
+| full, larger variability (sv .5, .2, .2) | 96.70 | 3.75 | 1.15 | 84x / 3.3x |
+| st0 = 0 | 1.85 | 1.50 | 1.15 | 1.6x / 1.3x |
+| sv = 0 | 6.20 | 2.75 | 1.15 | 5.4x / 2.4x |
+| SZ = 0 | 1.80 | 1.50 | 1.15 | 1.6x / 1.3x |
+| **all zero (plain Wiener)** | **0.30** | **0.25** | 1.20 | **0.3x / 0.2x — the analytic wins** |
+
+So:
+
+- The margin holds for the full model and for `sv = 0` (it is the `st0` and
+  `sw` integrations that cost, not `sv`).
+- Fixing `st0` or `SZ` to zero shrinks it to 1.3–1.6x: still a win, but not
+  one to headline.
+- For the plain Wiener model the flow is **4x slower** than the analytic. The
+  case for the single network there is convenience and one validated artefact,
+  not speed, and §1 of the methods document should say so.
+
+Two-thirds of the flow's 1.15 ms at n = 1000 is the fixed per-call cost that
+`EMC2_IMPLEMENTATION_BRIEF.md` §1 attributes to scalar matrix loops. With that
+fix (~0.55 ms per call) the st0 = 0 and SZ = 0 margins become ~3x and the plain
+Wiener deficit ~2x — worth having, but it does not change which column wins.
+
+## 8. Risks
 
 - **Interior degradation** — eight regimes now share the capacity. Q2 is the
   gate; the fallback is two artefacts.
@@ -218,7 +251,10 @@ the laptop.
   most expensive recurring bug. Assert `context_names` and `context_transforms`
   on load; one golden vector per regime.
 
-## 8. Decisions needed
+## 9. Decisions needed
+
+All five taken 2026-09-26 (AH: yes to every recommendation), subject to the
+speed expectations in §7 being stated rather than hidden.
 
 1. Transform: `asinh(x/c)` with `c_st0 = 0.002` (recommended) or a common `c`.
 2. Budget: 24e6 (recommended) or keep 16e6.
