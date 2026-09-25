@@ -237,7 +237,60 @@ Two-thirds of the flow's 1.15 ms at n = 1000 is the fixed per-call cost that
 fix (~0.55 ms per call) the st0 = 0 and SZ = 0 margins become ~3x and the plain
 Wiener deficit ~2x — worth having, but it does not change which column wins.
 
-## 8. Risks
+## 8. Capacity, staging, and which model does what
+
+### Capacity on tux26
+
+The only job there is the regression-baseline SBC cell (last seen 169/250,
+~29 h to go as of 2026-09-26 00:44, ~57 cores). Nothing needs to be paused:
+
+- **Training does not need the cores the cell is using.** Three seeds
+  concurrently take ~12 cores (each run uses under 4). With the other user at
+  ~23 and the cell at ~57, that is 92 of 96 — tight but it fits, and training
+  is ~6-8 h.
+- **The new flow's SBC cells come after training, export and screening**, by
+  which time the regression cell has finished on its own schedule.
+
+If it ever is necessary to reclaim cores without losing work, **suspend rather
+than kill**: `pkill -STOP -f "SBCddmreg[.]R"` freezes every worker in place
+(memory stays allocated, progress is kept) and `pkill -CONT -f ...` resumes.
+`run_sbc` writes nothing until the end, so killing it forfeits the whole cell.
+The progress watcher counts processes, and stopped processes still count, so it
+keeps working through a suspension.
+
+### Staging, and which model for which stage
+
+The work splits cleanly into mechanical stages that produce compact, checkable
+output and judgement stages where a wrong call is expensive. Match the model to
+the stage; the token cost of this project so far has been dominated by reading
+long outputs, not by reasoning.
+
+| stage | what it is | model | why |
+|---|---|---|---|
+| S1 simulation: box, transforms, stratified sampler, 24e6 rows, choice targets | code edits with an exact acceptance test (stored `ll` vs WienR at zeros = 0.000000; strata counts as specified) | **Sonnet** | routine implementation against a written spec; the test decides, not the model |
+| S2 training: launch 3 seeds, export 90 checkpoints, golden vectors | scripted; long-running; output is pass/fail per checkpoint | **Haiku** for launch/monitor/collect; **Sonnet** if an export gate trips | nothing to decide unless something fails |
+| S3 screening: score bias per checkpoint, posterior-shift screen per regime | scripted; produces one table | **Haiku** to run, **Sonnet** to read the table and pick the checkpoint by the stated rule | the selection rule is written down in advance |
+| S4 EMC2 wrapper `DDMnn0`, SBC drivers, `mapped_pars()` assertions, bound exceptions | small but trap-dense (§0 of the EMC2 brief) | **Opus / Fable** | this is where four phases were lost last time; one careful pass beats three cheap ones |
+| S5 SBC cells: launch, watch, collect | scripted, days of wall time | **Haiku** | pure orchestration |
+| S6 reading the results against Q1-Q3, deciding replace-or-ship-both, writing the document sections | judgement, and the part the paper depends on | **Opus / Fable** | disagreements between screen and SBC have so far always been the cell's fault, and finding that takes reasoning |
+
+Rules that save more than the model choice does:
+
+- **Every long job runs in the background with a watcher that prints a table,
+  never a log.** Reading a 700-line SBC log costs more than the analysis of it.
+- **Scripts print the acceptance test result as one line.** `PASS max|diff|
+  2.4e-12` is a token; a dump of the diffs is a page.
+- **One launcher script per batch of cells**, checked once, rather than five
+  hand-launched cells each needing a verification exchange.
+- **Run the posterior-shift screen before any SBC cell.** A regime the screen
+  puts far inside the gate still needs its cell for the record, but one that
+  fails the screen should be understood before three hours of cluster time are
+  spent confirming it.
+- **Hand the plan file, not the conversation, to the next stage.** Each stage
+  starts from `ZERO_BOX_RETRAIN_PLAN.md` and the spec in it; the context that
+  needs carrying is written here, not remembered.
+
+## 9. Risks
 
 - **Interior degradation** — eight regimes now share the capacity. Q2 is the
   gate; the fallback is two artefacts.
@@ -251,7 +304,7 @@ Wiener deficit ~2x — worth having, but it does not change which column wins.
   most expensive recurring bug. Assert `context_names` and `context_transforms`
   on load; one golden vector per regime.
 
-## 9. Decisions needed
+## 10. Decisions needed
 
 All five taken 2026-09-26 (AH: yes to every recommendation), subject to the
 speed expectations in §7 being stated rather than hidden.
