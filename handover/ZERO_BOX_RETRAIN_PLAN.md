@@ -35,7 +35,19 @@ writing this.
 4. **The simulator is fine.** `EMC2::make_data` with constants at −Inf under the
    analytic `DDM` design reproduces `WienR::rWDM` in all four zero regimes
    (mean rt and P(upper) agree to three decimals).
-5. **Fixing a parameter at the floor is not a substitute.** Phase 29 measured
+5. **The pipeline's own labels are exact at zero and in the gap.** The stored
+   `ll` comes from `EMC2:::dDDM` at precision 5e-10 on the EMC2-scale
+   parameter vector; with zeros passed as −Inf it matches WienR 1e-8 to
+   ≤ 2e-8 in every regime — full, st0 = 0, sv = 0, SZ = 0, all-zero, and
+   st0 ∈ {1e-3, 3e-3}. No new likelihood code is needed for the labels.
+6. **EMC2's admissible set has a gap only for `st0`.** `DDM()$bound` allows
+   `sv ∈ {0} ∪ [0.01, 10]` and `SZ ∈ {0} ∪ [0.01, 0.99]` — `make_data` refuses
+   `sv = 1e-3` outright — but `st0 ∈ [0, 0.5]` continuously. The box below
+   mirrors that: for `sv` and `SZ` the network learns exactly zero plus the
+   region above the floor, which is all a user can fit, and interpolates across
+   a gap it never sees (harmless: both effects are O(x²)). For `st0` the gap is
+   real, allowed, and where the density moves fastest, so it is sampled densely.
+7. **Fixing a parameter at the floor is not a substitute.** Phase 29 measured
    it: at `st0 = 0.05` the t0 bias is essentially intact and `Z` degrades; at
    the floor `st0 = 0.01` everything degrades (a +0.448, Z −0.405).
 
@@ -67,12 +79,12 @@ need).
 
 ### 1.2 Box
 
-| parameter | lower | upper | change |
-|---|---|---|---|
-| sv | **0** | 4.0 | was 0.01 |
-| SZ | **0** | 0.99 | was 0.05 |
-| st0 | **0** | 0.49 | was 0.01 |
-| others | unchanged | | |
+| parameter | admissible set | change |
+|---|---|---|
+| sv | **{0} ∪ [0.01, 4.0]** | zero added; mirrors `DDM()$bound` |
+| SZ | **{0} ∪ [0.05, 0.99]** | zero added; 0.05 keeps `sw ≥ 0.01` at the worst `Z` |
+| st0 | **[0, 0.49]** | continuous down to zero, as EMC2 allows |
+| others | unchanged | |
 
 ### 1.3 Sampling: stratified zero patterns
 
@@ -91,8 +103,12 @@ people fit — at about 1% of the data. Stratify on the eight regimes:
 | all three = 0 | 10% |
 
 Within a stratum, free variability parameters are uniform in the `asinh`
-coordinate, so the gap between 0 and the old floor is densely covered. Stored
-context is on the new sampled scale (the current pipeline would store −Inf).
+coordinate over their admissible range: for `sv` and `SZ` that is log-like
+above the floor (as today); for `st0` it runs to zero, so the gap is densely
+covered. The simulation stores parameters on **EMC2's** sampled scale, with
+−Inf at zeros — the pipeline's likelihood accepts that exactly (§0.5) — and the
+`asinh` context is computed from it in one place, the training loader and
+exporter (`zerobox_context()`), never stored twice.
 
 ### 1.4 Budget
 
@@ -162,11 +178,11 @@ The full-model regime's score bias over the SBC prior must not be worse than
 of the shipped flow's. If this fails, ship both networks rather than replace
 the shipped one.
 
-**Q3. Is it right in the gap?** (the region EMC2 cannot reach)
-Between zero and the old floor there is no EMC2 evaluator at all; the flow would
-be the only one. Score bias against WienR 1e-8 at, say, st0 ∈ {0.001, 0.003},
-sv ∈ {0.001, 0.003}, SZ ∈ {0.01, 0.03}, with the analytic control at the same
-points. The control is meaningful there because in-mass WienR is smooth (§0.2);
+**Q3. Is it right in the `st0` gap?** (the region below EMC2's old nn floor)
+Between zero and 0.01 the analytic runs but the current flow was never trained.
+Score bias against WienR 1e-8 at st0 ∈ {0.001, 0.003}, with the analytic
+control at the same points. (No gap exists for `sv` and `SZ`: EMC2 admits zero
+or the floor and above, and so does the box.) The control is meaningful there because in-mass WienR is smooth (§0.2);
 report the density-weighted error, not the max, which lives in the massless
 edge.
 
