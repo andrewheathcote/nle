@@ -3375,7 +3375,7 @@ The corollary is worth stating positively: **when a cheap diagnostic disagrees
 with an expensive one, do not assume the cheap one is wrong.** The posterior-shift
 estimator was right and cost one minute per flow against three to five hours.
 
-## Phase 38 (RUNNING) — SBC for the direct-regression baseline
+## Phase 38 — SBC for the direct-regression baseline: passes the gate, ranks fail on four parameters
 
 The one calibration question the project never asked of the route that looked
 best on score bias. Phase 31 measured it; Phase 37 is why measuring is not
@@ -3423,7 +3423,45 @@ specification before the net's -- `mapped_pars` on every non-sampled parameter,
 and whether the control differs from the cell in exactly one respect. That is
 what Phase 37 cost four phases to learn.
 
-Collection and write-up instructions: `handover/nle-methods/docs/OPEN_ITEMS.md`.
+**Result (2026-09-27 00:46, 250 replicates, 3.8 days; `sbc/nci/results_reg_s402/DDMreg_N400_R250.rds`).**
+
+| par | SBC std bias (250 reps, se 0.063) | screen predicted | coverage (95%) | KS p | the shipped flow at N = 400 |
+|---|---|---|---|---|---|
+| **Z** | **+0.437** | +0.35 | 0.952 | 5.7e-9 | −0.032 |
+| v | −0.406 | −0.18 | 0.940 | 1.3e-9 | +0.052 |
+| sv | +0.322 | +0.11 | 0.912 | 2.8e-6 | +0.014 |
+| SZ | −0.280 | −0.10 | 0.940 | 1.3e-4 | −0.051 |
+| st0 | +0.174 | −0.08 | 0.940 | 0.42 | −0.136 |
+| t0 | −0.036 | +0.08 | 0.968 | 0.047 | **+0.319** (KS 1.8e-7) |
+| a | −0.010 | −0.05 | 0.980 | 0.38 | +0.012 |
+
+Gate: passes (all |std bias| < 0.5). Coverage nominal except sv 0.912 (2.7 se
+low). Rank uniformity: fails on v, Z, sv, SZ (KS < 1e-3; mean ranks 0.625,
+0.390, 0.404, 0.582); t0 marginal (0.047, mean rank 0.531); a and st0 clean.
+
+**Scoring the screen.** Hit: Z is the worst parameter at +0.44 against +0.35
+predicted (0.09, inside the ~0.1 the screen has managed on every previous
+cell), and t0 is clean as predicted. Miss: v −0.41 vs −0.18, sv +0.32 vs +0.11,
+SZ −0.28 vs −0.10, st0 +0.17 vs −0.08 — the secondary parameters are all 0.2 to
+0.25 sd further from zero than screened, 3 to 4 se of the cell. The cell's
+design was asserted (`mapped_pars` on every non-sampled parameter; wrapper ==
+training evaluation to 1e-12), so per the rule registered above this counts
+against the screen, not the cell. Reading: the 60-dataset screen's own
+Monte Carlo error on a displacement is ~0.13 sd (it was stated as such in P34),
+so a 0.2 miss is at the edge of what it could resolve — it is a ranking
+instrument, and it ranked correctly, but it should not be quoted to better than
+±0.15 on any single parameter. Five cells, five correct rankings, one
+magnitude miss.
+
+**What it settles.** The regression net trades one offset (the flow's t0, +0.32
+at N = 400 and growing) for four (Z, v, sv, SZ at 0.28–0.44, N-dependence
+unknown). It is not the better-calibrated likelihood the score-bias ranking
+(P31) suggested; it is a differently miscalibrated one that happens to be clean
+on the boundary parameter. The methods document's division of labour stands,
+with that boundary claim now specific. Written to `docs/METHODS.md` §4,
+`docs/RECIPE.md`, `README.md` (2026-09-27).
+
+
 
 ## Phase 39 — the t0 correction, confirmed out of sample
 

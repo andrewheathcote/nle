@@ -90,15 +90,14 @@ rested on one run per condition was later retracted; none replicated across
 |---|---|---|
 | `rdm_small.rds` | passes N=100 and N=400 | worst \|std bias\| 0.090 |
 | `ddm_cap256w_c4.rds` | passes N=100–800 | `t0` carries a +0.28% offset; see `docs/RECIPE.md` |
-| `reg_s402` (regression net) | **SBC running** | see `docs/OPEN_ITEMS.md`; screen predicts worst +0.35 on `Z` |
+| `reg_s402` (regression net) | passes N=400 (250 reps) | worst std bias +0.437 (`Z`); t0 clean; ranks non-uniform on v, Z, sv, SZ; see `docs/METHODS.md` §4 |
 | `ddm_st0zero.rds` | passes N=400 | 7-parameter st0=0 build, once `st0` is named a constant (see `docs/TRAPS.md`): worst std bias +0.282, coverage 0.936-0.960, ranks non-uniform on a, t0, Z |
 
-## One result is outstanding
+## Nothing is outstanding
 
-The direct-regression baseline's SBC cell (N = 400, 250 replicates) was launched
-on 2026-09-23 and takes about 5.7 days. Everything else here is complete.
-`docs/OPEN_ITEMS.md` says how to check it, collect it, and which four files to
-write it into — with the screen's prediction recorded in advance.
+The direct-regression baseline's SBC cell (N = 400, 250 replicates) reported on
+2026-09-27: `results/sbc/reg_s402/DDMreg_N400_R250.rds`, written up in
+`docs/METHODS.md` §4. Every number in this package is now backed by a result.
 
 ## Provenance
 

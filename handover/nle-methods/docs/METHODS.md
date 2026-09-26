@@ -1,9 +1,8 @@
 # Calibration-grade neural likelihoods for evidence accumulation models
 
 *Methods document, revised 2026-09-23 after Phase 37 retracted the st0 = 0 and
-decision-time SBC verdicts (§3.7). One result is outstanding — the
-direct-regression baseline's SBC cell, still running; see §4 and
-`docs/OPEN_ITEMS.md`. Companion to `RECIPE.md` (the five steps, condensed),
+decision-time SBC verdicts (§3.7), and 2026-09-27 when the direct-regression
+baseline's SBC cell reported (§4); nothing is outstanding. Companion to `RECIPE.md` (the five steps, condensed),
 `TRAPS.md` (the checklist) and `EMC2_INTEGRATION.md` (the how-to). Every number
 here is backed by an object under `results/` or, for the dead ends, under
 `../long-and-winding-road/`. The full audit trail is `SBC_PLAN.md` in the parent
@@ -514,45 +513,56 @@ density.** But regression is not a free substitute:
   53x penalty that makes an SBC cell a multi-day job rather than a three-hour
   one. A compiled evaluator would remove this; none is written.
 
-### What the screen says, and the cell that is still running
+### What the screen predicted, and what the cell found
 
 The posterior-shift screen (§6) on the selected net `reg_s402`, 60 datasets,
-run under both simulators (the two agree on every shift to within 0.006):
+run under both simulators (the two agree on every shift to within 0.006),
+predicted that the regression net **trades the flow's t0 problem for a smaller
+`Z` problem**, with nothing outside the gate. The SBC cell — N = 400, 250
+replicates, tux26, 2026-09-23 to 09-27 (`results/sbc/reg_s402/DDMreg_N400_R250.rds`) —
+against that registered prediction and against the shipped flow's own N = 400
+cell (§3.4):
 
-| par | predicted std bias | displacement vs analytic (sd) | the shipped flow, for contrast |
-|---|---|---|---|
-| **t0** | **+0.08** | −0.06 | flow predicted +0.28, measured +0.319 |
-| **Z** | **+0.35** | **+0.22** | flow −0.04 |
-| v | −0.18 | −0.17 | +0.04 |
-| sv | +0.11 | +0.16 | — |
-| SZ | −0.10 | −0.12 | — |
-| st0 | −0.08 | +0.13 | — |
-| a | −0.05 | +0.00 | — |
+| par | SBC std bias (250 reps, se 0.063) | screen predicted | coverage (95%) | KS p | the shipped flow at N = 400 |
+|---|---|---|---|---|---|
+| **Z** | **+0.437** | +0.35 | 0.952 | 5.7e-9 | −0.032 |
+| v | −0.406 | −0.18 | 0.940 | 1.3e-9 | +0.052 |
+| sv | +0.322 | +0.11 | 0.912 | 2.8e-6 | +0.014 |
+| SZ | −0.280 | −0.10 | 0.940 | 1.3e-4 | −0.051 |
+| st0 | +0.174 | −0.08 | 0.940 | 0.42 | −0.136 |
+| t0 | −0.036 | +0.08 | 0.968 | 0.047 | **+0.319** (KS 1.8e-7) |
+| a | −0.010 | −0.05 | 0.980 | 0.38 | +0.012 |
 
-So the screen says the regression net **trades the flow's t0 problem for a
-smaller `Z` problem**, with nothing predicted outside the gate. That sharpens
-the division of labour below, and it is a prediction, not a verdict.
+**Verdict: it passes the gate and fails rank uniformity on four parameters.**
+Every standardised bias is inside ±0.5 and coverage is nominal except `sv`
+(0.912, 2.7 se low). But `v`, `Z`, `sv` and `SZ` are all offset by 0.28–0.44 sd
+with KS p below 1e-3, where the shipped flow is offset on t0 alone. So the
+regression net does what the screen said on the two headline parameters — t0
+is clean (−0.04 against the flow's +0.32) and `Z` is the worst (+0.44, predicted
++0.35, the screen's fifth hit within 0.1) — and it also carries offsets on `v`,
+`sv` and `SZ` that the screen put at only −0.18, +0.11 and −0.10. That is the
+screen's first substantive miss: the pattern and the ranking were right, the
+spread of the secondary parameters was under-predicted by about 0.2 sd, which is
+3 se of the cell. The miss is not a design fault of the cell — `mapped_pars`
+was asserted for every parameter and the wrapper reproduces the training-time
+evaluation to 1e-12 before any replicate runs (P38) — so it counts against the
+screen, as the record promised it would.
 
-**The SBC cell is running and its result is NOT in this document.** `reg_s402`,
-N = 400, 250 replicates, launched on tux26 on 2026-09-23 at 48 cores; at the
-observed rate (0.55 h per replicate on a contended machine) it lands about five
-days later. 250 rather than 500 replicates because of the 53x evaluation
-penalty; se on the standardised bias is 0.063, enough for the gate and for rank
-uniformity. The driver is `evaluation/SBCddmreg.R` and the wrapper
-`evaluation/DDMreg.R`; `docs/OPEN_ITEMS.md` says how to collect the result and
-which four places to write it.
-
-**Until that cell reports, the honest statement is: the regression baseline is
-better on the screen and unverified by SBC.** Given §3.7 — where two flows were
-convicted by a mis-specified cell and exonerated by this same screen — neither
-number should be quoted as settled without the other.
+**What this settles.** Regression is not the better-calibrated likelihood; it
+is a *differently* miscalibrated one. The flow concentrates its residual in one
+parameter, with a known N-dependence and a validated correction (§3.5); the
+regression net spreads a comparable residual over four parameters, with no
+correction studied and a 53x evaluation penalty. The division of labour stays as
+stated below, with the boundary claim now specific: where the parameter that
+matters is t0, regression's point estimate is unbiased and the flow's is not;
+everywhere else the flow is at least as good.
 
 **Recommendation: keep this as its own short section, framed as a division of
 labour.** Where an analytic exists but is slow, regression is the simpler
-artefact and looks better calibrated on the parameter that matters most for the
-DDM (t0), at the cost of a slower evaluator and a weaker `Z`. Where no analytic
-exists, or a CDF is needed, the flow is the only option and its residual is the
-price.
+artefact and is cleanly calibrated on the parameter the DDM cares most about
+(t0), at the cost of a slower evaluator and offsets on `Z`, `v`, `sv` and `SZ`.
+Where no analytic exists, or a CDF is needed, the flow is the only option and
+its t0 residual — corrected or reported — is the price.
 
 ---
 

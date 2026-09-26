@@ -1,81 +1,21 @@
 # Open items at handover
 
-Status 2026-09-23. One result is outstanding; the rest are judgement calls that
+Status 2026-09-27. Nothing is outstanding; the rest are judgement calls that
 do not block the document.
 
 ---
 
-## 1. RUNNING: the direct-regression baseline's SBC cell
+## 1. CLOSED: the direct-regression baseline's SBC cell
 
-Everything else in this package is finished and self-consistent. This is the one
-number the document promises and does not have.
+This was the one number the document promised and did not have; it has it now.
 
-**What is running.** `reg_s402`, N = 400, **250 replicates**, launched on tux26
-2026-09-23 05:36 (CEST) at 48 cores (`SBC_CORES=16` x 3 chains) by
-`sbc/run_reg_sbc.sh`.
-
-| | |
-|---|---|
-| driver | `evaluation/SBCddmreg.R` (on tux26: `sbc/nci/SBCddmreg.R`) |
-| model wrapper | `evaluation/DDMreg.R` (on tux26: `handover/regress/DDMreg.R`) |
-| net | `results/model_states/reg_s402_budget/regress.json`, md5 `979c83158bd0ba0edf94d49dd895db77` |
-| log | tux26 `~/emc2nn/nle/sbc/reg_sbc.log` |
-| result | tux26 `~/emc2nn/nle/sbc/nci/results_reg_s402/DDMreg_N400_R250.rds` |
-| marker | the line `reg sbc done` appended to `~/emc2nn/nle/sbc/phase37.log` |
-
-**Expected duration ~5.7 days** from launch: the regression net costs 43 ms per
-400-trial call against the flow's 0.80 ms on that machine (reference BLAS, 53x),
-and the observed rate was 0.55 h per replicate on a contended machine. Nothing
-is recoverable if it is killed — `run_sbc` writes the drawn truths at the start
-and everything else at the end, so the `_tmp.RData` holds no partial results.
-
-**Check progress:**
-
-```bash
-ssh andrew@tux26psy.fmg.uva.nl 'cd ~/emc2nn/nle
-  grep -c "Sampling stopped" sbc/reg_sbc.log          # replicates finished, of 250
-  sed -n "/=====.*done/,\$p" sbc/reg_sbc.log'          # the table, once finished
-```
-
-**Collect it:**
-
-```bash
-scp andrew@tux26psy.fmg.uva.nl:~/emc2nn/nle/sbc/nci/results_reg_s402/DDMreg_N400_R250.rds \
-    results/sbc/reg_s402/
-shasum -a 256 results/sbc/reg_s402/DDMreg_N400_R250.rds >> ARTEFACTS.sha256
-```
-
-**What the screen predicts**, so the result can be read against a registered
-expectation rather than after the fact (`results/score_bias/postshift_reg_s402*.rds`):
-
-| par | predicted std bias |
-|---|---|
-| t0 | +0.08 |
-| Z | +0.35 |
-| v | −0.18 |
-| sv | +0.11 |
-| SZ | −0.10 |
-| st0 | −0.08 |
-| a | −0.05 |
-
-`Z` is the parameter to watch: it is the largest displacement screened for any
-model in this project, and the only one near the 0.5 gate.
-
-**Where to write the result — four places:**
-
-1. `docs/METHODS.md` §4 — replace "the SBC cell is running and its result is NOT
-   in this document" with the table, and settle the division-of-labour wording.
-2. `docs/RECIPE.md` — the artefact status table.
-3. `README.md` — the artefact status table.
-4. `../../sbc/SBC_PLAN.md` — a Phase 38 entry, with the screen's prediction
-   scored against the outcome (it has now been right on four cells; a miss is
-   as informative as a hit).
-
-**If it disagrees with the screen**, do not assume the screen is wrong: on the
-st0 = 0 and decision-time cells, the disagreement was the cell's fault (§3.7 of
-`METHODS.md`, Phase 37). Check the design first — `mapped_pars` for every
-parameter not being sampled, and that the analytic control differs from the cell
-in exactly one respect.
+**CLOSED 2026-09-27.** The cell finished at 00:46 CEST after 3.8 days
+(`results/sbc/reg_s402/DDMreg_N400_R250.rds`, sha256 in `ARTEFACTS.sha256`).
+It passes the gate (worst +0.437 on `Z`, t0 −0.036) and fails rank uniformity
+on v, Z, sv, SZ. The screen's prediction was right on the ranking (Z worst, t0
+clean; Z within 0.09) and under-predicted v, sv, SZ, st0 by ~0.2 sd. Written to
+the four places: `docs/METHODS.md` §4, `docs/RECIPE.md`, `README.md`,
+`../../sbc/SBC_PLAN.md` Phase 38. Nothing in this package is now outstanding.
 
 ---
 
