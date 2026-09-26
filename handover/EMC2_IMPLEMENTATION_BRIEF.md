@@ -298,6 +298,28 @@ numbers: the same log-densities as the R port (~1e-14), the same score bias to
 re-run cell. Those numbers are in `results/` and in `METHODS.md`, so the test is
 already written down; nothing new has to be invented to check it.
 
+**Compute, and what does NOT need a server (decided 2026-09-26, compute-bound
+on tux26 until 1 Oct).** Acceptance does not require re-running SBC cells on
+the new branch. An SBC cell is an expensive and weak test of an evaluator
+change — its Monte Carlo error is 0.045 per parameter at 500 replicates — while
+the exact tests are cheap and strict:
+
+| check | cost | what it proves |
+|---|---|---|
+| log-densities on matched (theta, rt, R) vs the R port, all four artefacts | seconds | the evaluator is the same function, to ~1e-14 |
+| score bias on `cap256w_c4` and `reg_s402` reproduced to 1e-6 (`evaluation/score_bias_draws.R`, `score_bias_regress.R`) | minutes | the estimator path is intact |
+| posterior-shift screen reproduces its recorded predictions (`results/score_bias/postshift_*.rds`) | ~1 min per 7-parameter flow | the sampler-free path is intact |
+
+So the "server batch" of a `cap256w_c4` control cell and a `reg_s402` cell is
+**not** needed: the `reg_s402` cell is already running on the present install
+(its result is the number the document needs, whichever branch computed it),
+and `cap256w_c4` may be superseded by the zero-box network under evaluation.
+The only SBC compute that has to happen is the zero-box network's own cells
+(`ZERO_BOX_RETRAIN_PLAN.md` §4). If the new branch is usable when those run,
+run them there and they double as the acceptance test; if not, run them on the
+present install and re-run ONE of them on the new branch later, which is the
+one SBC-level acceptance check worth its cost.
+
 Two consequences worth planning for:
 
 - **The migration will find contract gaps.** `DDMreg` has no CDF, the
