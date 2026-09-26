@@ -330,3 +330,48 @@ speed expectations in §7 being stated rather than hidden.
 3. Strata shares as in §1.3, or a different emphasis.
 4. Q2's fallback: replace the shipped artefact only if not worse, else ship both.
 5. Wrapper: bespoke `DDMnn0` now (recommended) or wait for the registry.
+
+
+---
+
+## Progress log
+
+**2026-09-26 — S1 and S2 complete; training launched.**
+
+- S1 (`simulation/zerobox.R`, `sim_ddm_zerobox.R`, `sim_val_zerobox.R`,
+  `sim_choice_prob_zerobox.R`, `test_zerobox.R`): eight acceptance checks pass;
+  stored `ll` matches WienR 1e-8 to 3.9e-10 across all regimes (with the
+  s-scaling in the reference — omit it and every s ≠ 1 draw fails, the Phase 7
+  trap). Training set 600k draws / 24e6 rows, 552 MB, 113 min at 8 cores, 0% at
+  the floor; validation 25k draws; classifier targets 200k/20k. One packaging
+  bug found and fixed on the way: run from the package directory, no `.Rlibs`
+  is found and the default-library EMC2 floors every label in the parallel
+  workers — the script now resolves `EMC2NN_LIB` or a repo-root `.Rlibs`,
+  exports it as `R_LIBS` for the workers, and asserts on `find.package`.
+- S2: `data.py` `apply_context_encoding()` (both loaders), `train_ddm.py
+  --zerobox`, `export_flow_ddm.py --zerobox` (constants and bounds in the
+  export, golden vectors with forced exact zeros), R and C++ ports with the
+  encoding, the box check on the network scale, and the st0 = 0 support rule.
+  `port/tests/validate_zerobox_plumbing.R`: R and C++ agree to 8.7e-12 over
+  five regimes with exact zeros; the rule fires identically in both. Note the
+  ports exist in two copies (repo root and package) whose committed versions
+  differ; both carry the change now, and a working-directory reset put one
+  patch in the wrong copy once — check `git status` on both after editing.
+- `DDMnn0` wrapper (`handover/zerobox/DDMnn0.R`): builds the asinh context in
+  R so EMC2's own compiled evaluator needs no change; `p_types` −Inf and bound
+  exceptions at 0 verified; omitting SZ/st0 from a formula maps them to exactly
+  0.
+- Training: `flow/scripts/train_zerobox_tux.sh` on tux26, three seeds
+  (zb_s901–903), 4 threads each, placeholder classifier `large`; imports the
+  package's patched `flow` via `PYTHONPATH` (the venv's editable install points
+  at the unpatched repo tree). A one-epoch local smoke run passed. The
+  placeholder classifier's scaler differs from the flow's, so export requires
+  the classifier retrained with `retrain_classifier.py --zerobox --scaler-from
+  <seed> --data-suffix _zerobox --out-json`, converted with
+  `json_to_classifier_ckpt.py`, and installed into each seed with its
+  `train_loader.pkl` — exactly `sbc/fix_z0_classifier.sh`'s sequence.
+
+**Next (S3):** export all 90 checkpoints with `--zerobox`; regime-specific
+screening (the existing `score_bias_draws.R` differentiates on EMC2's log scale
+and cannot be used at an exact zero — Q1 needs draws per regime with the zero
+parameters held at zero); posterior-shift screen per regime; select; then S4.
