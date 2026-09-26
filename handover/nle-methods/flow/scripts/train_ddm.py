@@ -98,6 +98,9 @@ def main():
                          "only). Raise it to study within-run variation or to "
                          "average weights across late epochs; a [256,128] "
                          "checkpoint is ~1.5 MB.")
+    ap.add_argument("--zerobox", action="store_true",
+                    help="condition on asinh(x/c) for sv, SZ, st0 so exact zeros are "
+                         "representable; data from simulation/sim_ddm_zerobox.R")
     ap.add_argument("--st0-zero", action="store_true",
                     help="7-parameter build with st0 absent (see "
                          "handover/ST0_ZERO_RETRAIN.md); requires training data "
@@ -267,7 +270,8 @@ def main():
         tnames = [TARGET, "param_id"]
     loader_args = dict(data_names=DATA, context_names=CTX + [RESPONSE],
                        target_names=tnames, response_name=RESPONSE,
-                       standardize=True, geometry=args.geometry)
+                       standardize=True, geometry=args.geometry,
+                       context_encoding="zerobox" if args.zerobox else None)
     # The score penalty needs both trials of a parameter draw in the same
     # batch at positions 2k/2k+1, so pairs are shuffled instead of rows.
     pair_rows = args.score_lambda is not None

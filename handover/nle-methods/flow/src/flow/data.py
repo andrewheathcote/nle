@@ -19,7 +19,7 @@ def sign_rts(rts, response):
 
 
 def batches(dset, data_names, context_names, target_names, response_name,
-            batch_size=8192, shuffle_files=True, sign=False):
+            batch_size=8192, shuffle_files=True, sign=False, context_encoding=None):
     frags = list(dset.get_fragments())
     if shuffle_files:
         np.random.shuffle(frags)
@@ -35,6 +35,7 @@ def batches(dset, data_names, context_names, target_names, response_name,
                 [rb.column(c).to_numpy(zero_copy_only=False).astype(np.float32) for c in context_names],
                 axis=1,
             )
+            context = apply_context_encoding(context, context_names, context_encoding)
             y = rb.column(target_names).to_numpy(zero_copy_only=False).astype(np.float32)
 
             data_j = jnp.asarray(data)
@@ -74,9 +75,36 @@ def _norm_cdf(x):
     return 0.5 * (1.0 + sp.erf(x / sqrt(2.0)))
 
 
+
+# --- context encodings -------------------------------------------------------
+# The parquet stores parameters on EMC2's sampled scale: log for a, t0, s, sv,
+# st0 and probit for Z, SZ, with -Inf at an exact zero. The "zerobox" encoding
+# re-expresses sv, SZ and st0 as asinh(x / c), which is exactly 0 at 0, linear
+# below c and log-like above it, so one network can be conditioned on exact
+# zeros. Constants match simulation/zerobox.R and are written into the export.
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}
+
+
+def apply_context_encoding(context, context_names, encoding):
+    """Return context re-encoded in place of the stored EMC2-scale columns."""
+    if encoding in (None, "emc2"):
+        return context
+    if encoding != "zerobox":
+        raise ValueError(f"unknown context encoding {encoding!r}")
+    out = context.copy()
+    for name, c in ZEROBOX_C.items():
+        if name not in context_names:
+            continue
+        j = context_names.index(name)
+        col = context[:, j].astype(np.float64)
+        nat = _norm_cdf(col) if name == "SZ" else np.exp(col)   # -Inf -> 0 exactly
+        out[:, j] = np.arcsinh(nat / c).astype(np.float32)
+    assert np.isfinite(out).all(), "zerobox encoding left a non-finite context value"
+    return out
+
 def _load_dataset(dset, data_names, context_names, target_names,
                   response_name, sign, standardize=False, scaler=None,
-                  geometry=False):
+                  geometry=False, context_encoding=None):
     # target_names may be a LIST, in which case y comes back as (n, k). Needed
     # by the score-matching loss (ll plus 8 true-score columns) and by the
     # off-sample grid loss (ll plus a flag marking rows that are not model
@@ -95,6 +123,8 @@ def _load_dataset(dset, data_names, context_names, target_names,
          for c in context_names],
         axis=1,
     )
+
+    context = apply_context_encoding(context, context_names, context_encoding)
 
     if geometry:
         context = add_geometry_features(context, context_names, response_name)
@@ -139,11 +169,11 @@ class PreloadedBatches:
     def __init__(self, dset, data_names, context_names, target_names,
                  response_name, batch_size=8192, shuffle=True, sign=False,
                  drop_last=True, rng=None, standardize=False, scaler=None,
-                 pair_rows=False, geometry=False):
+                 pair_rows=False, geometry=False, context_encoding=None):
         self._data, self._context, self._y, self._scaler = _load_dataset(
             dset, data_names, context_names, target_names, response_name, sign,
             standardize, scaler, geometry
-        )
+        , context_encoding=context_encoding)
         self._n = int(self._data.shape[0])
         self._batch_size = batch_size
         self._shuffle = shuffle
