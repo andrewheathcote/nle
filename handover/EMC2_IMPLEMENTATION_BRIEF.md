@@ -298,6 +298,30 @@ numbers: the same log-densities as the R port (~1e-14), the same score bias to
 re-run cell. Those numbers are in `results/` and in `METHODS.md`, so the test is
 already written down; nothing new has to be invented to check it.
 
+### The usability gate — what "dev-nle is usable" means, concretely
+
+Five checks, all exact or near-exact, all under an hour of compute. The branch
+is usable when all five pass; none of them is an SBC cell.
+
+| # | check | how | pass when |
+|---|---|---|---|
+| 1 | the artefacts load | `cap256w_c4`, `st0zero`, `rdm_small`, `reg_s402` through the new interface, contexts asserted on load | no error, asserted `context_names` match the exports |
+| 2 | same likelihood, across theta | `sbc/test_emc2_vs_port.R` (already written: EMC2's full likelihood path vs the R port over 120 theta x 3 datasets, not just at one point) | max abs diff ~1e-12 or better; 1e-9 if the BLAS rewrite reorders sums |
+| 3 | same score bias | `evaluation/score_bias_draws.R 200 cap256w_c4` and `score_bias_regress.R` | every parameter within 1e-6 of `results/score_bias/` |
+| 4 | same screen | `evaluation/test_posterior_shift.R` on `cap256w_c4` and `z0_s503_e282` | predictions within Monte Carlo noise of `results/score_bias/postshift_*.rds` (same seeds: identical) |
+| 5 | the SBC pipeline runs | ONE cell, N = 100, 12 replicates, any DDM artefact (~10 min) | completes; `mapped_pars()` assertion passes; no bound rejections |
+
+Check 5 is a smoke test of the plumbing (design, priors, defaults, bound
+exceptions, the sampler loop), not a measurement — 12 replicates cannot measure
+anything, which is exactly why it is cheap enough to run.
+
+Why this replaces the "server batch" (a `cap256w_c4` control cell plus a
+`reg_s402` cell): an SBC cell has Monte Carlo error 0.045 per parameter at 500
+replicates, so it would pass an evaluator that was wrong by 0.02 in standardised
+bias and cost three hours (flow) to four days (regression net) to say so. Check
+2 catches a difference of 1e-10 in seconds. The cells measure the *model*; the
+gate measures the *code*, and only the code changed.
+
 **Compute, and what does NOT need a server (decided 2026-09-26, compute-bound
 on tux26 until 1 Oct).** Acceptance does not require re-running SBC cells on
 the new branch. An SBC cell is an expensive and weak test of an evaluator
