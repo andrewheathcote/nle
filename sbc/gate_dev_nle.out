@@ -1,4 +1,4 @@
-=== dev-nle usability gate  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  2026-09-26 16:45 ===
+=== dev-nle usability gate  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  2026-09-26 17:24 ===
   artefacts: MANIFEST, ddm_cap256w_c4.rds, ddm_st0zero.rds, rdm_small.rds
   reg_s402 card: /Users/andrew/R/nle-cards/ddm_reg_s402.rds
 PASS  1. kit exported; cap256w_c4, st0zero, rdm_small load; reg_s402 card registers
@@ -39,22 +39,22 @@ Running data set 1
 Running data set 2
 Running data set 3
 Running data set 4
-Running data set 7
 Running data set 8
 Running data set 5
+Running data set 7
 Running data set 6
-Running data set 9
 Running data set 12
+Running data set 9
 Running data set 10
 Running data set 11
     model parameter    std_bias         bias  coverage      ks_p in_envelope  n
-1 network         v  0.30531148  0.031558119 1.0000000 0.6372567        TRUE 12
-2 network         a -0.39572487 -0.012262022 1.0000000 0.1874968        TRUE 12
-3 network        t0  0.50845656  0.009906669 0.9166667 0.2163832        TRUE 12
-4 network         Z -0.08912268 -0.003883033 0.9166667 0.2569201        TRUE 12
-5 network        sv -0.65096642 -0.083783191 0.9166667 0.2057138        TRUE 12
-6 network        SZ  0.24225600  0.038766235 0.9166667 0.6563175        TRUE 12
-7 network       st0 -0.05669233 -0.009705443 0.9166667 0.3481514        TRUE 12
+1 network         v  0.42708115  0.040141452 1.0000000 0.1865014        TRUE 12
+2 network         a  0.12207043  0.004737978 0.9166667 0.8301906        TRUE 12
+3 network        t0  0.21946927  0.003740003 1.0000000 0.8576769        TRUE 12
+4 network         Z -0.22951175 -0.008883033 1.0000000 0.8125034        TRUE 12
+5 network        sv -0.65251219 -0.088033191 0.9166667 0.1898975        TRUE 12
+6 network        SZ  0.22019935  0.036516235 0.9166667 0.7648606        TRUE 12
+7 network       st0  0.05244046  0.009461224 0.8333333 0.5230400        TRUE 12
 PASS  5. a 12-replicate N=100 nn_sbc_cell() completes and summarises (plumbing, not a measurement)
 [1] TRUE
 

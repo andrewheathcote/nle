@@ -366,7 +366,9 @@ Two consequences worth planning for:
 5/5 in 1 minute (`sbc/gate_dev_nle.out`): exact check 2 at 8.9e-14 /
 7.4e-14 / 1.4e-14 for `cap256w_c4` / `st0zero` / `reg_s402`; score bias `a`
 +0.0126 (0.0013) vs recorded +0.0136; posterior shift t0 +0.22 vs +0.28; the
-12-replicate `nn_sbc_cell()` ran and summarised. dev-nle is usable now; the
-zero-box network additionally needs the asinh transform hook, `-Inf` `p_types`
-defaults, bound exceptions at 0 and the st0 = 0 support rule, with check 2 as
-the acceptance test for each.
+12-replicate `nn_sbc_cell()` ran and summarised. dev-nle is usable now. The zero-box registration (asinh transform, `-Inf`
+`p_types`, bound exceptions at 0, st0 = 0 support rule) landed the same day
+(EMC2-nle d49d190b) and passed the NLE acceptance script
+`sbc/gate_zerobox_dev_nle.R` 3/3 (dfun vs R port ≤ 1.3e-12 in every zero
+regime; `-Inf` matched at 450 support-boundary points; exact zeros survive
+`design()`/`make_data()`/`nn_sbc_cell()`).
