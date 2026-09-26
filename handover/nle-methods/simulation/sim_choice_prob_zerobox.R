@@ -43,7 +43,8 @@ make_set <- function(n, seed, split) {
               (proc.time()[3] - t0) / 60))
   # per-regime sanity: P(R) must be identical whether st0 is 0 or not, so the
   # all-zero and st0=0 strata should span the same range as their neighbours
-  print(round(tapply(pm$p_R2, pm$regime, function(x) c(min = min(x), max = max(x))), 3)[1:2])
+  rng <- sapply(split(pm$p_R2, pm$regime), range)
+  cat("  per-regime P(R=2) range:", paste(sprintf("%s [%.3f, %.3f]", colnames(rng), rng[1, ], rng[2, ]), collapse = "  "), "\n")
 }
 cat("=== zero-box analytic choice probabilities ===\n")
 make_set(N_VAL, 20260927L, "val")
