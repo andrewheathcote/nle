@@ -300,8 +300,14 @@ already written down; nothing new has to be invented to check it.
 
 ### The usability gate — what "dev-nle is usable" means, concretely
 
-Five checks, all exact or near-exact, all under an hour of compute. The branch
-is usable when all five pass; none of them is an SBC cell.
+Five checks, all exact or near-exact, ~25 minutes at 8 cores, none an SBC
+cell. Runnable as `Rscript sbc/gate_dev_nle.R ~/R/nle-sbc-lib` from the NLE
+repo root (it uses dev-nle's own kit -- `nn_score_bias()`, `nn_posterior_shift()`,
+`nn_sbc_cell()` -- plus one exact comparison of each model function's `dfun`
+against this project's R port). The same procedure is in the EMC2 session's
+notes: `SBC-staging/2026-09-24_dev-nle_phase6/USABILITY_GATE.md`. First run,
+2026-09-26 against dev-nle 3.4.1.9001: checks 1-2 pass, with the compiled
+likelihood matching the R port to ~1e-13 for cap256w_c4, st0zero and reg_s402.
 
 | # | check | how | pass when |
 |---|---|---|---|
