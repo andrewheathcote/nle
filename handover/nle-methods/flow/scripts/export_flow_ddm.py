@@ -334,7 +334,6 @@ def main():
                            theta_clf=theta_clf,
                            clf_scaler_mean=clf_scaler_mean,
                            clf_scaler_scale=clf_scaler_scale) for R in (1, 2)}
-
     # --- cross-check against the authoritative JAX joint_log_prob ---
     dims_flow = f_widths[:-1]
     cond = make_mlp_conditioner(nnx.Rngs(0), dims=dims_flow, num_bins=num_bins,
@@ -447,13 +446,28 @@ def main():
     wpath.write_text(json.dumps(weights))
     print(f"Wrote {wpath}")
 
+    if args.zerobox:
+        # The st0 = 0 support rule is part of the artefact's likelihood: the
+        # true density is zero below t0, the spline cannot say so, every
+        # evaluator does. Apply it to the golden values so ports are checked
+        # against what they must return, not against the raw network.
+        j_st0, j_t0 = CTX.index("st0"), CTX.index("t0")
+        hard = np.isneginf(theta[:, j_st0])[:, None] & (rt[None, :] <= np.exp(theta[:, j_t0])[:, None])
+        for R in (1, 2):
+            z, lp, cdfd, lpr, inter = res[R]
+            lp = np.where(hard, -np.inf, lp); cdfd = np.where(hard, 0.0, cdfd)
+            res[R] = (z, lp, cdfd, lpr, inter)
+        print(f"support rule applied to {int(hard.sum())} golden (theta, rt) cells with st0 = 0, rt <= t0")
+
     # --- golden CSV (long format, both responses) ---
     gpath = out_dir / f"{tag}_golden.csv"
     ctx_cols = ",".join(CTX)
     with open(gpath, "w") as f:
         f.write(f"param_id,{ctx_cols},R,rt,z,log_pdf_joint,cdf_defective,log_p_R\n")
         for i in range(theta.shape[0]):
-            th = ",".join(f"{v:.17g}" for v in theta[i])
+            # R parses "-Inf"; exact zeros on the EMC2 scale are -Inf under --zerobox
+            th = ",".join(f"{v:.17g}" if np.isfinite(v) else ("-Inf" if v < 0 else "Inf")
+                          for v in theta[i])
             for R in (1, 2):
                 z, lp, cdfd, lpr, _ = res[R]
                 for j in range(len(rt)):
@@ -465,7 +479,18 @@ def main():
     # --- intermediates (first 3 param sets, R = 1) ---
     ctx_std, raw, x_pos, y_pos, slopes = res[1][4]
     ipath = out_dir / f"{tag}_intermediates.json"
-    ipath.write_text(json.dumps({
+
+    def _json_safe(o):
+        # JSON has no infinities; jsonlite rejects Python's -Infinity. Write the
+        # strings R's as.numeric() understands, so validate_ddm.R needs no change.
+        if isinstance(o, float):
+            return o if np.isfinite(o) else ("-Inf" if o < 0 else "Inf")
+        if isinstance(o, list):
+            return [_json_safe(x) for x in o]
+        if isinstance(o, dict):
+            return {k: _json_safe(v) for k, v in o.items()}
+        return o
+    ipath.write_text(json.dumps(_json_safe({
         "theta": theta[:3].tolist(),
         "ctx_std": ctx_std[:3].tolist(),
         "conditioner_raw_R1": raw[:3].tolist(),
@@ -478,7 +503,7 @@ def main():
             ctx_std[:3] if theta_clf is None
             else ((theta_clf[:3] - clf_scaler_mean) / clf_scaler_scale),
             clf_layers, None).squeeze(-1).tolist(),
-    }))
+    })))
     print(f"Wrote {ipath}")
 
 

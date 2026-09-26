@@ -24,6 +24,11 @@ ctx_names <- if (!is.null(fl$classifier_context_names))
 ptr <- ddm_build(fl)
 
 fails <- 0L
+# |a - b| with two equal infinities counting as agreement (the st0 = 0 support
+# rule returns -Inf for log_pdf below t0 in every evaluator and in the golden set)
+adiff <- function(a, b) { d <- abs(a - b); same_inf <- is.infinite(a) & is.infinite(b) & (sign(a) == sign(b))
+  d[same_inf] <- 0; d }
+
 check <- function(label, diff, tol) {
   ok <- is.finite(diff) && diff < tol
   cat(sprintf("%-50s max|diff| = %10.3e  tol = %g  %s\n",
@@ -57,12 +62,12 @@ for (pid in unique(golden$param_id)) {
   ev <- ddm_eval(fl, theta, g$rt, g$R)
   cv <- ddm_eval_cpp(ptr, theta, g$rt, as.integer(g$R))
   stopifnot(ev$in_box, cv$in_box)
-  d$r_lp  <- max(d$r_lp,  abs(ev$log_pdf - g$log_pdf_joint))
-  d$r_cdf <- max(d$r_cdf, abs(ev$cdf - g$cdf_defective))
-  d$c_lp  <- max(d$c_lp,  abs(cv$log_pdf - g$log_pdf_joint))
-  d$c_cdf <- max(d$c_cdf, abs(cv$cdf - g$cdf_defective))
-  d$c_pr  <- max(d$c_pr,  abs(log(cv$p_R) - g$log_p_R))
-  d$rc    <- max(d$rc, abs(cv$log_pdf - ev$log_pdf), abs(cv$cdf - ev$cdf))
+  d$r_lp  <- max(d$r_lp,  adiff(ev$log_pdf, g$log_pdf_joint))
+  d$r_cdf <- max(d$r_cdf, adiff(ev$cdf, g$cdf_defective))
+  d$c_lp  <- max(d$c_lp,  adiff(cv$log_pdf, g$log_pdf_joint))
+  d$c_cdf <- max(d$c_cdf, adiff(cv$cdf, g$cdf_defective))
+  d$c_pr  <- max(d$c_pr,  adiff(log(cv$p_R), g$log_p_R))
+  d$rc    <- max(d$rc, adiff(cv$log_pdf, ev$log_pdf), adiff(cv$cdf, ev$cdf))
 }
 n_sets <- length(unique(golden$param_id))
 cat(sprintf("\nGolden grid: %d parameter sets x %d (rt, R) pairs\n",
@@ -78,12 +83,23 @@ check("C++ vs R (all outputs)", d$rc, 1e-10)
 # --- 3. Bounding box: just outside each face -> pdf = 0, cdf = 0 ---
 lo <- fl$bounds_sampled$lower; hi <- fl$bounds_sampled$upper
 mid <- (lo + hi) / 2
+# Under --zerobox the bounds are on the NETWORK scale (asinh); the ports take
+# EMC2-scale theta, so faces and midpoint are mapped back before the call.
+# A face just outside the lower bound at 0 maps to a negative natural value,
+# hence NaN on the log/probit scale, which the box check treats as outside.
+to_emc2 <- function(u) {
+  if (!identical(fl$context_encoding, "zerobox")) return(u)
+  for (p in names(fl$zerobox_c)) { j <- match(p, fl$context_names); if (is.na(j)) next
+    nat <- sinh(u[j]) * fl$zerobox_c[[p]]
+    u[j] <- if (p == "SZ") suppressWarnings(qnorm(nat)) else suppressWarnings(log(nat)) }
+  u }
 rt_test <- c(0.3, 1, 3); R_test <- c(1L, 2L, 1L)
 box_ok <- TRUE
 for (j in seq_along(mid)) {
   for (side in c("lower", "upper")) {
     th <- mid
     th[j] <- if (side == "lower") lo[j] - 1e-9 else hi[j] + 1e-9
+    th <- to_emc2(th)
     for (evb in list(ddm_eval(fl, th, rt_test, R_test),
                      ddm_eval_cpp(ptr, th, rt_test, R_test))) {
       if (isTRUE(evb$in_box) || any(evb$pdf != 0) || any(evb$cdf != 0) ||
@@ -91,7 +107,7 @@ for (j in seq_along(mid)) {
     }
   }
 }
-ev_mid <- ddm_eval_cpp(ptr, mid, rt_test, R_test)
+ev_mid <- ddm_eval_cpp(ptr, to_emc2(mid), rt_test, R_test)
 if (!ev_mid$in_box || any(ev_mid$pdf <= 0)) box_ok <- FALSE
 cat(sprintf("%-50s %s\n",
             sprintf("bounding box (R & C++, %d faces + interior)", 2 * length(mid)),

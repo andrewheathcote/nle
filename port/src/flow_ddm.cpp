@@ -422,9 +422,14 @@ List ddm_eval_cpp(SEXP ptr_, NumericVector theta, NumericVector rt,
   }
   DdmCond c;
   ddm_condition(m, theta.begin(), c);
+  // st0 = 0 support rule (see the trial-wise path): zero density below t0
+  const bool hard_edge = m.zerobox && m.st0_idx >= 0 && m.t0_idx >= 0 &&
+                         theta[m.st0_idx] == R_NegInf;
+  const double t0_nat = (m.t0_idx >= 0) ? std::exp(theta[m.t0_idx]) : 0.0;
   for (int t = 0; t < n; ++t) {
     if (R[t] != 1 && R[t] != 2) stop("R must be 1 or 2.");
     eval_one(c, rt[t], R[t], t, pdf, cdf, log_pdf, p_R);
+    if (hard_edge && rt[t] <= t0_nat) { pdf[t] = 0.0; cdf[t] = 0.0; log_pdf[t] = R_NegInf; }
   }
   return List::create(_["pdf"] = pdf, _["cdf"] = cdf,
                       _["log_pdf"] = log_pdf, _["p_R"] = p_R,
@@ -520,6 +525,12 @@ List ddm_ens_eval_trials_cpp(SEXP ptr_, NumericMatrix theta, NumericVector rt,
       cdf[t] = s_cdf / K;
       p_R[t] = s_pR / K;
       log_pdf[t] = std::log(pdf[t]);
+      // st0 = 0 support rule, members share one context so member 0 decides
+      const DdmModel& m0 = e.members[0];
+      if (m0.zerobox && m0.st0_idx >= 0 && m0.t0_idx >= 0 &&
+          row[m0.st0_idx] == R_NegInf && rt[t] <= std::exp(row[m0.t0_idx])) {
+        pdf[t] = 0.0; cdf[t] = 0.0; log_pdf[t] = R_NegInf;
+      }
     }
   }
   return List::create(_["pdf"] = pdf, _["cdf"] = cdf,
