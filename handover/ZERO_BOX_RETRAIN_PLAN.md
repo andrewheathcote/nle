@@ -371,6 +371,22 @@ speed expectations in §7 being stated rather than hidden.
   `json_to_classifier_ckpt.py`, and installed into each seed with its
   `train_loader.pkl` — exactly `sbc/fix_z0_classifier.sh`'s sequence.
 
+**2026-09-26, later — export path validated on a real export; training running.**
+The one-epoch smoke run was taken through the whole S3 chain locally: classifier
+regressed on the zero-box targets (`retrain_classifier.py --zerobox`), converted
+and installed, `export_flow_ddm.py --zerobox` (port vs JAX 7.4e-05), and
+`port/tests/validate_ddm.R`: **15 of 15 groups pass**, R vs C++ to 8.3e-13.
+Three things had to be fixed to get there, all now committed: the export files
+wrote `-Infinity`, which is not JSON (now the strings R parses); the st0 = 0
+support rule was applied in R but not in the C++ single-theta or ensemble
+paths nor in the golden values (now everywhere, applied after the JAX
+cross-check so that gate stays meaningful, with the defective CDF set to 0
+rather than NA); and the validator's box test assumed EMC2-scale bounds (now
+mapped back from the network scale). `flow/scripts/zerobox_export_tux.sh` runs
+that chain for all 90 checkpoints. Training started on tux26 at 07:49 (CEST),
+three seeds, ~4 min per epoch at load 64, so **~20 h** for 300 epochs; a watcher
+polls for `zerobox_done.marker`.
+
 **Next (S3):** export all 90 checkpoints with `--zerobox`; regime-specific
 screening (the existing `score_bias_draws.R` differentiates on EMC2's log scale
 and cannot be used at an exact zero — Q1 needs draws per regime with the zero
