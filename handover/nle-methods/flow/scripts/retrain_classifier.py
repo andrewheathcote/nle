@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 
+import math
 import numpy as np
 import pyarrow.parquet as pq
 import jax, jax.numpy as jnp, optax
@@ -50,7 +51,23 @@ CONFIGS = {
 }
 
 
-def load(split, suffix="", ctx=None):
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}   # matches simulation/zerobox.R
+
+
+def zerobox_encode(X, ctx):
+    """EMC2-scale theta -> asinh(x / c) for sv, SZ, st0; -Inf maps to exactly 0."""
+    X = X.astype(np.float64, copy=True)
+    for name, c in ZEROBOX_C.items():
+        if name in ctx:
+            j = ctx.index(name)
+            nat = 0.5 * (1.0 + np.vectorize(math.erf)(X[:, j] / math.sqrt(2.0))) if name == "SZ" \
+                else np.exp(X[:, j])
+            X[:, j] = np.arcsinh(nat / c)
+    assert np.isfinite(X).all()
+    return X.astype(np.float32)
+
+
+def load(split, suffix="", ctx=None, zerobox=False):
     """`suffix="_grad"` selects the CORRECTED targets.
 
     The original data/choice_prob/*.parquet was generated without the
@@ -63,8 +80,10 @@ def load(split, suffix="", ctx=None):
     """
     t = pq.read_table(REPO / "data" / "choice_prob" /
                       f"{split}{suffix}.parquet").to_pandas()
-    return (t[ctx or CONTEXT].to_numpy(np.float32),
-            t["p_R2"].to_numpy(np.float32))
+    X = t[ctx or CONTEXT].to_numpy(np.float32)
+    if zerobox:
+        X = zerobox_encode(X, ctx or CONTEXT)
+    return (X, t["p_R2"].to_numpy(np.float32))
 
 
 def main():
@@ -79,6 +98,10 @@ def main():
                          "the c2/c3 runs")
     ap.add_argument("--st0-zero", action="store_true",
                     help="7-parameter build: drop st0 from the classifier input")
+    ap.add_argument("--zerobox", action="store_true",
+                    help="zero-box build: encode sv, SZ, st0 as asinh(x/c) to match "
+                         "a flow trained with train_ddm.py --zerobox; pair with "
+                         "--data-suffix _zerobox")
     ap.add_argument("--scaler-from", default="large",
                     help="budget whose flow scaler the classifier must match; "
                          "the export asserts the two agree")
@@ -89,8 +112,8 @@ def main():
     a = ap.parse_args()
 
     CTX = CONTEXT_ST0ZERO if a.st0_zero else CONTEXT
-    Xtr, ytr = load("train", a.data_suffix, CTX)
-    Xva, yva = load("val", a.data_suffix, CTX)
+    Xtr, ytr = load("train", a.data_suffix, CTX, zerobox=a.zerobox)
+    Xva, yva = load("val", a.data_suffix, CTX, zerobox=a.zerobox)
     print(f"targets: data/choice_prob/*{a.data_suffix}.parquet", flush=True)
     # the classifier must standardise exactly as the flow does, or the export's
     # flow/classifier scaler assertion fails
