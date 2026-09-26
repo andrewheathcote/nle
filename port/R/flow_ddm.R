@@ -77,7 +77,8 @@ ddm_in_box <- function(fl, theta) {
       b <- list(lower = b$lower[-j], upper = b$upper[-j])
     }
   }
-  all(theta >= b$lower & theta <= b$upper)
+  # NaN (a negative natural value fed to log/probit) is outside, not an error
+  isTRUE(all(theta >= b$lower & theta <= b$upper))
 }
 
 # Amortizable conditioning: one parameter vector -> spline knots for BOTH
@@ -184,12 +185,13 @@ ddm_eval <- function(fl, theta, rt, R) {
   # spline over log rt cannot produce -Inf itself, so the evaluator does. It is
   # a property of the model, costs nothing, and (Phase 32b) never binds at the
   # likelihood maximum -- insurance, not a correction.
+  hard <- rep(FALSE, n)
   if (identical(fl$context_encoding, "zerobox")) {
     js <- match("st0", fl$context_names); jt <- match("t0", fl$context_names)
     if (!is.na(js) && !is.na(jt) && is.infinite(theta[js]) && theta[js] < 0) {
-      below <- rt <= exp(theta[jt]); log_pdf[below] <- -Inf; z[below] <- NA_real_ } }
+      hard <- rt <= exp(theta[jt]); log_pdf[hard] <- -Inf } }
   list(pdf = exp(log_pdf),
-       cdf = pnorm(z) * exp(log_p_R),   # defective CDF
+       cdf = ifelse(hard, 0, pnorm(z) * exp(log_p_R)),   # defective CDF; 0 below t0 when st0 = 0
        log_pdf = log_pdf,
        p_R = exp(log_p_R),
        z = z, in_box = TRUE)
