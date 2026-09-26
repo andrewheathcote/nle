@@ -1,5 +1,5 @@
-# The dev-nle usability gate, in dev-nle's own terms. Five checks; ~25 min at
-# 8 cores; none is an SBC measurement. Run from the NLE repo root:
+# The dev-nle usability gate, in dev-nle's own terms. Five checks; ~1 min at
+# 8 cores; none is an SBC measurement. First full pass 2026-09-26 (5/5). Run from the NLE repo root:
 #
 #   Rscript sbc/gate_dev_nle.R [library]      # default ~/R/nle-sbc-lib
 #
@@ -88,8 +88,10 @@ verdict(ok4, "4. nn_posterior_shift() runs (read: control ~0, t0 near +0.28)")
 ok5 <- tryCatch({
   out <- nn_sbc_cell(cell, trials = 100, replicates = 12, run_control = FALSE,
                      cores_per_chain = 4, cores_for_chains = 2)
-  s <- nn_sbc_summary(if (!is.null(out$network)) out$network else out)
-  print(s)
+  # nn_sbc_cell() returns list(nn, control, summary, cell) with the summary
+  # already computed by nn_sbc_summary(out$nn)
+  stopifnot(!is.null(out$nn), !is.null(out$summary))
+  print(out$summary)
   TRUE }, error = function(e) { cat("  ", conditionMessage(e), "\n"); FALSE })
 verdict(ok5, "5. a 12-replicate N=100 nn_sbc_cell() completes and summarises (plumbing, not a measurement)")
 

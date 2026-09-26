@@ -361,3 +361,12 @@ Two consequences worth planning for:
   and `METHODS.md` §6 is the argument for why loading a network is not the same
   as being able to infer with it. Point at them rather than writing something
   new and thinner.
+
+**Result (2026-09-26):** `Rscript sbc/gate_dev_nle.R ~/R/nle-sbc-lib` passed
+5/5 in 1 minute (`sbc/gate_dev_nle.out`): exact check 2 at 8.9e-14 /
+7.4e-14 / 1.4e-14 for `cap256w_c4` / `st0zero` / `reg_s402`; score bias `a`
++0.0126 (0.0013) vs recorded +0.0136; posterior shift t0 +0.22 vs +0.28; the
+12-replicate `nn_sbc_cell()` ran and summarised. dev-nle is usable now; the
+zero-box network additionally needs the asinh transform hook, `-Inf` `p_types`
+defaults, bound exceptions at 0 and the st0 = 0 support rule, with check 2 as
+the acceptance test for each.
