@@ -52,6 +52,14 @@ struct DdmModel {
   // carries its own scaler. theta is ALWAYS supplied on EMC2's scale.
   bool triple = false;
   std::vector<double> clf_scaler_mean, clf_scaler_scale;
+  // zerobox: sv, SZ, st0 are conditioned on asinh(x / c); theta still arrives
+  // on EMC2's scale (-Inf at an exact zero, which maps to exactly 0). Both
+  // heads take the same encoding, so one scaler serves. zb_idx/zb_c/zb_probit
+  // are parallel: context column, scale constant, whether the column is probit.
+  bool zerobox = false;
+  std::vector<int> zb_idx; std::vector<double> zb_c; std::vector<bool> zb_probit;
+  int st0_idx = -1, t0_idx = -1;           // for the st0 = 0 support rule
+
   std::vector<double> lower, upper;       // bounding box (sampled scale)
   Mlp flow;                                // input dim n_ctx + 1 (R appended)
   Mlp clf;                                 // input dim n_ctx, output 1 logit
@@ -173,12 +181,27 @@ static inline void rqs_inverse_one(const Knots& kn, double u,
       + 2.0 * std::log(denominator);
 }
 
+// EMC2 scale -> zero-box network scale for the declared columns.
+static inline void emc2_to_zerobox(const DdmModel& m, const double* theta,
+                                   std::vector<double>& out) {
+  out.assign(theta, theta + m.n_ctx);
+  for (size_t k = 0; k < m.zb_idx.size(); ++k) {
+    const int j = m.zb_idx[k];
+    const double nat = m.zb_probit[k] ? R::pnorm(theta[j], 0.0, 1.0, 1, 0)
+                                      : std::exp(theta[j]);
+    out[j] = std::asinh(nat / m.zb_c[k]);
+  }
+}
+
 static inline bool in_box(const DdmModel& m, const double* theta) {
+  std::vector<double> tf;
+  if (m.zerobox) { emc2_to_zerobox(m, theta, tf); theta = tf.data(); }
   for (int j = 0; j < m.n_ctx; ++j)
     if (std::isnan(theta[j]) || theta[j] < m.lower[j] || theta[j] > m.upper[j])
       return false;
   return true;
 }
+
 
 // EMC2 (v, log a, log t0, log s, qnorm Z, qnorm SZ, log sv, log st0) ->
 // (v, log SZ0, log t0, log s, log SZ, log SZ1, log sv, log st0). Mirrors
@@ -212,10 +235,16 @@ static void ddm_condition(const DdmModel& m, const double* theta, DdmCond& c) {
       ctx[j]     = (tf[j]    - m.scaler_mean[j])     / m.scaler_scale[j];
       ctx_clf[j] = (theta[j] - m.clf_scaler_mean[j]) / m.clf_scaler_scale[j];
     }
+  } else if (m.zerobox) {
+    std::vector<double> tf;
+    emc2_to_zerobox(m, theta, tf);
+    for (int j = 0; j < m.n_ctx; ++j)
+      ctx_clf[j] = ctx[j] = (tf[j] - m.scaler_mean[j]) / m.scaler_scale[j];
   } else {
     for (int j = 0; j < m.n_ctx; ++j)
       ctx_clf[j] = ctx[j] = (theta[j] - m.scaler_mean[j]) / m.scaler_scale[j];
   }
+
   for (int r = 0; r < 2; ++r) {
     ctx[m.n_ctx] = (double)(r + 1);      // raw response code
     mlp_forward(m.flow, ctx, raw);
@@ -297,7 +326,28 @@ static void load_ddm_from_list(List fl, DdmModel& m) {
   if (fl.containsElementNamed("context_encoding")) {
     std::string enc = as<std::string>(fl["context_encoding"]);
     m.triple = (enc == "triple");
+    m.zerobox = (enc == "zerobox");
   }
+  if (m.zerobox) {
+    if (!fl.containsElementNamed("zerobox_c") || !fl.containsElementNamed("context_names"))
+      stop("ddm_build: context_encoding is 'zerobox' but zerobox_c/context_names are absent.");
+    List zc = fl["zerobox_c"];
+    CharacterVector cn = fl["context_names"];
+    CharacterVector zn = zc.names();
+    for (int k = 0; k < zn.size(); ++k) {
+      const std::string nm = as<std::string>(zn[k]);
+      int j = -1;
+      for (int i = 0; i < cn.size(); ++i) if (as<std::string>(cn[i]) == nm) { j = i; break; }
+      if (j < 0) stop("ddm_build: zerobox_c names a column not in context_names.");
+      m.zb_idx.push_back(j); m.zb_c.push_back(as<double>(zc[k]));
+      m.zb_probit.push_back(nm == "SZ");
+    }
+    for (int i = 0; i < cn.size(); ++i) {
+      if (as<std::string>(cn[i]) == "st0") m.st0_idx = i;
+      if (as<std::string>(cn[i]) == "t0")  m.t0_idx  = i;
+    }
+  }
+
   if (m.triple) {
     if (!fl.containsElementNamed("classifier_scaler"))
       stop("ddm_build: context_encoding is 'triple' but classifier_scaler is absent.");
@@ -411,6 +461,13 @@ List ddm_eval_trials_cpp(SEXP ptr_, NumericMatrix theta, NumericVector rt,
       pdf[t] = 0.0; cdf[t] = 0.0; log_pdf[t] = R_NegInf; p_R[t] = NA_REAL;
     } else {
       eval_one(c, rt[t], R[t], t, pdf, cdf, log_pdf, p_R);
+      // Exact support boundary when st0 = 0 (theta st0 = -Inf): the true
+      // density is zero below t0. The spline cannot produce -Inf; this does.
+      // Insurance, not a correction -- it never binds at the optimum (Phase 32b).
+      if (m.zerobox && m.st0_idx >= 0 && m.t0_idx >= 0 &&
+          row[m.st0_idx] == R_NegInf && rt[t] <= std::exp(row[m.t0_idx])) {
+        pdf[t] = 0.0; cdf[t] = 0.0; log_pdf[t] = R_NegInf;
+      }
     }
   }
   return List::create(_["pdf"] = pdf, _["cdf"] = cdf,
