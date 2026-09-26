@@ -63,6 +63,25 @@ CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
 _FORCE_STEP = [None]
 
 
+# --zerobox: sv, SZ, st0 are conditioned on asinh(x / c) so that exact zeros
+# (stored as -Inf on the EMC2 scale) are representable. Constants match
+# simulation/zerobox.R and flow/src/flow/data.py; they are written into the export.
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}
+ZEROBOX_BOUNDS_NAT = {"sv": (0.0, 4.0), "SZ": (0.0, 0.99), "st0": (0.0, 0.49)}
+
+
+def emc2_to_zerobox(theta, ctx):
+    """EMC2 sampled-scale theta (n, k) -> the zero-box network context."""
+    out = np.array(theta, dtype=np.float64, copy=True)
+    for name, c in ZEROBOX_C.items():
+        if name not in ctx:
+            continue
+        j = ctx.index(name)
+        nat = sstats.norm.cdf(out[:, j]) if name == "SZ" else np.exp(out[:, j])
+        out[:, j] = np.arcsinh(nat / c)
+    return out
+
+
 def emc2_to_triple(theta):
     """(v, log a, log t0, log s, qnorm Z, qnorm SZ, log sv, log st0)
     -> (v, log SZ0, log t0, log s, log SZ, log SZ1, log sv, log st0).
@@ -103,10 +122,13 @@ def tf_one(v, t):
     return float(v)
 
 
-def sampled_bounds(ctx=None):
+def sampled_bounds(ctx=None, zerobox=False):
     ctx = ctx if ctx is not None else CONTEXT
-    return {"lower": [tf_one(BOUNDS_NAT[p][0], TRANSFORMS[p]) for p in ctx],
-            "upper": [tf_one(BOUNDS_NAT[p][1], TRANSFORMS[p]) for p in ctx]}
+    def one(p, k):
+        if zerobox and p in ZEROBOX_C:          # network scale: asinh(x / c)
+            return float(np.arcsinh(ZEROBOX_BOUNDS_NAT[p][k] / ZEROBOX_C[p]))
+        return tf_one(BOUNDS_NAT[p][k], TRANSFORMS[p])
+    return {"lower": [one(p, 0) for p in ctx], "upper": [one(p, 1) for p in ctx]}
 
 
 def read_mlp(ckpt_dir, kind):
@@ -194,6 +216,8 @@ def main():
                     help="export this checkpoint step instead of the best-val one")
     ap.add_argument("--tag-suffix", default="",
                     help="appended to the output tag, e.g. _e207")
+    ap.add_argument("--zerobox", action="store_true",
+                    help="flow was trained with train_ddm.py --zerobox")
     ap.add_argument("--st0-zero", action="store_true",
                     help="7-parameter build with st0 absent (see "
                          "handover/ST0_ZERO_RETRAIN.md); requires training data "
@@ -275,7 +299,7 @@ def main():
     assert scaler_mean.shape[0] == len(CTX), "scaler covers params only"
 
     # --- golden grid ---
-    bounds_s = sampled_bounds(CTX)
+    bounds_s = sampled_bounds(CTX, zerobox=args.zerobox)
     rng = np.random.default_rng(20260708)
     lo = np.array(bounds_s["lower"]); hi = np.array(bounds_s["upper"])
     theta = rng.uniform(lo, hi, size=(args.n_param_sets, len(lo)))
@@ -289,6 +313,20 @@ def main():
     if args.triple:
         theta_flow = emc2_to_triple(theta)
         theta_clf = theta
+    if args.zerobox:
+        # bounds_s is on the network (asinh) scale, so theta was drawn there.
+        # Force exact zeros into a quarter of the rows, one variability
+        # parameter at a time; both heads take the network scale, and the
+        # golden CSV records the EMC2-scale theta (-Inf at zeros).
+        n12 = theta.shape[0] // 12
+        for i, name in enumerate(("sv", "SZ", "st0")):
+            theta[i * n12:(i + 1) * n12, CTX.index(name)] = 0.0
+        theta_flow = theta.copy()
+        theta = theta_flow.copy()
+        for name, c in ZEROBOX_C.items():
+            j = CTX.index(name); nat = np.sinh(theta_flow[:, j]) * c
+            with np.errstate(divide="ignore"):
+                theta[:, j] = sstats.norm.ppf(nat) if name == "SZ" else np.log(nat)
 
     res = {R: ddm_eval_f64(theta_flow, rt, R, flow_layers, flow_norms, clf_layers,
                            scaler_mean, scaler_scale, num_bins,
@@ -371,11 +409,14 @@ def main():
         "exported": str(date.today()),
         "context_names": CTX,
         "classifier_context_names": CTX,
-        "context_encoding": ("st0zero" if args.st0_zero
+        "context_encoding": ("zerobox" if args.zerobox
+                             else "st0zero" if args.st0_zero
                              else "triple" if args.triple else "emc2"),
+        "zerobox_c": ZEROBOX_C if args.zerobox else None,
         "classifier_scaler": {"mean": clf_scaler_mean.tolist(),
                               "scale": clf_scaler_scale.tolist()},
-        "context_transforms": TRANSFORMS,
+        "context_transforms": ({**TRANSFORMS, **{k: f"asinh(x/{c})" for k, c in ZEROBOX_C.items()}}
+                               if args.zerobox else TRANSFORMS),
         "parameter_scale": "sampled",
         "response_coding": "flow context gets raw R (1.0 or 2.0) appended after "
                            "standardized params; classifier logit is for P(R=2)",
