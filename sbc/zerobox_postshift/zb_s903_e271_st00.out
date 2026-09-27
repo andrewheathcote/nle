@@ -1,0 +1,17 @@
+Warning message:
+package ‘WienR’ was built under R version 4.6.1 
+flow zb_s903_e271  regime st00 (pinned: st0 = -Inf)  48 datasets x 400 trials, 2000 draws, cores 8
+usable datasets 48 / 48   0.5 min
+
+predicted SBC std bias (mean(post mean - truth) / sd), and the shift of the
+flow posterior from the analytic one on the SAME data, in analytic post sd
+
+par     analytic       flow   shift (sd)   sd ratio
+v         +0.001     +0.027       +0.029      1.012
+a         +0.049     -0.051       -0.097      0.991
+t0        -0.035     +0.068       +0.112      0.981
+Z         -0.079     -0.079       -0.001      1.006
+SZ        +0.017     +0.010       -0.007      1.002
+sv        -0.039     -0.037       +0.002      1.000
+
+ESS  analytic median 616 (min 395)   flow median 625 (min 308)

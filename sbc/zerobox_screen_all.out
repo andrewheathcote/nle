@@ -1,0 +1,74 @@
+[09-27 21:35:53] === 1. fetch exports ===
+normalised 88 of 88 cards
+[09-27 21:36:15]         88 checkpoints
+[09-27 21:36:15] === 2. score-bias screen, 300 draws, seven regimes ===
+[09-27 21:36:56]   full: CONTROL max |g| = 7.34e-05  (PASS)
+[09-27 21:37:32]   sv0: CONTROL max |g| = 7.34e-05  (PASS)
+[09-27 21:37:49]   SZ0: CONTROL max |g| = 6.04e-05  (PASS)
+[09-27 21:38:05]   st00: CONTROL max |g| = 5.93e-05  (PASS)
+[09-27 21:38:17]   all0: CONTROL max |g| = 3.64e-05  (PASS)
+[09-27 21:38:36]   gap1: CONTROL max |g| = 5.93e-05  (PASS)
+[09-27 21:38:57]   gap3: CONTROL max |g| = 5.97e-05  (PASS)
+[09-27 21:38:57] === 3. selection ===
+analytic control, max |g| per regime: full 7.3e-05  sv0 7.3e-05  SZ0 6.0e-05  st00 5.9e-05  all0 3.6e-05 
+
+88 checkpoints ranked; top 3:
+           tag mean_abs_g_a sum_abs_g g_a_full  g_a_sv0 g_a_SZ0 g_a_st00
+1 zb_s903_e271      0.01434    0.1740  0.01402 -0.00399 0.03614 -0.00742
+2 zb_s903_e265      0.01506    0.1719  0.01088 -0.00753 0.03459 -0.00989
+3 zb_s903_e286      0.01526    0.1765  0.01599 -0.00169 0.03746 -0.00525
+  g_a_all0
+1  0.01011
+2  0.01242
+3  0.01592
+
+worst 3:
+            tag mean_abs_g_a sum_abs_g g_a_full g_a_sv0 g_a_SZ0 g_a_st00
+86 zb_s901_e284      0.03797    0.2557  0.02109 0.00320 0.06721  0.04126
+87 zb_s901_e274      0.04237    0.2838  0.02524 0.00622 0.07150  0.04702
+88 zb_s901_e270      0.04239    0.2798  0.02697 0.00928 0.07426  0.04320
+   g_a_all0
+86  0.05709
+87  0.06189
+88  0.05822
+
+Q2 reference cap256w_c4, full regime, same draws: g_a +0.01181 (se 0.0011); sum|g| 0.02338
+selected zb_s903_e271, full regime:                        g_a +0.01402 (se 0.0007); sum|g| 0.04423  -> not worse than the shipped flow (Q2 pass)
+
+per seed: n, median and min of mean|g_a|
+         n median    min
+zb_s901 29 0.0323 0.0241
+zb_s902 30 0.0344 0.0303
+zb_s903 29 0.0204 0.0143
+
+Q3 gap1 (st0 = 1 ms), control max |g| 5.9e-05:
+          tag         v         a          Z        sv         SZ sum_abs_g
+ zb_s903_e265 0.0008691 -0.004844  0.0002152 9.461e-05 -5.529e-04  0.006576
+ zb_s903_e271 0.0006920 -0.003268 -0.0011393 7.963e-05 -1.632e-04  0.005342
+ zb_s903_e286 0.0004827 -0.001413  0.0018755 5.403e-05  8.098e-05  0.003906
+
+Q3 gap3 (st0 = 3 ms), control max |g| 6.0e-05:
+          tag         v          a         Z        sv         SZ sum_abs_g
+ zb_s903_e265 0.0007646 -0.0001608 -0.003091 1.011e-04 -0.0008188  0.004936
+ zb_s903_e271 0.0006328  0.0003722 -0.004051 8.578e-05 -0.0003701  0.005512
+ zb_s903_e286 0.0004574  0.0021044 -0.001208 6.592e-05 -0.0002343  0.004070
+
+selected for the posterior-shift screen: zb_s903_e271, zb_s903_e265, zb_s903_e286
+saved sbc/zerobox_screen/ranking.rds
+[09-27 21:38:57] === 4. posterior-shift screen, top 3 x five regimes, 48 datasets ===
+[09-27 22:06:59]   zb_s903_e271 full: a flow -0.317  t0 flow +0.191  Z flow +0.028  
+[09-27 22:34:18]   zb_s903_e271 sv0: a flow -0.560  t0 flow +0.150  Z flow +0.020  
+[09-27 22:35:01]   zb_s903_e271 SZ0: a flow -0.104  t0 flow +0.212  Z flow +0.186  
+[09-27 22:35:32]   zb_s903_e271 st00: a flow -0.051  t0 flow +0.068  Z flow -0.079  
+[09-27 22:35:50]   zb_s903_e271 all0: a flow -0.167  t0 flow +0.035  Z flow +0.107  
+[09-27 23:03:53]   zb_s903_e265 full: a flow -0.342  t0 flow +0.203  Z flow +0.037  
+[09-27 23:30:59]   zb_s903_e265 sv0: a flow -0.581  t0 flow +0.163  Z flow +0.032  
+[09-27 23:31:42]   zb_s903_e265 SZ0: a flow -0.114  t0 flow +0.224  Z flow +0.194  
+[09-27 23:32:12]   zb_s903_e265 st00: a flow -0.113  t0 flow +0.136  Z flow -0.050  
+[09-27 23:32:31]   zb_s903_e265 all0: a flow -0.203  t0 flow +0.121  Z flow +0.133  
+[09-28 00:00:24]   zb_s903_e286 full: a flow -0.302  t0 flow +0.168  Z flow +0.032  
+[09-28 00:27:27]   zb_s903_e286 sv0: a flow -0.535  t0 flow +0.115  Z flow +0.023  
+[09-28 00:28:10]   zb_s903_e286 SZ0: a flow -0.085  t0 flow +0.183  Z flow +0.186  
+[09-28 00:28:40]   zb_s903_e286 st00: a flow -0.014  t0 flow +0.036  Z flow -0.043  
+[09-28 00:28:59]   zb_s903_e286 all0: a flow -0.097  t0 flow -0.021  Z flow +0.132  
+[09-28 00:28:59] === S3 done: read sbc/zerobox_screen/selection.out and sbc/zerobox_postshift/*.out ===
