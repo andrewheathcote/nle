@@ -16,6 +16,7 @@ say "=== 1. fetch exports ==="
 rsync -aq --include='ddm_zb_s90?_e*_weights.json' --exclude='*' \
   andrew@tux26psy.fmg.uva.nl:~/emc2nn/nle/handover/nle-methods/port/export/ port/export/ \
   || { say "ABORT: rsync failed"; exit 1; }
+python3 sbc/zerobox_card_normalise.py port/export/ddm_zb_*_weights.json || { say "ABORT: card normalisation failed"; exit 1; }
 TAGS=$(ls port/export | grep -oE '^ddm_zb_s90[0-9]_e[0-9]+' | sed 's/^ddm_//' | sort -t e -k2 -n | tr '\n' ' ')
 N=$(echo $TAGS | wc -w); say "  $N checkpoints"
 [ "$N" -ge 60 ] || { say "ABORT: expected ~90 exports"; exit 1; }

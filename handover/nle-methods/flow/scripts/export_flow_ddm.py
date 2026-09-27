@@ -414,13 +414,18 @@ def main():
         "zerobox_c": ZEROBOX_C if args.zerobox else None,
         "classifier_scaler": {"mean": clf_scaler_mean.tolist(),
                               "scale": clf_scaler_scale.tolist()},
-        "context_transforms": ({**TRANSFORMS, **{k: f"asinh(x/{c})" for k, c in ZEROBOX_C.items()}}
+        # dev-nle's card contract: a zero-box input is transform "zerobox" with
+        # its constant in zerobox_c (not a descriptive string), and the natural
+        # box must agree with the sampled one -- lower = 0 for the three.
+        "context_transforms": ({**TRANSFORMS, **{k: "zerobox" for k in ZEROBOX_C}}
                                if args.zerobox else TRANSFORMS),
         "parameter_scale": "sampled",
         "response_coding": "flow context gets raw R (1.0 or 2.0) appended after "
                            "standardized params; classifier logit is for P(R=2)",
         "bounds_sampled": bounds_s,
-        "bounds_natural": BOUNDS_NATURAL,
+        "bounds_natural": ({"lower": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[0] for p in CONTEXT],
+                            "upper": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[1] for p in CONTEXT]}
+                           if args.zerobox else BOUNDS_NATURAL),
         "scaler": {"mean": scaler_mean.tolist(), "scale": scaler_scale.tolist()},
         "flow_mlp": {
             "activation": "gelu_tanh",
