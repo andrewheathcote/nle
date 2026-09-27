@@ -392,3 +392,4 @@ screening (the existing `score_bias_draws.R` differentiates on EMC2's log scale
 and cannot be used at an exact zero — Q1 needs draws per regime with the zero
 parameters held at zero); posterior-shift screen per regime; select; then S4.
 - 2026-09-26 17:30 dev-nle zero-box registration accepted (`sbc/gate_zerobox_dev_nle.R` 3/3 on the fixture card; gate 5/5). S4 cells will run on dev-nle; `DDMnn0` on dev-nn stays as the fallback.
+- 2026-09-27 12:55 training done: 3 seeds x 300 epochs, 30 checkpoints each, no NaN; best val 83.57 / 83.03 / 83.59 (zb_s901/902/903). Export stage (`flow/scripts/zerobox_export_tux.sh`) launched 13:03.
