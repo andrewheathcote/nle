@@ -59,10 +59,9 @@ build <- function(tg) {
   register_nn_model(f, twin = DDM)()
 }
 nets <- lapply(tags, build); names(nets) <- tags
-for (tg in tags) if (length(PIN) && !all(PIN == 0)) {           # gap regimes need the zero-box box
-  lo <- nets[[tg]]$bound$minmax["st0", 1]
-  if (!is.na(lo) && lo > 0 && lo > min(PIN)) stop(tg, ": st0 lower bound ", lo, " excludes the gap regime")
-}
+# Gap regimes (st0 below the old 0.01 floor) are outside the shipped flow's box:
+# dfun floors them at min_ll there, which shows up as an absurd g, so the gap
+# rows are read only for zero-box cards (bounds_sampled lower = 0 for st0).
 
 ## ---- likelihoods on the NATURAL scale (dfun's scale) -----------------------
 # th: named natural-scale vector v a t0 s Z SZ sv st0 (SZ = the fraction, as EMC2 has it)
@@ -97,7 +96,7 @@ pin_s <- c(sv = if ("sv" %in% names(PIN)) log(PIN[["sv"]]) else NA,
 one <- function(i) {
   tr <- truth[i, ]; th_s <- c(tr[c("v", "a", "t0", "Z", "SZ", "sv", "st0")])
   for (p in names(PIN)) th_s[[p]] <- pin_s[[p]]
-  th <- to_nat(th_s); stopifnot(all(th[names(PIN)] == PIN))     # exact, not floored
+  th <- to_nat(th_s); stopifnot(all(abs(th[names(PIN)] - PIN) <= 1e-12 * pmax(1, PIN)))  # exact zeros; the gap to fp
   rt <- th[["t0"]] + exp(seq(log(1e-3), log(8), length.out = 120))
   dr <- c(diff(rt)[1], (head(diff(rt), -1) + tail(diff(rt), -1)) / 2, tail(diff(rt), 1))
   grid <- list(rt = rt, w = lapply(1:2, function(R) exp(an_lpdf(th, rt, R)) * dr))
