@@ -22,33 +22,35 @@ cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 PY=~/emc2nn/nle/flow/.venv/bin/python
 export PYTHONPATH="$ROOT/flow/src"
-LOG="$ROOT/zerobox_export.log"
+PREFIX=${PREFIX:-zb}                            # zb (v1) or zb2 (the retrain)
+LOG="$ROOT/${PREFIX}_export.log"
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
-SEEDS="zb_s901 zb_s902 zb_s903"
-REF=zb_s901                                     # whose scaler the classifier uses
+SEEDS="${PREFIX}_s901 ${PREFIX}_s902 ${PREFIX}_s903"
+REF=${PREFIX}_s901                              # whose scaler the classifier uses
+CLFJ="clf_${PREFIX}_big"                        # classifier export name; its ckpt tag is clf$PREFIX
 
-[ -f "$ROOT/zerobox_done.marker" ] || { say "ABORT: training marker absent"; exit 1; }
+[ -f "$ROOT/${PREFIX}_done.marker" ] || { say "ABORT: training marker absent"; exit 1; }
 for t in $SEEDS; do
   n=$(ls "$ROOT/results/model_states/${t}_budget/DDM_flow" 2>/dev/null | grep -c '^[0-9]')
   [ "$n" -ge 30 ] || { say "ABORT: $t has $n checkpoints"; exit 1; }
 done
 
 say "=== 1. classifier (config big) on the zero-box targets, scaler from $REF ==="
-if [ ! -f "$ROOT/port/export/clf_zb_big_weights.json" ]; then
+if [ ! -f "$ROOT/port/export/${CLFJ}_weights.json" ]; then
   OMP_NUM_THREADS=8 "$PY" flow/scripts/retrain_classifier.py --zerobox --config big \
     --scaler-from "$REF" --data-suffix _zerobox \
-    --out-json port/export/clf_zb_big_weights.json > "$ROOT/clf_zb_big.log" 2>&1 \
+    --out-json port/export/${CLFJ}_weights.json > "$ROOT/${CLFJ}.log" 2>&1 \
     || { say "ABORT: classifier training failed"; exit 1; }
 fi
-say "  $(grep -E '^FINAL' "$ROOT/clf_zb_big.log")"
+say "  $(grep -E '^FINAL' "$ROOT/${CLFJ}.log")"
 
 say "=== 2-3. checkpoint + install into each seed ==="
-"$PY" flow/scripts/json_to_classifier_ckpt.py --from-export clf_zb_big --tag clfzb \
+"$PY" flow/scripts/json_to_classifier_ckpt.py --from-export "$CLFJ" --tag "clf$PREFIX" \
   --scaler-from "$REF" >> "$LOG" 2>&1 || { say "ABORT: checkpoint conversion failed"; exit 1; }
 for t in $SEEDS; do
   d="$ROOT/results/model_states/${t}_budget"
   rm -rf "$d/DDM_classifier"
-  cp -R "$ROOT/results/model_states/clfzb_budget/DDM_classifier" "$d/DDM_classifier"
+  cp -R "$ROOT/results/model_states/clf${PREFIX}_budget/DDM_classifier" "$d/DDM_classifier"
   cp "$d/train_loader.pkl" "$d/DDM_classifier/train_loader.pkl"
   say "  $t: zero-box classifier installed"
 done
@@ -67,4 +69,4 @@ for t in $SEEDS; do
   say "  $t: $(ls "$ROOT/port/export/" | grep -cE "^ddm_${t}_e[0-9]+_weights.json$") exported"
 done
 say "=== export done; screening is part 2 (regime-specific, see the plan) ==="
-echo "zerobox export done $(date)" >> "$ROOT/zerobox_export.marker"
+echo "zerobox export done $(date)" >> "$ROOT/${PREFIX}_export.marker"

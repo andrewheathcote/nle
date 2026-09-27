@@ -334,6 +334,49 @@ speed expectations in §7 being stated rather than hidden.
 
 ---
 
+## 11. Version 2: the retrain (decided 2026-09-28)
+
+**Decision (AH):** delay shipping; retrain; SBC stage at 72 cores.
+
+**What v1 established.** Exact-zero regimes pass (all-zero with uniform ranks
+on every parameter; st0 = 0 through the gate). The full regime fails on st0
+(+0.60) and sv = 0 likewise (+0.61), while t0 is clean in both (+0.08 / +0.01)
+where the shipped flow carries +0.32. The failure is "st0 free", in every
+regime where it is free.
+
+**Mechanism being tested.** Training density where the cell measures. With
+st0 free in 62% of rows and uniform in asinh(x / 0.002), 12% of all rows had
+st0 in the SBC prior's region [0.03, 0.10]; the shipped flow's log-uniform box
+put 31% there. The score-bias screen saw it (g_st0 3.3x the shipped flow's on
+the same draws) but the v1 selection rule ranked on g_a alone.
+
+**Changes, and nothing else** (`simulation/zerobox.R`, `ZB_VERSION=2`):
+
+| | v1 | v2 |
+|---|---|---|
+| strata full / st0=0 / sv=0 / SZ=0 / st0=sv=0 / st0=SZ=0 / sv=SZ=0 / all=0 | 40/14/8/8/7/7/6/10 | 50/10/8/8/5/5/6/8 |
+| free st0 | uniform in asinh(x/0.002) on [0, 0.49] | 75% log-uniform on [0.01, 0.49] + 25% asinh-uniform on [0, 0.49] |
+| rows with st0 in [0.03, 0.10] | 12% | 20% (test asserts > 18%) |
+| free st0 below 0.01 (the gap) | 37% | 9% (test asserts > 5%) |
+| sv, SZ, encoding, box, architecture, budget, epochs | | unchanged |
+| selection rule | mean \|g_a\| over 5 regimes | + mean \|g_st0\| over the 3 regimes where st0 is free (declared here, before any v2 number) |
+
+The zero strata shrink because their cells passed with room; the full share
+rises because that is where the failure is. Data, runs and cards carry new
+names throughout (`zerobox600k_v2`, `zb2_s901..903`, `clf_zb2_big`), so v1
+stays reproducible beside v2.
+
+**Pipeline.** `flow/scripts/zerobox_v2_pipeline_tux.sh` on tux26: simulate
+(48 + 12 cores) -> sampler test -> train 3 seeds x 12 threads -> classifier +
+export. Then on the laptop `PREFIX=zb2 bash sbc/zerobox_screen_all.sh` (screen,
+rule v2, posterior shift), and on tux26 `CARD=... bash sbc/zerobox_s4_launch.sh`
+(four cells, two at a time at 36 cores = 72). Acceptance: the same four cells;
+v2 replaces the shipped flow only if the full cell passes the gate on every
+parameter and the exact-zero cells stay as good as v1's.
+
+**Budget.** ~1 h simulate, ~15-25 h train (12 threads; v1 took 29 h at 4),
+~20 min export, ~3 h screen, ~6 h cells at 72 cores. tux26 is otherwise empty.
+
 ## Progress log
 
 **2026-09-26 — S1 and S2 complete; training launched.**
@@ -397,3 +440,4 @@ parameters held at zero); posterior-shift screen per regime; select; then S4.
 - 2026-09-28 00:29 S3 done (`sbc/zerobox_screen/selection.out`, `sbc/zerobox_postshift/*.out`). Score bias, 88 checkpoints x 5 zero regimes, 300 prior draws, controls < 8e-5: seed zb_s903 dominates (min mean|g_a| 0.0143 vs 0.0241 / 0.0303 for s901 / s902 — seed variance again). Selected by the declared rule: **zb_s903_e271** (g_a full +0.0140 (0.0007) vs cap256w_c4 +0.0118 (0.0011) on the same draws: Q2 pass on a; sum|g| 0.044 vs 0.023). Gap (Q3): st0 = 1 and 3 ms, |g| < 0.005 on every parameter, controls 6e-5. Posterior shift, top 3 x 5 regimes, 48 datasets (se ~0.15): st0 = 0 and all-zero regimes clean (worst shift t0 +0.11 / +0.08); whenever st0 is FREE the flow shifts st0 by +0.27 to +0.40 (all three checkpoints, all three regimes with st0 free), a by -0.19 (full) / -0.30 (sv = 0), Z by -0.22 (sv = 0); t0 +0.17 in the full regime against the shipped flow's +0.28. Prediction for S4: st0 = 0 and all-zero cells pass cleanly; full and sv = 0 cells pass the gate with st0 the worst parameter (+0.3 to +0.4).
 - 2026-09-27 16:45 CEST S4 launched on tux26 on dev-nle (installed there at `~/emc2nn/nle/.Rlibs-nle`; gate 5/5 and zero-box acceptance 3/3 on that install): cells full, st0 = 0, all-zero, sv = 0 with zb_s903_e271, each with its matched analytic control (the twin DDM in the same design), N = 400, 500 replicates, zeros as named constants at -Inf, `mapped_pars()` asserted for both designs (`sbc/zerobox_s4_cell.R`, `sbc/zerobox_s4_launch.sh`; two cells at a time at 36 cores). Results: `~/emc2nn/nle/sbc/nci/results_zerobox/<regime>/`.
 - 2026-09-28 00:45 CEST S4: three of four cells in (N = 400, 500 reps, matched analytic controls all clean). **all-zero: PASS, ranks uniform on every parameter** (worst std bias t0 +0.08, KS >= 0.4) — the first network cell in the project with clean ranks throughout. **st0 = 0: passes the gate** (worst a -0.21, t0 +0.18), ranks non-uniform on a (KS 2e-4) and t0 (0.025); better than the dedicated z0_s503_e282 build (worst +0.28, three rank failures). **full: FAILS the gate on st0 (+0.60, KS 1e-26, coverage 0.928)**, v +0.18 and a -0.22 with non-uniform ranks; t0 +0.08 with KS 0.32 — the shipped flow's t0 problem (+0.32, KS 2e-7) is absent. sv = 0 network run (control at 410/500): st0 +0.61, a -0.44, Z -0.35, v +0.26, t0 clean — same pattern. The posterior-shift screen predicted st0 +0.32/+0.38 for these two: ranked right, under-predicted by ~0.25 again. The score-bias screen had the signal: g_st0 +0.0119 vs cap256w_c4 +0.0036 (3.3x) and g_Z 2.6x, on the same draws — the selection rule ranked on g_a alone. Q1 (exact zero): passes. Q2 (still as good above the floor): FAILS on st0 -> per §4, ship both unless retrained. Mechanism hypothesis, testable: st0 free in 62% of rows, uniform in asinh(x/0.002) over [0, 6.19], puts 12% of the data in the SBC prior's st0 region [0.03, 0.10] against 31% for cap256w_c4's log-uniform [0.01, 0.49] — 2.6x less resolution where the cell measures.
+- 2026-09-28 ~03:00 CEST v2 decided and launched on tux26 (`zerobox_v2_pipeline_tux.sh`; §11). v1 screen outputs kept in `sbc/zerobox_screen_v1/`, `sbc/zerobox_postshift_v1/`.

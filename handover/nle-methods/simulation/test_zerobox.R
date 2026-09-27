@@ -7,17 +7,19 @@ source("simulation/sim_functions.R"); source("simulation/designs.R"); source("si
 ok <- function(cond, lab, ...) { cat(sprintf("%s  %s\n", if (cond) "PASS" else "FAIL", sprintf(lab, ...))); invisible(cond) }
 
 n <- 20000L
-P <- param_matrix_zerobox(n, param_namesDDM, lowerDDM, upperDDM, transformsDDM, seed = 1)
+V <- ZB_VERSION_DEFAULT; REG <- zb_regimes(V)
+cat(sprintf("sampler version %d (ZB_VERSION)\n", V))
+P <- param_matrix_zerobox(n, param_namesDDM, lowerDDM, upperDDM, transformsDDM, seed = 1, version = V)
 reg <- attr(P, "regime")
 all_ok <- TRUE
 
 # 1. strata shares
-tab <- table(reg)[ZB_REGIMES$regime] / n
-all_ok <- ok(max(abs(tab - ZB_REGIMES$share)) < 2e-3, "strata shares within 0.2%%: worst |diff| %.4f", max(abs(tab - ZB_REGIMES$share))) && all_ok
+tab <- table(reg)[REG$regime] / n
+all_ok <- ok(max(abs(tab - REG$share)) < 2e-3, "strata shares within 0.2%%: worst |diff| %.4f", max(abs(tab - REG$share))) && all_ok
 
 # 2. zeros exactly where the regime says, and nowhere else
 sv0 <- is.infinite(P[, "sv"]); SZ0 <- is.infinite(P[, "SZ"]); st00 <- is.infinite(P[, "st0"])
-want <- ZB_REGIMES[match(reg, ZB_REGIMES$regime), ]
+want <- REG[match(reg, REG$regime), ]
 all_ok <- ok(all(sv0 == want$sv0) && all(SZ0 == want$SZ0) && all(st00 == want$st00),
              "exact zeros (-Inf) match regime labels on all %d draws", n) && all_ok
 
@@ -25,7 +27,11 @@ all_ok <- ok(all(sv0 == want$sv0) && all(SZ0 == want$SZ0) && all(st00 == want$st
 sv <- exp(P[!sv0, "sv"]); SZ <- pnorm(P[!SZ0, "SZ"]); st0 <- exp(P[!st00, "st0"])
 all_ok <- ok(min(sv) >= 0.01 && max(sv) <= 4 && min(SZ) >= 0.05 && max(SZ) <= 0.99 && min(st0) >= 0 && max(st0) <= 0.49,
              "free ranges: sv [%.3f, %.2f]  SZ [%.3f, %.2f]  st0 [%.4f, %.2f]", min(sv), max(sv), min(SZ), max(SZ), min(st0), max(st0)) && all_ok
-all_ok <- ok(mean(st0 < 0.01) > 0.15, "st0 gap (0, 0.01) is densely sampled: %.1f%% of free st0", 100 * mean(st0 < 0.01)) && all_ok
+all_ok <- ok(mean(st0 < 0.01) > if (V == 1L) 0.15 else 0.05, "st0 gap (0, 0.01) is sampled: %.1f%% of free st0", 100 * mean(st0 < 0.01)) && all_ok
+if (V >= 2L) {  # the point of version 2: density where the SBC prior lives, as a share of ALL rows
+  in_region <- mean(!st00 & exp(P[, "st0"]) >= 0.03 & exp(P[, "st0"]) <= 0.10)
+  all_ok <- ok(in_region > 0.18, "st0 in [0.03, 0.10]: %.1f%% of all rows (v1 12%%, shipped flow 31%%)", 100 * in_region) && all_ok
+}
 
 # 4. the network context: finite everywhere, exactly 0 at zeros, monotone in x
 ctx <- zerobox_context(P)

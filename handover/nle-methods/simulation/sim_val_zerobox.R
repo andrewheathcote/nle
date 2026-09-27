@@ -15,8 +15,9 @@ if (nzchar(.lib)) stopifnot(startsWith(normalizePath(find.package("EMC2")), .lib
 source("simulation/sim_functions.R"); source("simulation/designs.R"); source("simulation/zerobox.R")
 
 N_PARAMS <- 25000L; N_TRIALS <- 20L; VAL_SEED <- 9124   # not the training seed
-out <- file.path("data", "val", "zerobox", "DDM")
-params <- param_matrix_zerobox(N_PARAMS, param_namesDDM, lowerDDM, upperDDM, transformsDDM, seed = VAL_SEED)
+V <- ZB_VERSION_DEFAULT
+out <- file.path("data", "val", paste0("zerobox", zb_data_suffix(V)), "DDM")
+params <- param_matrix_zerobox(N_PARAMS, param_namesDDM, lowerDDM, upperDDM, transformsDDM, seed = VAL_SEED, version = V)
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 arrow::write_parquet(data.frame(param_id = seq_len(N_PARAMS), regime = attr(params, "regime")),
                      file.path(out, "regimes.parquet"))

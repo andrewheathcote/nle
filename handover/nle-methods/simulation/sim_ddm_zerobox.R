@@ -27,15 +27,16 @@ a <- commandArgs(trailingOnly = TRUE)
 N_PARAMS <- if (length(a)) as.integer(a[1]) else 600000L
 N_TRIALS <- 20L                                   # per stimulus -> 40 rows per draw
 TRAIN_SEED <- 3876
-out <- file.path("data", "train", sprintf("zerobox%dk", N_PARAMS %/% 1000L), "DDM")
+V <- ZB_VERSION_DEFAULT                            # ZB_VERSION env; 2 = the 2026-09-28 retrain
+out <- file.path("data", "train", sprintf("zerobox%dk%s", N_PARAMS %/% 1000L, zb_data_suffix(V)), "DDM")
 
 params <- param_matrix_zerobox(N_PARAMS, param_namesDDM, lowerDDM, upperDDM,
-                               transformsDDM, seed = TRAIN_SEED)
+                               transformsDDM, seed = TRAIN_SEED, version = V)
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 arrow::write_parquet(data.frame(param_id = seq_len(N_PARAMS), regime = attr(params, "regime")),
                      file.path(out, "regimes.parquet"))
-cat(sprintf("=== zero-box: %d draws x %d rows = %d rows -> %s ===\n",
-            N_PARAMS, 2 * N_TRIALS, N_PARAMS * 2 * N_TRIALS, out))
+cat(sprintf("=== zero-box v%d: %d draws x %d rows = %d rows -> %s ===\n",
+            V, N_PARAMS, 2 * N_TRIALS, N_PARAMS * 2 * N_TRIALS, out))
 print(table(attr(params, "regime")))
 t0 <- proc.time()[3]
 simulate_data(param_namesDDM, lowerDDM, upperDDM, designDDM,

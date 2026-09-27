@@ -6,9 +6,9 @@
 set -u
 cd "$(dirname "$0")/.."
 export LIB=~/emc2nn/nle/.Rlibs-nle CPC=${CPC:-12} CFC=${CFC:-3} OUT=sbc/nci/results_zerobox
-REPS=${REPS:-500}
+REPS=${REPS:-500}; CARD=${CARD:-handover/nle-methods/port/export/ddm_zb_s903_e271_weights.json}
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
-run() { Rscript sbc/zerobox_s4_cell.R $1 handover/nle-methods/port/export/ddm_zb_s903_e271_weights.json $REPS \
+run() { Rscript sbc/zerobox_s4_cell.R $1 $CARD $REPS \
           > sbc/nci/results_zerobox/cell_$1.log 2>&1 && say "  cell $1 done" || say "  cell $1 FAILED"; }
 mkdir -p sbc/nci/results_zerobox
 say "=== S4: full + st00 ==="; run full & run st00 & wait

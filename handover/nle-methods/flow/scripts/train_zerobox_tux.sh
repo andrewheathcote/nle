@@ -15,12 +15,15 @@ cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 PY=~/emc2nn/nle/flow/.venv/bin/python
 export PYTHONPATH="$ROOT/flow/src"
-LOG="$ROOT/zerobox_train.log"
+LOG="$ROOT/${PREFIX:-zb}_train.log"
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
 CLF=${CLF:-c4clf}
-TRAIN="data/train/zerobox600k/DDM/trials"
-VAL="data/val/zerobox/DDM/trials"
+PREFIX=${PREFIX:-zb}                 # run tags ${PREFIX}_s901..903; v2 retrain uses zb2
+SUFFIX=${SUFFIX:-}                   # data dir suffix (_v2 for the retrain)
+THREADS=${THREADS:-4}
+TRAIN="data/train/zerobox600k${SUFFIX}/DDM/trials"
+VAL="data/val/zerobox${SUFFIX}/DDM/trials"
 say "waiting for $TRAIN to reach 240 chunks"
 until [ "$(ls "$ROOT/$TRAIN" 2>/dev/null | grep -c parquet)" -ge 240 ]; do sleep 60; done
 sleep 120   # let the last chunk finish writing
@@ -39,7 +42,7 @@ train_one() {
   if [ -d "$ck" ] && [ "$(ls "$ck" | grep -c '^[0-9]')" -ge 30 ]; then
     say "  $tag already trained; skipping"; return 0
   fi
-  OMP_NUM_THREADS=4 "$PY" flow/scripts/train_ddm.py \
+  OMP_NUM_THREADS=$THREADS "$PY" flow/scripts/train_ddm.py \
     --tag "$tag" --zerobox --classifier-from "$CLF" \
     --train-data "$TRAIN" --val-data "$VAL" \
     --batch 1024 --epochs 300 --num-bins 64 --widths 256,128 \
@@ -47,13 +50,13 @@ train_one() {
     > "$ROOT/train_${tag}.log" 2>&1
   say "  $tag finished (exit $?)"
 }
-say "=== zero-box training, 3 seeds x 4 threads ==="
-train_one zb_s901 901 & a=$!
-train_one zb_s902 902 & b=$!
-train_one zb_s903 903 & c=$!
+say "=== zero-box training ($PREFIX, data zerobox600k$SUFFIX), 3 seeds x $THREADS threads ==="
+train_one ${PREFIX}_s901 901 & a=$!
+train_one ${PREFIX}_s902 902 & b=$!
+train_one ${PREFIX}_s903 903 & c=$!
 wait $a $b $c
 say "=== training done ==="
-for t in zb_s901 zb_s902 zb_s903; do
+for t in ${PREFIX}_s901 ${PREFIX}_s902 ${PREFIX}_s903; do
   say "  $t: $(ls "$ROOT/results/model_states/${t}_budget/DDM_flow" 2>/dev/null | grep -c '^[0-9]') checkpoints; best val: $(grep -oE 'val[^0-9-]*-?[0-9.]+' "$ROOT/train_${t}.log" | tail -1)"
 done
-echo "zerobox training done $(date)" >> "$ROOT/zerobox_done.marker"
+echo "zerobox training done $(date)" >> "$ROOT/${PREFIX}_done.marker"
