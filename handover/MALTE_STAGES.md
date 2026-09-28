@@ -36,7 +36,7 @@ requested from Malte by email.
 | M1 | Converter, golden vectors, R port additions | **Sonnet** | Malte's code only (random-initialised conditioners are enough for an exactness check) | nothing |
 | M2 | CRDM simulator and Volterra reference in C++ (standalone Rcpp), validated against `eamax` | **Sonnet** | `eamax` | nothing |
 | M3 | Prompt for the EMC2 session + the NLE-side acceptance gate for it | **Fable / Opus** | M1, M2 | nothing else |
-| — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | **done 2026-09-28**, dev-nle 14c12c79 (local, not pushed) |
+| — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | **done 2026-09-28**, dev-nle 14c12c79 (pushed to origin/dev-nle) |
 | M4 | Register trained cards; score bias and posterior shift for both RDM flows | **Sonnet** to adapt scripts, **Haiku** to run | trained checkpoints; dev-nle with M3 | Malte; EMC2 session |
 | M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4 | tux26 free |
 | M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
@@ -383,4 +383,7 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   the RDM control uses it, so keep s fixed at 1 in the comparison cell (v b <= 28); hybrid Wald rows use a log-form Wald
   (`src/nle_wald.h`) and differ from `pWald` by up to 2.5e-10. tux26: install 14c12c79 into a NEW library directory, not
   `.Rlibs-nle`, so stage Z's cells run on the library they were gated on. Next: M7a (prompt above); M4-M6 wait for Malte's checkpoints.
+- 2026-09-28 Decisions (AH): **keep** the new training-region rule (sd of the combination); dev-nle 14c12c79 **pushed** to
+  origin/dev-nle (ampl-psych/EMC2). M7a cleared to start. Note: running the package suite with `load_package = "installed"` deletes
+  `tests/testthat/_snaps/RACE.md` in the worktree (testthat removes snapshots of skipped tests); it was restored before the push.
 
