@@ -324,49 +324,74 @@ four `PRIMARY VERDICTS` lines; `table.csv` and `summary.csv` are on the laptop a
 
 ### Prompt for M7b
 
+Revised 2026-09-28 12:00 CEST: **every run of the study is running or queued on tux26**, so
+this stage launches no training. It waits, screens twice, and prints.
+
 ```
-Read handover/MALTE_STAGES.md section "Stage M7b", the last five entries of
-its log, and handover/RDM_A0_BOX_PLAN.md section 9. Do exactly that stage:
-watch, screen, print the table. Every run is already launched. Do not interpret the
-numbers, do not edit any script's header, do not change the criterion, seeds,
-arms or defaults. Work from /Users/andrew/Downloads/julian/nle on the laptop
-(absolute paths) and over ssh andrew@tux26psy.fmg.uva.nl, where everything
-runs from ~/emc2nn/nle-malte with
+Read handover/MALTE_STAGES.md section "Stage M7b" and the last six entries of
+its log. Do exactly that stage: wait, screen, print the table. Do not
+interpret the numbers, do not edit any script, do not change the criterion,
+seeds, arms or defaults. Work from /Users/andrew/Downloads/julian/nle on the
+laptop (absolute paths) and over ssh andrew@tux26psy.fmg.uva.nl, where
+everything runs from ~/emc2nn/nle-malte with
   export PY=~/emc2nn/nle/flow/.venv/bin/python LIB=~/emc2nn/nle/.Rlibs-malte
-Never delete or restart a run. The launch script skips complete runs and runs
-in progress; do not work around it.
 
-1. Wait for training. Two launches are running, both started on 28 Sep:
-     tail -12 sbc/seed_study_launch_wave1.out    # 5 runs, must end "5 of 5 runs complete"
-     tail -24 sbc/seed_study_launch_wave2.out    # 15 runs, must end "15 of 15 runs complete"
-   Look at most once an hour. If a run printed FAILED, print the last 30
-   lines of its log in sbc/seed_study/ss/logs/ and stop. Launch nothing.
+Rules. Start no training run, delete nothing under results/, kill nothing.
+The only way to ask how training stands is
+  STATUS=1 bash sbc/seed_study_launch_tux.sh
+which starts nothing and ends with a line
+  STATUS c complete, r running, n not started of 20
+Ignore the "x of y runs complete" lines in sbc/seed_study_launch_wave*.out:
+the runs were launched in five overlapping batches and those counts are per
+batch. Malte's four runs go one after another, so "not started" is normal for
+them until the evening of 28 Sep. AH is asleep: do not ask questions; if
+something fails, print the evidence named below, write it to the log, and
+stop. Judge how busy tux26 is from the idle figure of `top -bn1 | grep Cpu`,
+never from the load average.
 
-2. As soon as wave 1 is complete (it finishes a day before wave 2), screen
-   the baseline arm, the new RDM flow's candidates, about 1 h:
+1. Wait for the baseline arm. Poll in the background, not by hand, e.g.
+     until ssh andrew@tux26psy.fmg.uva.nl 'cd ~/emc2nn/nle-malte &&
+       export PY=~/emc2nn/nle/flow/.venv/bin/python &&
+       [ $(STATUS=1 bash sbc/seed_study_launch_tux.sh |
+           grep -c "^ss_base_s80[1-4] *complete") = 4 ]'; do sleep 600; done
+   Expected about 01:00 CEST on 29 Sep. If a run shows "not started or
+   stopped" with more than 0 and fewer than 300 epochs, it died: print the
+   last 30 lines of sbc/seed_study/ss/logs/<run>.log and stop.
+
+2. Screen the baseline arm, the new RDM flow's candidates (about 1 h):
      PREFIX=ss ARMS=base NEED_MARKER=0 CORES=16 nohup bash \
        sbc/seed_study_screen.sh > sbc/seed_study_screen_base.out 2>&1 &
-   Required: "0 failing line(s)", every CONTROL below 0.001, four runs with
-   "30 exported, 0 failed". Copy sbc/seed_study/ss/table.csv to the laptop as
-   sbc/seed_study/ss/table_base.csv. Print the per-arm distribution lines for
-   arm base, both cells, verbatim. Its verdict section is empty by design.
-   If stage Z's cells are running, use CORES=8.
+   Required in the output: four runs with "30 exported, 0 failed",
+   "0 failing line(s)", every CONTROL below 0.001. Copy
+   sbc/seed_study/ss/table.csv and summary.csv to the laptop as
+   sbc/seed_study/ss/table_base.csv and summary_base.csv and commit them.
+   Print, verbatim, the lines for arm base in both cells. The verdict
+   section is empty at this point by design.
 
-3. When all 20 runs are complete, run the launch script once more with no
-   ARMS or ONLY (it starts nothing and writes
-   sbc/seed_study/ss/train_done.marker), then the full screen:
+3. Wait for the whole study, polling as in step 1, until the status line
+   reads "STATUS 20 complete, 0 running, 0 not started of 20". Expected
+   between 04:00 and 09:00 CEST on 29 Sep. Then, and only then, run
+     bash sbc/seed_study_launch_tux.sh > sbc/seed_study_launch_final.out 2>&1
+   It finds every run complete, starts nothing, prints the table of 20 runs
+   and writes sbc/seed_study/ss/train_done.marker. Required: "20 of 20 runs
+   complete". If it prints "start", something was incomplete: say so in the
+   log and wait for it to finish.
+
+4. Full screen (about 2 h):
      CORES=32 nohup bash sbc/seed_study_screen.sh > sbc/seed_study_screen.out 2>&1 &
-   Done when sbc/seed_study/ss/screen_done.marker exists.
+   Use CORES=8 if `pgrep -fa "zerobox_s4|nn_sbc"` shows stage Z's cells
+   running. Done when sbc/seed_study/ss/screen_done.marker exists.
 
-4. Print, verbatim and without comment: the run tables at the end of the
-   launch outputs, and sbc/seed_study_screen.out from the line
+5. Print, verbatim and without comment: sbc/seed_study_launch_final.out from
+   the run table to the end, and sbc/seed_study_screen.out from the line
    "=== 4. table ===" to the end. Copy sbc/seed_study/ss/table.csv,
    summary.csv, card_check.out, failed_exports.txt and the .out files to the
    laptop's sbc/seed_study/ss/ and commit them. Append one line to the log in
    handover/MALTE_STAGES.md: runs complete, failed exports per arm, the two
-   controls, seconds per epoch, and the four PRIMARY VERDICTS lines as printed.
+   controls, seconds per epoch per arm (last epoch in each run's log), and
+   the four PRIMARY VERDICTS lines as printed.
 
-5. End by naming the next stage, its model and its full prompt: selecting the
+6. End by naming the next stage, its model and its full prompt: selecting the
    new RDM flow from the baseline arm and testing it (RDM_A0_BOX_PLAN.md
    section 4) and M8 are both Fable / Opus; say which of M4-M6 are still open.
 ```
@@ -577,3 +602,9 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   (4 each, using 2.2-2.6). The slow epochs at 11:20 were a transient; at 11:51 wave 1 is at 177 s per epoch and wave 2 at 190 (aff)
   to 244 s (dt). Expected: wave 1 about 01:00 on 29 Sep; wave 2's first six 04:00-09:00 on 29 Sep; wave 2 complete between the late
   evening of 29 Sep and the early morning of 30 Sep.
+- 2026-09-28 11:56 CEST, **the last nine runs launched** (AH: 24 more cores, idle 31% before): `ss_aff_s804`, `ss_dt_s803`,
+  `ss_both_s803`, `ss_dt_s804` on cores 24-39; `ss_both_s804` on 76-79; Malte's four one after another on 80-83 (outputs
+  `sbc/seed_study_launch_wave3a/b/c.out`). All 16 of our runs are training; wave 2's queue will find its remaining entries running or
+  complete and skip them, so **its final "x of 15" count will be short and means nothing**. New `STATUS=1` mode of the launch script
+  prints the state of all 20 runs and starts nothing; the M7b prompt is rewritten around it and launches no training. Expected: Malte's
+  runs by the evening of 28 Sep, wave 1 about 01:00 on 29 Sep, everything between 04:00 and 09:00 on 29 Sep.

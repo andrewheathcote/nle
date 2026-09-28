@@ -86,6 +86,9 @@
 #          when every run of the study is complete
 #   MSTEPS 100000  MEVERY 1000
 #   DRY=1   print the commands and the preflight, start nothing
+#   STATUS=1  print one line per run of the study (complete, running with its
+#           epoch count, or not started) and a last line "STATUS c complete,
+#           r running, n not started of N"; start nothing, no preflight
 set -u
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -99,11 +102,29 @@ if [ "$ZEROBOX" = 1 ]; then
 else
   TRAIN=${TRAIN:-data/train/rdm16m/RDM/trials}; VAL=${VAL:-}; ZFLAG=""
 fi
-MSTEPS=${MSTEPS:-100000}; MEVERY=${MEVERY:-1000}; DRY=${DRY:-0}
+MSTEPS=${MSTEPS:-100000}; MEVERY=${MEVERY:-1000}; DRY=${DRY:-0}; STATUS=${STATUS:-0}
 OUT=sbc/seed_study/$PREFIX; mkdir -p "$OUT/logs"
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
 export PYTHONPATH="$ROOT/flow/src${PYTHONPATH:+:$PYTHONPATH}"
 
+if [ "$STATUS" = 1 ]; then
+  c=0; r=0; n=0
+  for a in $ARMS; do
+    if [ "$a" = malte ]; then ss=$MSEEDS; else ss=$SEEDS; fi
+    for s in $ss; do
+      tag=${PREFIX}_${a}_s$s
+      if [ "$a" = malte ]; then f=results/malte_runs/$tag/training_log.json; key=saved; want=$KEEP; p="$PYM"
+      else f=results/model_states/${tag}_budget/RDM/training_log.json; key=train_losses; want=$EPOCHS; p="$PY"; fi
+      k=0; [ -f "$f" ] && k=$("$p" -c "import json;print(len(json.load(open('$f'))['$key']))" 2>/dev/null || echo 0)
+      if pgrep -f -- "(--tag $tag |malte_runs/$tag )" >/dev/null 2>&1; then st=running; r=$((r + 1))
+      elif [ "${k:-0}" -ge "$want" ]; then st=complete; c=$((c + 1))
+      else st="not started or stopped"; n=$((n + 1)); fi
+      printf "%-22s %-24s %s of %s %s\n" "$tag" "$st" "${k:-0}" "$want" "$( [ "$a" = malte ] && echo checkpoints || echo epochs)"
+    done
+  done
+  echo "STATUS $c complete, $r running, $n not started of $((c + r + n))"
+  exit 0
+fi
 say "=== seed study launch: prefix $PREFIX, arms [$ARMS], root $ROOT ==="
 # ---- preflight: name what is missing, start nothing if anything is ----------
 bad=0; need() { say "  MISSING: $*"; bad=1; }
