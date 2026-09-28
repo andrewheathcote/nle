@@ -94,3 +94,8 @@ sbc/**/*.log
 # checkpoints via flow/scripts/export_flow_ddm.py. The lnr_* reference exports
 # committed earlier stay tracked (an ignore rule does not untrack anything).
 port/export/*
+
+# Malte Lueken flows: clones, environment, Orbax fixtures (regenerable by make_fixtures.py)
+malte/eamax/
+malte/neural-race-model-estimation/
+malte/fixtures/*/ckpt/

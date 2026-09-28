@@ -267,3 +267,13 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
 - 2026-09-28 plan and stages written; email to Malte drafted
   (`~/Downloads/julian/EMAIL_TO_MALTE.md`). Zero-box v2 training at epoch 25
   of 300 on tux26, 6.2 min per epoch.
+- 2026-09-28 M1 PASS. `malte/` uv env (py3.11, jax 0.10.2, flax 0.12.8; eamax 6d7f2ff, confrdm fae8add),
+  `malte/make_fixtures.py`, `flow/scripts/malte_to_card.py` (refuses non-identity boundary slopes and a box
+  that does not reproduce the recorded input scaling), affine / input-scaling / n-hidden support in both
+  copies of `port/R/flow_race.R`, `port/tests/validate_malte.R`. R vs his `evaluate_pdf_sf`, float64, max|diff|:
+  log_pdf 7.3e-12 (rdm_final), 3.4e-11 (rdm_plain), 3.6e-11 (crdm_final); log_sf <= 7.4e-13 for z < 20.
+  rdm_small (e207) vs golden 6.8e-13 and vs the pre-extension evaluator 0 (bit-identical). Note: jax's
+  `norm.logsf` is wrong by up to 3.7e-9 for z >= 20 (survival < e-87; R and scipy agree with each other);
+  there the port is held to scipy's exact value (golden.csv `log_sf_exact`), matches to <= 7.7e-12.
+  Irrelevant to any likelihood, but do not compare trained flows to jax logsf beyond z = 20.
+
