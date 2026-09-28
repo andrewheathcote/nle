@@ -2,7 +2,7 @@
 
 Written 2026-09-28 by the NLE session (stage M3 of
 `~/Downloads/julian/nle/handover/MALTE_STAGES.md`). Hand the block below to the
-EMC2 session as-is. Compute: a laptop. Every acceptance test here runs in
+EMC2 session as-is. Model for that session: **Fable** (AH, 2026-09-28). Compute: a laptop. Every acceptance test here runs in
 seconds to a few minutes at 8 cores; no server, no SBC measurement.
 
 ---

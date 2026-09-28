@@ -36,7 +36,7 @@ requested from Malte by email.
 | M1 | Converter, golden vectors, R port additions | **Sonnet** | Malte's code only (random-initialised conditioners are enough for an exactness check) | nothing |
 | M2 | CRDM simulator and Volterra reference in C++ (standalone Rcpp), validated against `eamax` | **Sonnet** | `eamax` | nothing |
 | M3 | Prompt for the EMC2 session + the NLE-side acceptance gate for it | **Fable / Opus** | M1, M2 | nothing else |
-| — | *EMC2 session implements M3's prompt in dev-nle* | (its own session) | M3 | — |
+| — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | — |
 | M4 | Register trained cards; score bias and posterior shift for both RDM flows | **Sonnet** to adapt scripts, **Haiku** to run | trained checkpoints; dev-nle with M3 | Malte; EMC2 session |
 | M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4 | tux26 free |
 | M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
@@ -302,4 +302,6 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   Found: shipped rdm_small is checkpoint 195, not e207; design(functions = lD) with amp_lDFALSE = -Inf already maps to exact zeros in R
   (the compiled mapping is untested until check 4 runs); nn_cell() has no `functions` argument. Interface fixed by the gate:
   `pars = c("v","s","B")` with `exceptions = c(A = 0)`, `hybrid = "amp"`, exported `CRDM(dt, t_max, sim_dt)`.
-
+- 2026-09-28 Model for the EMC2 session that implements `MALTE_FLOWS_PROMPT.md`: **Fable** (AH). Reason: compiled-likelihood changes
+  (hybrid switch in the batched native path, exact zeros in the compiled mapping) where an error is a small bias, not a crash, and
+  requirements in the prompt that the gate does not test (box on Wald rows, refusal of A != 0, package tests).
