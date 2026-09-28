@@ -571,3 +571,9 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   another user (mdonzal) runs about 36 R jobs, load average 103 on 96 cores after the launch. Epoch times: wave 1 went from 165 s to
   about 250 s; wave 2 runs 205-266 s. Expected, if the load stays: wave 1 done about 04:30 on 29 Sep; wave 2's first six about 07:00-10:30
   on 29 Sep, its last runs on the morning of 30 Sep. Every run of the study is now launched or queued; M7b launches nothing.
+- 2026-09-28 11:51 CEST, **correction to the entry above: tux26 is not oversubscribed.** Measured with top: 25.7% idle; our jobs use
+  47.5 cores (zero-box included), mdonzal's 23. The load average (83-103) counts runnable threads, and each of our runs carries 38-61
+  threads, so it overstates use. Pinning confirmed with taskset: wave 1 on cores 40-74 (7 each, using 3.1-3.3), wave 2 on cores 0-23
+  (4 each, using 2.2-2.6). The slow epochs at 11:20 were a transient; at 11:51 wave 1 is at 177 s per epoch and wave 2 at 190 (aff)
+  to 244 s (dt). Expected: wave 1 about 01:00 on 29 Sep; wave 2's first six 04:00-09:00 on 29 Sep; wave 2 complete between the late
+  evening of 29 Sep and the early morning of 30 Sep.

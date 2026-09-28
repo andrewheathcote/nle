@@ -194,3 +194,9 @@ to about 250 s. This supersedes the revised schedule above: wave 1 about 04:30 o
 29 September, the baseline screen that morning, wave 2 complete on the morning of
 30 September, the full screen and table the same day. Decision 2 of section 7 is moot for
 launching; it matters only for how many cores stage Z's cells take while wave 2 runs.
+
+**Correction, 11:51 CEST.** tux26 was not oversubscribed: top shows 25.7% idle. The load
+average counts threads, and our runs carry many more threads than they use (a run pinned to
+7 cores uses about 3.2, one pinned to 4 uses about 2.4). Epochs are back to 177 s (wave 1)
+and 190 to 244 s (wave 2). Expected: wave 1 about 01:00 on 29 September, wave 2 complete
+between the late evening of 29 September and the early morning of 30 September.
