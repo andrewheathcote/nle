@@ -284,3 +284,10 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   there the port is held to scipy's exact value (golden.csv `log_sf_exact`), matches to <= 7.7e-12.
   Irrelevant to any likelihood, but do not compare trained flows to jax logsf beyond z = 20.
 
+- 2026-09-28 M2 PASS. `port/src/crdm.cpp` (+ mirror in handover/nle-methods/port/src; the two `flow_ddm.cpp` copies already differed before M2, untouched),
+  `malte/make_crdm_reference.py` -> `malte/crdm_ref/` (20 Sobol sets in the crdm_final box, 3 with amp = 0; dt 0.002 and 0.0005, t_max 3; 1e5 draws x 5 sets at dt 0.001),
+  `port/tests/validate_crdm.R`. `dcrdm_volterra` vs his `solve_volterra_fpt` (float64), max rel diff pdf 9.3e-14 (dt 0.002), 3.7e-13 (dt 0.0005); cdf <= 1.3e-14.
+  amp = 0 vs closed-form Wald: 4.0e-14 -- exact by construction, not a discretisation test (the kernel factor -v + dM/dt vanishes, so the recursion sum is 0 and the
+  density is the Wald term itself; same in his solver). Real convergence, amp > 0, vs dt 0.00025, max |pdf err|/peak: 5.9e-3 (dt 0.002), 2.1e-3 (0.001), 5.6e-4 (0.0005),
+  order ~1.5-1.9; max |cdf err| 1.8e-2, 2.6e-3, 6.1e-4. Simulator vs his draws KS p >= 0.33; vs Volterra CDF (dt 0.0005) KS p >= 0.084 (all five sets).
+  Timing per call, t_max 3: 5 ms (dt 0.002), 22 ms (0.001), 86 ms (0.0005). dcrdm_volterra holds end values outside [dt, t_max] like his jnp.interp.
