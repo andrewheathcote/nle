@@ -327,7 +327,7 @@ four `PRIMARY VERDICTS` lines; `table.csv` and `summary.csv` are on the laptop a
 ```
 Read handover/MALTE_STAGES.md section "Stage M7b", the last five entries of
 its log, and handover/RDM_A0_BOX_PLAN.md section 9. Do exactly that stage:
-watch, screen, launch what is left, print the table. Do not interpret the
+watch, screen, print the table. Every run is already launched. Do not interpret the
 numbers, do not edit any script's header, do not change the criterion, seeds,
 arms or defaults. Work from /Users/andrew/Downloads/julian/nle on the laptop
 (absolute paths) and over ssh andrew@tux26psy.fmg.uva.nl, where everything
@@ -336,43 +336,29 @@ runs from ~/emc2nn/nle-malte with
 Never delete or restart a run. The launch script skips complete runs and runs
 in progress; do not work around it.
 
-1. Wave 1. `tail -12 sbc/seed_study_launch_wave1.out`. It is done when the
-   output ends with "5 of 5 runs complete". If a run printed FAILED, print the
-   last 30 lines of its log in sbc/seed_study/ss/logs/ and stop.
+1. Wait for training. Two launches are running, both started on 28 Sep:
+     tail -12 sbc/seed_study_launch_wave1.out    # 5 runs, must end "5 of 5 runs complete"
+     tail -24 sbc/seed_study_launch_wave2.out    # 15 runs, must end "15 of 15 runs complete"
+   Look at most once an hour. If a run printed FAILED, print the last 30
+   lines of its log in sbc/seed_study/ss/logs/ and stop. Launch nothing.
 
-2. Screen the baseline arm (the new RDM flow's candidates), about 1 h:
+2. As soon as wave 1 is complete (it finishes a day before wave 2), screen
+   the baseline arm, the new RDM flow's candidates, about 1 h:
      PREFIX=ss ARMS=base NEED_MARKER=0 CORES=16 nohup bash \
        sbc/seed_study_screen.sh > sbc/seed_study_screen_base.out 2>&1 &
    Required: "0 failing line(s)", every CONTROL below 0.001, four runs with
    "30 exported, 0 failed". Copy sbc/seed_study/ss/table.csv to the laptop as
    sbc/seed_study/ss/table_base.csv. Print the per-arm distribution lines for
    arm base, both cells, verbatim. Its verdict section is empty by design.
+   If stage Z's cells are running, use CORES=8.
 
-3. Ask AH before launching the rest if stage Z's cells are running or due
-   (they want 72 cores): `pgrep -fa "zerobox_s4|run_sbc|nn_sbc"` and the log of
-   stage Z. With AH's answer, launch the remaining 11 of our runs:
-     ARMS="base aff dt both" JOBS=<n> THREADS=7 CORE0=<first free core> \
-       setsid nohup bash sbc/seed_study_launch_tux.sh \
-       > sbc/seed_study_launch_wave2.out 2>&1 < /dev/null &
-   JOBS x 7 cores, inside the cores AH allows; CORE0 so that the pinned range
-   does not overlap a running wave (wave 1 used 40-74).
-
-4. Malte's arm. Build his environment in ~/emc2nn/nle-malte/malte exactly as
-   malte/README.md says (uv is ~/.local/bin/uv; eamax at 6d7f2ff,
-   neural-race-model-estimation branch development at fae8add; the install
-   line includes hydra-core). Check
-     malte/.venv/bin/python -c "import hydra, eamax, confrdm_jax.flows_affine"
-   then, on free cores:
-     ARMS=malte JOBS=4 THREADS=7 CORE0=<first free core> setsid nohup bash \
-       sbc/seed_study_launch_tux.sh > sbc/seed_study_launch_malte.out 2>&1 < /dev/null &
-
-5. When all 20 runs are complete, run the launch script once more with no
+3. When all 20 runs are complete, run the launch script once more with no
    ARMS or ONLY (it starts nothing and writes
    sbc/seed_study/ss/train_done.marker), then the full screen:
      CORES=32 nohup bash sbc/seed_study_screen.sh > sbc/seed_study_screen.out 2>&1 &
    Done when sbc/seed_study/ss/screen_done.marker exists.
 
-6. Print, verbatim and without comment: the run tables at the end of the
+4. Print, verbatim and without comment: the run tables at the end of the
    launch outputs, and sbc/seed_study_screen.out from the line
    "=== 4. table ===" to the end. Copy sbc/seed_study/ss/table.csv,
    summary.csv, card_check.out, failed_exports.txt and the .out files to the
@@ -380,7 +366,7 @@ in progress; do not work around it.
    handover/MALTE_STAGES.md: runs complete, failed exports per arm, the two
    controls, seconds per epoch, and the four PRIMARY VERDICTS lines as printed.
 
-7. End by naming the next stage, its model and its full prompt: selecting the
+5. End by naming the next stage, its model and its full prompt: selecting the
    new RDM flow from the baseline arm and testing it (RDM_A0_BOX_PLAN.md
    section 4) and M8 are both Fable / Opus; say which of M4-M6 are still open.
 ```
@@ -578,3 +564,10 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   dev-nle <= 3.4e-13, **epoch 156 s (base) and 209 s (both) at 7 cores, so 14 to 18 h per run**, not 30. **Wave 1 launched 08:46 CEST:**
   `ss_base_s801..804`, `ss_aff_s801`, cores 40-74, expected about 23:00 CEST. Traps: tux26's `arrow` is in `~/emc2nn/Rlib-devnn` only;
   the launch script now refuses to start a run that is in progress (a relaunch would have wiped it). M7b prompt rewritten above.
+- 2026-09-28 11:13 CEST, **wave 2 launched** (AH: the remaining runs, 24 cores): 11 of ours (`ss_aff_s802..804`, `ss_dt_s801..804`,
+  `ss_both_s801..804`) and Malte's 4 (`ss_malte_s2026..2029`), 6 at a time at 4 cores, pinned to cores 0-23, output
+  `sbc/seed_study_launch_wave2.out`. Malte's environment built on tux26 in `~/emc2nn/nle-malte/malte` (eamax 6d7f2ff, confrdm fae8add,
+  jax 0.10.2, flax 0.12.8; `uv pip freeze` equals `requirements.lock` after pinning tfp-nightly to 20260927). **tux26 is oversubscribed:**
+  another user (mdonzal) runs about 36 R jobs, load average 103 on 96 cores after the launch. Epoch times: wave 1 went from 165 s to
+  about 250 s; wave 2 runs 205-266 s. Expected, if the load stays: wave 1 done about 04:30 on 29 Sep; wave 2's first six about 07:00-10:30
+  on 29 Sep, its last runs on the morning of 30 Sep. Every run of the study is now launched or queued; M7b launches nothing.

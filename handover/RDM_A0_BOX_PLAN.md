@@ -186,3 +186,11 @@ wave 1 does not overlap stage Z.
 
 The remaining runs overlap stage Z's cells if launched on 29 September; decision 2 of
 section 7 (cores during stage Z) is still open for them.
+
+**Wave 2**, launched 11:13 CEST on 28 September at AH's instruction (24 cores): the other
+11 of our runs and Malte's 4, six at a time at 4 cores, cores 0 to 23. tux26 was then at
+load 103 on 96 cores (another user's 36 R jobs), and epochs slowed to 205 to 266 s, wave 1's
+to about 250 s. This supersedes the revised schedule above: wave 1 about 04:30 on
+29 September, the baseline screen that morning, wave 2 complete on the morning of
+30 September, the full screen and table the same day. Decision 2 of section 7 is moot for
+launching; it matters only for how many cores stage Z's cells take while wave 2 runs.
