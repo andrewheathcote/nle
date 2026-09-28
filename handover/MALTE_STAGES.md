@@ -38,7 +38,7 @@ requested from Malte by email.
 | M3 | Prompt for the EMC2 session + the NLE-side acceptance gate for it | **Fable / Opus** | M1, M2 | nothing else |
 | — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | **done 2026-09-28**, dev-nle 14c12c79 (pushed to origin/dev-nle) |
 | M4 | Register trained cards; score bias and posterior shift for both RDM flows | **Sonnet** to adapt scripts, **Haiku** to run | trained checkpoints; dev-nle with M3 | Malte; EMC2 session |
-| T | **tux26 library**: install dev-nle 14c12c79 into a new library, run the three gates there | **Haiku** | dev-nle pushed (done) | nothing; must precede any Malte run on tux26 (M5, M6, M7b screens) |
+| T | **tux26 library**: install dev-nle 14c12c79 into a new library, run the three gates there | **Haiku** | dev-nle pushed (done) | **done 2026-09-28**; redo for any later dev-nle commit |
 | M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4, **T** | tux26 free |
 | M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
 | M7 | Seed study: our pipeline with the affine stage and decision-time option, four seeds per arm, screened | **Fable / Opus** for the training-code change, **Haiku** to run | M1 | compute after 1 Oct |
@@ -289,7 +289,16 @@ Every M5, M6 and M7b prompt must name `.Rlibs-malte` and must start by checking
 `~/emc2nn/nle/handover/nle-methods/rlibs_malte.marker`; if the marker is absent, stage T
 runs first. Whoever writes those prompts copies this rule into them.
 
-### Prompt for T
+**As run on 2026-09-28, which corrects the prompt below:** `~/emc2nn/nle` and the EMC2 source on
+tux26 are plain copies, not git checkouts, so there is nothing to pull. dev-nle went over as
+`git archive 14c12c79` to `~/emc2nn/src/EMC2-nle-14c12c79` and was installed with
+`R CMD INSTALL --library=~/emc2nn/nle/.Rlibs-malte`. tux26's `port/R/flow_race.R` predates M1, and
+stage Z's gate reads it, so it was **not** overwritten: the Malte files (M1 port, `crdm.cpp`,
+fixtures, reference data, the gate) live in a separate root, **`~/emc2nn/nle-malte`**, laid out
+like the repo. Malte runs on tux26 start from that root with `.Rlibs-malte`; new scripts and cards
+are copied into it, never into `~/emc2nn/nle`.
+
+### Prompt for T (superseded in steps 1 and 2 by the note above)
 
 ```
 On tux26 (ssh andrew@tux26psy.fmg.uva.nl), from ~/emc2nn/nle:
@@ -427,4 +436,10 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   `tests/testthat/_snaps/RACE.md` in the worktree (testthat removes snapshots of skipped tests); it was restored before the push.
 - 2026-09-28 Stage T added (AH asked that the tux26 update be part of the plan, not a note): new library `.Rlibs-malte`,
   three gates, marker file; M5 depends on it in the table and every tux26 prompt must check the marker.
+- 2026-09-28 Stage T DONE. tux26: dev-nle 14c12c79 in `~/emc2nn/nle/.Rlibs-malte` (built 05:24 UTC); `.Rlibs-nle` untouched (still
+  built 2026-09-27 14:35 UTC), as is `~/emc2nn/nle/port/R/flow_race.R`. Gates against the new library: Malte 9/9 in 1.0 min
+  (`sbc/gate_malte_dev_nle_tux.out`; check 0 1.3e-13, 2: 1.8e-12 / 8.7e-12, 3: 1.5e-12 / 6.0e-12, 4: 1.2e-13 / 4.1e-13, 5a 5.9e-16,
+  5b identical to the laptop draw for draw), zero-box 3/3 on ddm_zb_s903_e271 (<= 1.2e-12, 450 -Inf points), usability 5/5
+  (reg_s402 card absent on tux26, so that part of check 2 did not run). Marker `handover/nle-methods/rlibs_malte.marker` written.
+  Malte root on tux26: `~/emc2nn/nle-malte`. Done while zero-box v2 trained (3 jobs, about 20 of 96 cores).
 
