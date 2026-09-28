@@ -41,7 +41,7 @@ requested from Malte by email.
 | T | **tux26 library**: install dev-nle 14c12c79 into a new library, run the three gates there | **Haiku** | dev-nle pushed (done) | **done 2026-09-28**; redo for any later dev-nle commit |
 | M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4, **T** | tux26 free |
 | M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
-| M7 | Seed study: our pipeline with the affine stage and decision-time option, four seeds per arm, screened | **Fable / Opus** for the training-code change, **Haiku** to run | M1 | compute after 1 Oct |
+| M7 | Seed study: our pipeline with the affine stage and decision-time option, four seeds per arm, screened | **Fable / Opus** for the training-code change (M7a, **done 2026-09-28**), **Haiku** to run (M7b) | M1 | M7b: compute after 1 Oct, and tux26 free of zero-box v2 and stage Z |
 | M8 | Read M4–M7 against the registered expectations; write the comparison section | **Fable / Opus** | M4–M7 | — |
 | Z | Zero-box v2: export → screen → select → four SBC cells → read | **Haiku** to run, **Fable / Opus** to read the cells | tux26 pipeline marker | training (~09:00 CEST 29 Sep) |
 
@@ -280,6 +280,119 @@ interpret).
 
 ---
 
+## Stage M7b — seed study: launch, watch, screen, print  (Haiku)
+
+Written 2026-09-28 at the end of M7a. **Blocked until 1 Oct and until tux26 is free** of
+zero-box v2 training and stage Z's cells. Everything it runs was smoke-tested end to end on
+the laptop (five arms, one seed, 2 epochs on 1% of the data, his arm 300 steps):
+`sbc/seed_study/m7asmoke/`.
+
+**What M7a delivered, as M7b uses it**
+
+- `sbc/seed_study_launch_tux.sh`: 20 runs, 8 at a time at 9 cores (72). Its header holds the
+  registered criterion; do not edit it. It has a preflight that names what is missing and
+  starts nothing, never restarts a complete run, and writes
+  `sbc/seed_study/ss/train_done.marker` only when 20 of 20 are complete.
+- `sbc/seed_study_screen.sh`: export, card check, score-bias screen in two cells, table.
+  `sbc/seed_study_table.R` applies the registered rule and prints the verdict lines.
+- Tags: `ss_<arm>_s<seed>`; arms `base aff dt both malte`; our seeds 801-804 (also the
+  batch-order seed), his 2026-2029. Cards: `port/export/rdm_ss_<arm>_s<seed>_e<checkpoint>`.
+- His arm is `malte/train_conditioner_ckpt.py` in Malte's environment, which now needs
+  `hydra-core` (`malte/README.md`).
+
+**State of tux26 on 2026-09-28 (read-only look):** `~/emc2nn/nle/flow/.venv` exists (python
+3.12, jax 0.5.3) but its `flow` package is `~/emc2nn/nle/flow/src`, which predates M7a, so
+the scripts put their own root's `flow/src` first on `PYTHONPATH` and the preflight asserts
+it. Absent on tux26: the RDM training data (`data/train/rdm16m`, 1.8 GB), the RDM validation
+data, `sbc/nci/results/RDMnn_N100_R500.rds`, and any Malte python environment. `uv` is at
+`~/.local/bin/uv`; `taskset` exists; 96 cores.
+
+**Timing, measured on the laptop at 8 threads:** our epoch on the full data 203 s, so 300
+epochs are about 17 h per run there; his 100k steps about 45 min. The screen costs about
+6 s per export and about 1 min per run and cell at 8 cores.
+
+**Acceptance (one line each):** preflight passed; the tux26 smoke prints `0 failing line(s)`
+and both controls below 1e-3; `20 of 20 runs complete`; the screen prints the summary and the
+four `PRIMARY VERDICTS` lines; `table.csv` and `summary.csv` are on the laptop and committed.
+
+### Prompt for M7b
+
+```
+Read handover/MALTE_STAGES.md section "Stage M7b" and the last five entries of
+its log. Do exactly that stage: launch, watch, screen, print the table. Do not
+interpret the numbers, do not edit any script's header, do not change the
+criterion, seeds, arms or defaults. Work from /Users/andrew/Downloads/julian/nle
+on the laptop (absolute paths) and over ssh andrew@tux26psy.fmg.uva.nl.
+
+0. Preconditions, stop and report if any fails: the date is 1 Oct 2026 or
+   later; on tux26 `pgrep -fa "train_ddm|train_race|zerobox|run_sbc|Rscript"`
+   shows no zero-box or SBC job of ours; ~/emc2nn/nle/handover/nle-methods/
+   rlibs_malte.marker exists.
+
+1. Copy to the Malte root on tux26 (never into ~/emc2nn/nle). From the laptop
+   repo root:
+     rsync -aR flow/src flow/scripts malte/train_conditioner_ckpt.py \
+       malte/README.md malte/requirements.lock malte/make_fixtures.py \
+       sbc/seed_study_launch_tux.sh sbc/seed_study_screen.sh \
+       sbc/seed_study_table.R sbc/score_bias_race.R \
+       sbc/nci/results/RDMnn_N100_R500.rds port/R/flow_race.R \
+       port/tests/validate_m7a.R data/train/rdm16m/RDM/trials \
+       data/val/RDM_single/trials \
+       andrew@tux26psy.fmg.uva.nl:emc2nn/nle-malte/
+   Exclude nothing else; do not copy results/ or port/export/.
+
+2. On tux26, build Malte's environment in ~/emc2nn/nle-malte/malte exactly as
+   malte/README.md says (uv is ~/.local/bin/uv; eamax at 6d7f2ff,
+   neural-race-model-estimation branch development at fae8add; the install
+   line includes hydra-core). Check:
+     ~/emc2nn/nle-malte/malte/.venv/bin/python -c "import hydra, eamax, confrdm_jax.flows_affine"
+
+3. Smoke on tux26, from ~/emc2nn/nle-malte (about 15 minutes):
+     export PY=~/emc2nn/nle/flow/.venv/bin/python
+     PREFIX=tuxsmoke SEEDS=801 MSEEDS=2026 EPOCHS=2 KEEP=2 MSTEPS=300 \
+       MEVERY=100 JOBS=5 THREADS=9 bash sbc/seed_study_launch_tux.sh
+     PREFIX=tuxsmoke DRAWS=60 CORES=8 LIB=~/emc2nn/nle/.Rlibs-malte \
+       bash sbc/seed_study_screen.sh
+   Required: "preflight passed", "5 of 5 runs complete", "0 failing line(s)",
+   every CONTROL below 0.001. Report the seconds per epoch from
+   sbc/seed_study/tuxsmoke/logs/tuxsmoke_base_s801.log. If anything fails,
+   print the failing log's last 30 lines and stop. The smoke's numbers mean
+   nothing; do not report its verdict lines. Then remove
+   results/model_states/tuxsmoke_* results/malte_runs/tuxsmoke_*
+   port/export/rdm_tuxsmoke_* sbc/seed_study/tuxsmoke.
+
+4. Launch, from ~/emc2nn/nle-malte:
+     export PY=~/emc2nn/nle/flow/.venv/bin/python
+     setsid nohup bash sbc/seed_study_launch_tux.sh > sbc/seed_study_launch.out 2>&1 &
+   Watch with `tail -5 sbc/seed_study_launch.out` at most once an hour. A run
+   that prints FAILED: print the last 30 lines of its log in
+   sbc/seed_study/ss/logs/ and stop; relaunching is safe (complete runs are
+   skipped) but only after the cause is reported. Never delete or restart a
+   complete run. Done when sbc/seed_study/ss/train_done.marker exists and the
+   output ends with "20 of 20 runs complete".
+
+5. Screen, from ~/emc2nn/nle-malte:
+     export PY=~/emc2nn/nle/flow/.venv/bin/python
+     CORES=32 LIB=~/emc2nn/nle/.Rlibs-malte nohup bash sbc/seed_study_screen.sh \
+       > sbc/seed_study_screen.out 2>&1 &
+   Done when sbc/seed_study/ss/screen_done.marker exists.
+
+6. Print, verbatim and without comment: the run table at the end of
+   sbc/seed_study_launch.out, and sbc/seed_study_screen.out from the line
+   "=== 4. table ===" to the end. Copy sbc/seed_study/ss/table.csv,
+   summary.csv, card_check.out, failed_exports.txt and both .out files to the
+   laptop's sbc/seed_study/ss/ and commit them. Append one line to the log in
+   handover/MALTE_STAGES.md: runs complete, failed exports per arm, the two
+   controls, seconds per epoch, and the four PRIMARY VERDICTS lines as printed.
+
+7. End by naming the next stage, its model and its full prompt: M8 (Fable /
+   Opus) reads the table against the criterion registered in the launch
+   script's header, including the two caveats registered there; it needs M4-M6
+   as well, so say which of those are still open.
+```
+
+---
+
 ## Stage T — dev-nle for the Malte work on tux26  (Haiku)
 
 tux26's `~/emc2nn/nle/.Rlibs-nle` holds dev-nle d49d190b, the library stage Z's cells were
@@ -442,4 +555,23 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   5b identical to the laptop draw for draw), zero-box 3/3 on ddm_zb_s903_e271 (<= 1.2e-12, 450 -Inf points), usability 5/5
   (reg_s402 card absent on tux26, so that part of check 2 did not run). Marker `handover/nle-methods/rlibs_malte.marker` written.
   Malte root on tux26: `~/emc2nn/nle-malte`. Done while zero-box v2 trained (3 jobs, about 20 of 96 cores).
-
+- 2026-09-28 M7a PASS (code and laptop smoke; no training run started). Options `--affine`, `--decision-time`, `--shuffle-seed` in
+  `flow/scripts/train_race.py` (+ `affine=` in `flow/src/flow/config.py`; `training.py` unchanged), exporter writes `affine`, `affine_scale`,
+  `pre`, mirrored in `handover/nle-methods/flow`; `port/tests/validate_m7a.R` in both port copies (the two `flow_race.R` are identical and
+  needed no patch); `malte/train_conditioner_ckpt.py`; `sbc/seed_study_launch_tux.sh` (criterion registered in its header),
+  `sbc/seed_study_screen.sh`, `sbc/seed_study_table.R`; `sbc/score_bias_race.R` takes decision-time and natural-scale cards and an A = 0 cell.
+  Default path, rdm_b1k's configuration on the full 16M rows, first epoch before vs after the change, batch order seeded: train
+  1.1992952823638916 / val 0.7444201707839966 both times (`sbc/seed_study/m7a_first_epoch.out`). **The acceptance line as written cannot be
+  met by any code:** an existing tag's first epoch is not reproducible, because `PreloadedBatches` shuffles with an unseeded generator
+  (rdm_b1k recorded 1.2014626); the test was therefore HEAD against working tree under one injected shuffle seed. Smoke, 2 epochs on 1%
+  (160k rows), through the launch and screen scripts: golden max|diff| 2.0e-13 (base), 9.9e-14 (aff), 3.1e-13 (dt), 2.0e-13 (both), all
+  < 1e-10; dev-nle 14c12c79 `dfun`/`pfun` vs this repo's R port <= 8.3e-14, < 1e-7, all four register; float64 port vs distrax float32
+  <= 1.5e-4; screen controls 0.00021 (std) and 0.00025 (A0); table printed, 80 rows (`sbc/seed_study/m7asmoke/`; its |g| are of 2-epoch
+  flows and mean nothing). Found: (1) **our flow is weak at A -> 0**: rdm_b1k_e242 has |g| <= 0.004 in the standard cell and 0.09-0.33 in
+  the A = 0 cell, density error 0.066 at A <= 0.001 against 0.014 at A = 0.3, because A is uniform on [1e-4, 2] and conditioned on its log
+  (0.5% of draws below 0.01); this handicaps our side of every A = 0 comparison (M4, M5, arm 5 of M7) and is registered as a caveat in the
+  launch header; (2) R's log(1e-4) is 2e-15 below the card's numpy bound, so A = 1e-4 is out of the box unless clamped to the card's own
+  bound (done in the screen; M4/M5 must do the same); (3) tux26 has no RDM data, no Malte environment, and an installed `flow` package
+  that predates M7a, so the scripts put their root's `flow/src` first and assert it; (4) his trainer needs `hydra-core`, added to
+  `malte/.venv` and the lock file. Laptop timing at 8 threads: 203 s per epoch on the full data, his 100k steps about 45 min. Next: M7b
+  (Haiku, prompt above), blocked until 1 Oct and tux26 free.

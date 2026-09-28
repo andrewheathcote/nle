@@ -1,3 +1,4 @@
+import math
 import time
 
 import distrax
@@ -5,6 +6,14 @@ import optax
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
+
+# Affine stage on log time (option `affine`, off by default):
+#   scale = softplus(raw_scale + AFFINE_OFFSET) + AFFINE_MIN_SCALE,
+# with the offset chosen so that raw_scale = 0 gives scale = 1 exactly. The
+# exporter writes both numbers into the card's `affine_scale`.
+AFFINE_MIN_SCALE = 1e-3
+AFFINE_OFFSET = math.log(math.expm1(1.0 - AFFINE_MIN_SCALE))
 
 
 # @nnx.jit
@@ -15,6 +24,9 @@ def spline_flow(data, context, conditioner):
     # existed default to the original [-5, 5]
     range_min = getattr(conditioner, "range_min", -5.0)
     range_max = getattr(conditioner, "range_max", 5.0)
+    # per-context location and scale on log time (see make_mlp_conditioner);
+    # conditioners built without the attribute are plain
+    affine = getattr(conditioner, "affine", False)
     params = conditioner(context)                 # (N, dout)
     spline_size = 3 * num_bins + 1
     idx = 0
@@ -32,6 +44,15 @@ def spline_flow(data, context, conditioner):
             log_scale = params[..., idx + 1:idx + 2].squeeze(-1)
             idx += 2
             layers.append(distrax.ScalarAffine(shift=shift, log_scale=log_scale))
+
+    if affine:
+        # log t = loc + scale * spline(z): the two outputs AFTER the 3K+1
+        # spline outputs are [loc, raw_scale]. Exactly the card semantics of
+        # port/R/flow_race.R (`affine`, `affine_scale`) and of Malte Lueken's
+        # confrdm_jax.flows_affine, so zeroed outputs give loc 0, scale 1.
+        loc = params[..., idx]
+        scale = jax.nn.softplus(params[..., idx + 1] + AFFINE_OFFSET) + AFFINE_MIN_SCALE
+        layers.append(distrax.ScalarAffine(shift=loc, scale=scale))
 
     exp_layer = distrax.Lambda(
         forward=jnp.exp,
@@ -145,11 +166,17 @@ class MLP_no_norm(nnx.Module):
 
 
 def make_mlp_conditioner(rngs, dims, num_bins=16, num_splines=3, spline_flow = spline_flow, use_norm=True,
-                         range_min=-5.0, range_max=5.0):
+                         range_min=-5.0, range_max=5.0, affine=False):
     # each spline needs 3*num_bins + 1 params
     # each affine between splines needs 2 params (shift, log_scale)
     num_affine = num_splines - 1
     dout = num_splines * (3 * num_bins + 1) + num_affine * 2
+    if affine:
+        # two more outputs, [loc, raw_scale], after the spline's 3K+1. One
+        # spline only: the layout 3K+3 is what the card evaluators read.
+        if num_splines != 1:
+            raise ValueError("affine=True needs num_splines == 1")
+        dout += 2
     if use_norm:
         m = MLP(dims, dout, rngs=rngs)
     else:
@@ -159,6 +186,8 @@ def make_mlp_conditioner(rngs, dims, num_bins=16, num_splines=3, spline_flow = s
     m.spline_flow = spline_flow
     m.range_min = range_min
     m.range_max = range_max
+    if affine:            # attribute absent on a plain conditioner, as before
+        m.affine = True
     
     return m
 

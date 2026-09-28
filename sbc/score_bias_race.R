@@ -27,10 +27,37 @@
 #   Rscript sbc/score_bias_race.R <n_draws> <tag1> [tag2 ...]
 # Tags are export basenames, e.g. rdm_large -> port/export/rdm_large_weights.json
 # Env: SBR_CORES (default 4)
+#      SBR_CELL  "std" (default): the standard RDM cell, A sampled.
+#                "A0": the comparison cell of MALTE_CRDM_PLAN.md section 3.1,
+#                the standard cell minus A. The truth and the analytic control
+#                have A = 0 exactly (the Wald); a flow that conditions on A is
+#                evaluated at A_FLOOR = 1e-4, the edge of its box; a flow
+#                without A (Malte's, threshold b = B) needs nothing.
+#      SBR_LIB   library to prepend, holding the EMC2 that supplies the analytic
+#                density (default: ./.Rlibs when present). Asserted.
+#      SBR_OUT   results file (default sbc/score_bias_race_results.rds)
+#      SBR_CSV   if set, also write the score-bias table there, long format:
+#                cell, tag, par, g, se, n   (t0 relative to the analytic value)
+#      SBR_EXPORT  directory of the cards (default port/export)
+#
+# Card options understood (all evaluated by port/R/flow_race.R):
+#   pre = "t0"                 the flow takes rt - t0, and t0 is not an input
+#   context_scale = "natural"  inputs on the natural scale (Malte's cards);
+#                              otherwise log, as every card of ours
+#   an input named b           the threshold, b = B + A
 
-if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
+SBR_LIB <- Sys.getenv("SBR_LIB", "")
+if (nzchar(SBR_LIB)) {
+  .libPaths(c(normalizePath(path.expand(SBR_LIB)), .libPaths()))
+} else if (dir.exists(".Rlibs")) .libPaths(c(normalizePath(".Rlibs"), .libPaths()))
 source("port/R/flow_race.R")
 suppressPackageStartupMessages({library(EMC2); library(parallel)})
+if (nzchar(SBR_LIB))
+  stopifnot(startsWith(normalizePath(find.package("EMC2")), normalizePath(path.expand(SBR_LIB))))
+CELL <- Sys.getenv("SBR_CELL", "std")
+stopifnot(CELL %in% c("std", "A0"))
+A_FLOOR <- 1e-4
+EXPORT <- Sys.getenv("SBR_EXPORT", "port/export")
 
 args <- commandArgs(trailingOnly = TRUE)
 n_draws <- as.integer(args[1]); tags <- args[-1]
@@ -43,8 +70,9 @@ CORES <- as.integer(Sys.getenv("SBR_CORES", "4"))
 # quarter of what it was meant to measure. At 0.01 it is ~1%.
 H <- as.numeric(Sys.getenv("SBR_H", "0.01"))
 PARS <- c("v", "v_lMTRUE", "B", "A")     # t0 done separately, see below
+if (CELL == "A0") PARS <- setdiff(PARS, "A")
 
-fls <- lapply(tags, function(t) flow_load(sprintf("port/export/%s_weights.json", t)))
+fls <- lapply(tags, function(t) flow_load(file.path(EXPORT, sprintf("%s_weights.json", t))))
 names(fls) <- tags
 
 # theta on the SBC sampled scale -> the two accumulators' natural parameters.
@@ -53,7 +81,8 @@ names(fls) <- tags
 acc_pars <- function(th) {
   v1 <- exp(th[["v"]])                      # lM = FALSE
   v2 <- exp(th[["v"]] + th[["v_lMTRUE"]])   # lM = TRUE
-  base <- c(B = exp(th[["B"]]), A = exp(th[["A"]]), t0 = exp(th[["t0"]]), s = 1)
+  base <- c(B = exp(th[["B"]]), A = if (CELL == "A0") 0 else exp(th[["A"]]),
+            t0 = exp(th[["t0"]]), s = 1)
   list(cbind(v = v1, t(base))[rep(1, 1), , drop = FALSE],
        cbind(v = v2, t(base))[rep(1, 1), , drop = FALSE])
 }
@@ -74,10 +103,23 @@ an_logL <- function(th, rt, R) {
 # context on the SAMPLED scale in the export's order.
 fl_logL <- function(fl, th, rt, R) {
   P <- acc_pars(th)
-  cn <- fl$context_names
-  mk <- function(p) sapply(cn, function(nm) log(p[1, nm]))   # all exp-transformed
-  ew <- flow_eval(fl, mk(P[[R]]), rt)
-  el <- flow_eval(fl, mk(P[[3 - R]]), rt)
+  cn <- unlist(fl$context_names)
+  natural <- identical(fl$context_scale, "natural")
+  bnd <- if (natural) fl$bounds_natural else fl$bounds_sampled
+  mk <- function(p) sapply(cn, function(nm) {
+    x <- if (nm == "b") p[1, "B"] + p[1, "A"]          # threshold
+         else if (nm == "A") max(p[1, "A"], A_FLOOR)    # binds in the A0 cell only
+         else p[1, nm]
+    x <- if (natural) x else log(x)                     # ours: all exp-transformed
+    # A_FLOOR is the box edge, and log(1e-4) in R is 2e-15 below the card's
+    # bound (numpy's log): without this every A0 evaluation is out of the box
+    if (nm == "A" && CELL == "A0") x <- max(x, bnd$lower[match("A", cn)])
+    x
+  })
+  # a decision-time flow takes rt - t0; t0 is shared by the accumulators
+  t_arg <- if (identical(fl$pre, "t0")) rt - P[[1]][1, "t0"] else rt
+  ew <- flow_eval(fl, mk(P[[R]]), t_arg)
+  el <- flow_eval(fl, mk(P[[3 - R]]), t_arg)
   ew$log_pdf + el$log_sf
 }
 
@@ -98,9 +140,12 @@ gslope <- function(th0, par, grid, f) {
 
 x <- readRDS("sbc/nci/results/RDMnn_N100_R500.rds")
 truth <- as.matrix(x$SBC$med$alpha) - as.matrix(x$SBC$bias$alpha)
+# A0: the same prior draws for the remaining parameters
+if (CELL == "A0") truth <- truth[, colnames(truth) != "A", drop = FALSE]
 n_draws <- min(n_draws, nrow(truth))
-cat(sprintf("draws: %d   tags: %s   cores: %d\n\n", n_draws,
-            paste(tags, collapse = ", "), CORES))
+cat(sprintf("cell: %s   draws: %d   tags: %s   cores: %d\n\n", CELL, n_draws,
+            if (length(tags) > 12) sprintf("%d tags", length(tags)) else paste(tags, collapse = ", "),
+            CORES))
 
 one <- function(i) {
   th0 <- as.list(truth[i, ])
@@ -150,4 +195,18 @@ for (tg in tags) {
             mean(res[, paste0("t0.", tg)] - res[, "t0.analytic"]))
   cat(sprintf("%-16s %s\n", tg, paste(sprintf("%+11.5f", vals), collapse = " ")))
 }
-saveRDS(res, "sbc/score_bias_race_results.rds")
+saveRDS(res, Sys.getenv("SBR_OUT", "sbc/score_bias_race_results.rds"))
+
+CONTROL <- max(abs(sapply(PARS, function(p) mean(res[, paste0(p, ".analytic")]))))
+cat(sprintf("\nCONTROL max |g(analytic)| over %s: %.5f\n", paste(PARS, collapse = ", "), CONTROL))
+if (nzchar(Sys.getenv("SBR_CSV"))) {
+  se <- function(v) sd(v) / sqrt(length(v))
+  tab <- do.call(rbind, lapply(tags, function(tg) {
+    g <- lapply(PARS, function(p) res[, paste0(p, ".", tg)])
+    g[["t0"]] <- res[, paste0("t0.", tg)] - res[, "t0.analytic"]
+    data.frame(cell = CELL, tag = tg, par = c(PARS, "t0"), g = sapply(g, mean),
+               se = sapply(g, se), n = nrow(res), control = CONTROL, row.names = NULL)
+  }))
+  write.csv(tab, Sys.getenv("SBR_CSV"), row.names = FALSE)
+  cat(sprintf("wrote %s (%d rows)\n", Sys.getenv("SBR_CSV"), nrow(tab)))
+}

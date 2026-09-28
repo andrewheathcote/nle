@@ -21,12 +21,22 @@ Writes to `port/export/`:
 The NumPy float64 port is cross-checked against the authoritative float32
 distrax/JAX pipeline (`flow.config.spline_flow`) before anything is written.
 
+Two training options are exported as card fields (stage M7a), each evaluated
+by port/R/flow_race.R and dev-nle without a new evaluator:
+  affine         read off the output layer's width, 3K+3 instead of 3K+1; the
+                 card gets `affine: true` and `affine_scale {min_scale, offset}`
+  decision time  read from the run's variant_config.json (or --decision-time);
+                 t0 is not a context input, the card gets `pre: "t0"`, and the
+                 golden vectors record the rt a caller supplies, rt = t0 + d,
+                 with the flow evaluated at rt - t0
+
 Run from `flow/`:  uv run python scripts/export_flow.py --model LNR --budget small
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import date
 from pathlib import Path
 
@@ -47,6 +57,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RANGE_MIN, RANGE_MAX = -5.0, 5.0     # spline range used by flow.config.spline_flow
 MIN_BIN_SIZE = 1e-4
 MIN_KNOT_SLOPE = 1e-4
+# affine stage: scale = softplus(raw + AFFINE_OFFSET) + AFFINE_MIN_SCALE; the
+# same two numbers as flow.config and flow/scripts/malte_to_card.py
+AFFINE_MIN_SCALE = 1e-3
+AFFINE_OFFSET = math.log(math.expm1(1.0 - AFFINE_MIN_SCALE))
+SHIFT = "t0"          # the parameter a decision-time flow does not see
 
 # Model-specific facts. Context order must match the training notebook's
 # CONTEXT list; bounds/transforms come from simulation/designs.R (the
@@ -133,6 +148,7 @@ def mlp_forward(ctx_std, layers, norms):
 def build_knots(raw, num_bins, range_min=RANGE_MIN, range_max=RANGE_MAX):
     """raw: (n, 3K+1) conditioner output -> x_pos, y_pos, slopes (n, K+1)."""
     k = num_bins
+    raw = raw[:, :3 * k + 1]          # an affine conditioner has two more
     widths = normalize_bin_sizes(raw[:, :k], range_max - range_min, MIN_BIN_SIZE)
     heights = normalize_bin_sizes(raw[:, k:2 * k], range_max - range_min, MIN_BIN_SIZE)
     slopes = normalize_knot_slopes(raw[:, 2 * k:], MIN_KNOT_SLOPE)
@@ -194,17 +210,37 @@ def rqs_inverse(y, x_pos, y_pos, slopes):
     return x, logdet
 
 
-def flow_eval_f64(theta, rt, layers, norms, scaler_mean, scaler_scale, num_bins):
-    """Full float64 evaluation. theta: (n, K) sampled scale; rt: (m,)."""
+def affine_loc_scale(raw, num_bins):
+    """[loc, scale] from the two outputs after the 3K+1 spline outputs."""
+    k = num_bins
+    assert raw.shape[1] == 3 * k + 3
+    return raw[:, 3 * k + 1], softplus(raw[:, 3 * k + 2] + AFFINE_OFFSET) + AFFINE_MIN_SCALE
+
+
+def flow_eval_f64(theta, rt, layers, norms, scaler_mean, scaler_scale, num_bins,
+                  affine=False):
+    """Full float64 evaluation. theta: (n, K) sampled scale; rt: (m,), or
+    (n, m) when each parameter set has its own times (decision time). `rt` is
+    the flow's argument, i.e. rt - t0 for a decision-time flow."""
     ctx_std = (theta - scaler_mean) / scaler_scale
     raw = mlp_forward(ctx_std, layers, norms)
     x_pos, y_pos, slopes = build_knots(raw, num_bins)
-    u = np.log(rt)
-    n, m = theta.shape[0], rt.shape[0]
+    n = theta.shape[0]
+    u = np.log(np.broadcast_to(rt, (n, rt.shape[-1])))
+    m = u.shape[1]
     z = np.empty((n, m)); logdet = np.empty((n, m))
+    if affine:
+        loc, scale = affine_loc_scale(raw, num_bins)
     for i in range(n):
-        z[i], logdet[i] = rqs_inverse(u, x_pos[i], y_pos[i], slopes[i])
-    log_pdf = sstats.norm.logpdf(z) + logdet - u[None, :]
+        if affine:
+            # log t = loc + scale * spline(z): invert the spline at the
+            # standardised coordinate, identity tails in that coordinate
+            z[i], logdet[i] = rqs_inverse((u[i] - loc[i]) / scale[i],
+                                          x_pos[i], y_pos[i], slopes[i])
+            logdet[i] -= np.log(scale[i])
+        else:
+            z[i], logdet[i] = rqs_inverse(u[i], x_pos[i], y_pos[i], slopes[i])
+    log_pdf = sstats.norm.logpdf(z) + logdet - u
     cdf = sstats.norm.cdf(z)
     log_sf = sstats.norm.logsf(z)
     return z, log_pdf, cdf, log_sf, (ctx_std, raw, x_pos, y_pos, slopes)
@@ -236,19 +272,25 @@ def read_conditioner(ckpt_dir):
                   np.asarray(raw["norms"][i]["bias"]["value"], dtype=np.float64))
                  for i in sorted(raw["norms"], key=int)]
 
+    # The two layouts never coincide (they differ mod 3), so the layout is read
+    # off the weights: 3K+1 is a plain single spline, 3K+3 the affine one.
     dout = layers[-1][0].shape[1]
-    if (dout - 1) % 3 != 0:
-        raise ValueError(f"Conditioner output dim {dout} is not 3K+1: "
-                         f"multi-spline chains are not supported by this exporter.")
-    num_bins = (dout - 1) // 3
-    return step, layers, norms, num_bins
+    if dout % 3 == 1:
+        num_bins, affine = (dout - 1) // 3, False
+    elif dout % 3 == 0:
+        num_bins, affine = (dout - 3) // 3, True
+    else:
+        raise ValueError(f"Conditioner output dim {dout} is neither 3K+1 nor "
+                         f"3K+3: multi-spline chains are not supported by this exporter.")
+    return step, layers, norms, num_bins, affine
 
 
-def build_jax_conditioner(layers, norms, num_bins):
+def build_jax_conditioner(layers, norms, num_bins, affine=False):
     """Fresh nnx conditioner with the checkpoint weights assigned (float32)."""
     dims = [layers[0][0].shape[0]] + [W.shape[1] for W, _ in layers[:-1]]
     cond = make_mlp_conditioner(nnx.Rngs(0), dims=dims, num_bins=num_bins,
-                                num_splines=1, use_norm=norms is not None)
+                                num_splines=1, use_norm=norms is not None,
+                                **({"affine": True} if affine else {}))
     for i, (W, b) in enumerate(layers[:-1]):
         cond.linears[i].kernel.value = jnp.asarray(W, dtype=jnp.float32)
         cond.linears[i].bias.value = jnp.asarray(b, dtype=jnp.float32)
@@ -284,6 +326,11 @@ def main():
                          "for a run trained with a different column order. The "
                          "network is unchanged; this only records what its "
                          "inputs actually are.")
+    ap.add_argument("--decision-time", action="store_true",
+                    help="the run was trained with train_race.py "
+                         "--decision-time. Read from the run's "
+                         "variant_config.json when that records it; the flag "
+                         "is for runs that do not.")
     ap.add_argument("--n-param-sets", type=int, default=25)
     ap.add_argument("--port-tol", type=float, default=5e-3,
                     help="max |dlog_pdf| tolerated between the float64 port and "
@@ -302,7 +349,43 @@ def main():
     _FORCE_STEP[0] = args.step
     tag = f"{args.model.lower()}_{args.budget}{args.tag_suffix}"
 
-    step, layers, norms, num_bins = read_conditioner(ckpt_dir)
+    step, layers, norms, num_bins, affine = read_conditioner(ckpt_dir)
+
+    # What the run was trained as. variant_config.json is train_race.py's
+    # vars(args); runs older than the options have neither key.
+    vcfg = {}
+    _vp = ckpt_dir.parent / "variant_config.json"
+    if _vp.exists():
+        vcfg = json.loads(_vp.read_text())
+    decision_time = bool(args.decision_time or vcfg.get("decision_time", False))
+    if "affine" in vcfg and bool(vcfg["affine"]) != affine:
+        raise ValueError(f"variant_config.json says affine={vcfg['affine']} but the "
+                         f"output layer is {'3K+3' if affine else '3K+1'}")
+    for _k, _v in (("range_min", RANGE_MIN), ("range_max", RANGE_MAX)):
+        if float(vcfg.get(_k, _v)) != _v:
+            raise ValueError(f"run trained with {_k}={vcfg[_k]}; this exporter "
+                             f"writes {_v}")
+    full_context = list(spec["context"])
+    if decision_time:
+        if args.context:
+            raise ValueError("--context with a decision-time run: give the order "
+                             "in the registry instead")
+        if SHIFT not in full_context:
+            raise ValueError(f"{args.model} has no {SHIFT} to shift by")
+        _keep = [j for j, p in enumerate(full_context) if p != SHIFT]
+        spec["context"] = [full_context[j] for j in _keep]
+        spec["transforms"] = {p: spec["transforms"][p] for p in spec["context"]}
+        full_bounds = spec["bounds_natural"]
+        spec["bounds_natural"] = {k: [full_bounds[k][j] for j in _keep]
+                                  for k in ("lower", "upper")}
+        shift_bounds = [full_bounds[k][full_context.index(SHIFT)]
+                        for k in ("lower", "upper")]
+    if "context" in vcfg and list(vcfg["context"]) != list(spec["context"]):
+        raise ValueError(f"the run was trained on context {vcfg['context']} but "
+                         f"this export would declare {spec['context']}: the "
+                         f"card would permute the network's inputs")
+    print(f"options: affine={affine}  decision_time={decision_time}  "
+          f"context={spec['context']}", flush=True)
     n_par = sum(W.size + b.size for W, b in layers) + \
         (sum(s.size + b.size for s, b in norms) if norms else 0)
     widths = [layers[0][0].shape[0]] + [W.shape[1] for W, _ in layers]
@@ -341,11 +424,27 @@ def main():
     theta = theta.astype(np.float32).astype(np.float64)  # identical inputs everywhere
     rt = np.geomspace(0.005, 20.0, 23).astype(np.float32).astype(np.float64)
 
+    # Decision time: the grid above is the DECISION time d, shared across
+    # parameter sets. The card's public interface takes rt and t0, so each set
+    # gets its own t0 (uniform on the sampled scale within the training box)
+    # and the golden file records rt = t0 + d. The float64 values are computed
+    # at rt - t0, the number a caller's subtraction produces, which differs
+    # from d in the last bits.
+    rt_gold, t_flow, t0_nat = rt, rt, None
+    if decision_time:
+        lo0, hi0 = (np.log(b) for b in shift_bounds)
+        t0_s = rng.uniform(lo0, hi0, size=args.n_param_sets)
+        t0_s = t0_s.astype(np.float32).astype(np.float64)
+        t0_nat = np.exp(t0_s)
+        rt_gold = t0_nat[:, None] + rt[None, :]          # (n, m)
+        t_flow = rt_gold - t0_nat[:, None]
+
     z, log_pdf, cdf, log_sf, inter = flow_eval_f64(
-        theta, rt, layers, norms, scaler_mean, scaler_scale, num_bins)
+        theta, t_flow, layers, norms, scaler_mean, scaler_scale, num_bins,
+        affine=affine)
 
     # --- cross-check float64 port against the authoritative distrax path ---
-    conditioner = build_jax_conditioner(layers, norms, num_bins)
+    conditioner = build_jax_conditioner(layers, norms, num_bins, affine)
     ctx32 = ((theta - scaler_mean) / scaler_scale).astype(np.float32)
     max_lp, max_z = 0.0, 0.0
     all_lp = []
@@ -391,6 +490,14 @@ def main():
         "parameter_scale": "sampled",
         "bounds_sampled": bounds_s,
         "bounds_natural": spec["bounds_natural"],
+        # options (stage M7a); a card without the fields is a plain rt flow
+        "affine": affine,
+        **({"affine_scale": {"min_scale": AFFINE_MIN_SCALE,
+                             "offset": AFFINE_OFFSET}} if affine else {}),
+        **({"pre": SHIFT,
+            "pre_bounds_natural": {"lower": shift_bounds[0],
+                                   "upper": shift_bounds[1]}}
+           if decision_time else {}),
         "scaler": {"mean": scaler_mean.tolist(), "scale": scaler_scale.tolist()},
         "mlp": {
             "activation": "gelu_tanh",
@@ -414,13 +521,18 @@ def main():
 
     # --- golden CSV (long format) ---
     gpath = out_dir / f"{tag}_golden.csv"
-    ctx_cols = ",".join(spec["context"])
+    # Decision time: one more column, t0 on the sampled (log) scale like the
+    # context columns, after them; `rt` is then t0 + d.
+    ctx_cols = ",".join(spec["context"] + ([SHIFT] if decision_time else []))
+    rt_rows = np.broadcast_to(rt_gold, (theta.shape[0], len(rt)))
     with open(gpath, "w") as f:
         f.write(f"param_id,{ctx_cols},rt,z,log_pdf,cdf,log_sf\n")
         for i in range(theta.shape[0]):
             th = ",".join(f"{v:.17g}" for v in theta[i])
+            if decision_time:
+                th += f",{t0_s[i]:.17g}"
             for j in range(len(rt)):
-                f.write(f"{i + 1},{th},{rt[j]:.17g},{z[i, j]:.17g},"
+                f.write(f"{i + 1},{th},{rt_rows[i, j]:.17g},{z[i, j]:.17g},"
                         f"{log_pdf[i, j]:.17g},{cdf[i, j]:.17g},{log_sf[i, j]:.17g}\n")
     print(f"Wrote {gpath} ({theta.shape[0] * len(rt)} rows)")
 
@@ -434,6 +546,9 @@ def main():
         "x_pos": x_pos[:3].tolist(),
         "y_pos": y_pos[:3].tolist(),
         "knot_slopes": slopes[:3].tolist(),
+        **({"affine_loc": affine_loc_scale(raw, num_bins)[0][:3].tolist(),
+            "affine_scale": affine_loc_scale(raw, num_bins)[1][:3].tolist()}
+           if affine else {}),
     }))
     print(f"Wrote {ipath}")
 

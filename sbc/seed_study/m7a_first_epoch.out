@@ -1,0 +1,5 @@
+# Stage M7a, 2026-09-28: default options train bit-identically before and after the change.
+# sbc/seed_study/m7a_first_epoch.py <tree> 4242 --model RDM --tag <tag>   (rdm_b1k's configuration: rdm16m, [256,128], 64 bins, batch 1024, schedule for 300 epochs, seed 100; batch order seeded 4242; 8 threads)
+pre  (git HEAD 08207cd): FIRST_EPOCH train 1.1992952823638916 val 0.7444201707839966
+post (working tree):     FIRST_EPOCH train 1.1992952823638916 val 0.7444201707839966
+# rdm_b1k's recorded first epoch (train 1.2014626264572144, val 0.7499110698699951) cannot be reproduced by any code: its batch order came from an unseeded np.random.default_rng().
