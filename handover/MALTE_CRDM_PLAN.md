@@ -255,15 +255,13 @@ them the fallback is retraining: the RDM flows are cheap; the CRDM at
 dt = 0.0005 simulates 64 × 500 paths × 8000 steps per training step and was a
 GPU job of up to 8 h.
 
-**Decisions for Andrew:**
-
-1. Ask Malte for the checkpoints, or retrain here?
-2. Data sets for §4.3.
-3. RDM comparison on the `A = 0` cell only, or also report our standard
-   A-free cell for `rdm_small` alone?
-4. Hybrid race in dev-nle (recommended) or all-flow?
-5. Parameterisation for the real-data fits: EMC2's convention (`s` fixed) or
-   his (`s_true` free on the target)?
+**Decisions (AH, 2026-09-28):** checkpoints requested from Malte
+(`~/Downloads/julian/EMAIL_TO_MALTE.md`); **hybrid race** in dev-nle; the
+real-data study of §4.3 is **deferred**, and with it the choice of fitting
+parameterisation and of data sets. Still open: whether to also report our
+standard A-free cell for `rdm_small` beside the A = 0 comparison (default:
+yes, it exists already). The work is staged for cleared-context sessions in
+`handover/MALTE_STAGES.md`.
 
 **Sequence.** tux26 is committed to zero-box v2 until about 30 Sep, and
 compute is tux26-only until 1 Oct, so the order is by what needs no compute:
