@@ -20,6 +20,12 @@ requested from Malte by email.
   the port exists in two copies (`port/` at the repo root and
   `handover/nle-methods/port/`); patch both, check `git status` on both.
 - **Limits:** 8 cores on the laptop; 72 on tux26. Commit after each stage.
+- **Every stage ends by handing over the next one.** After the commit and the
+  log line, the final report names the next stage (from the table below, given
+  what has passed), the **model** to set, and the **full prompt** to paste,
+  ready to copy, adjusted for anything the stage just learned (paths, changed
+  tolerances, traps found). If the next stage is blocked, say on what. Do not
+  wait to be asked. (AH, 2026-09-28.)
 - Memory (`MEMORY.md`) carries the standing traps — dual EMC2 install, EMC2's
   own port copy, the st0-default trap — and is loaded automatically.
 
@@ -154,8 +160,9 @@ dt = 0.002, 0.001, 0.0005.
 ```
 Read handover/MALTE_STAGES.md, section "Stage M2", and do exactly that stage.
 His reference implementations are eamax/accumulators/pulse.py, volterra.py
-and diffusion.py (clone under malte/ from stage M1; if malte/ does not exist,
-create the environment as stage M1 item 1 describes). Read only those.
+and diffusion.py (clones and the uv environment are already in malte/ from
+stage M1: activate malte/.venv; malte/README.md has the rebuild steps if it is
+missing). Read only those.
 
 Work in /Users/andrew/Downloads/julian/nle with absolute paths; at most 8
 cores. When the acceptance lines pass, commit, append one line with the
