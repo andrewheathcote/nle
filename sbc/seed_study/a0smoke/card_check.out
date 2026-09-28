@@ -1,0 +1,10 @@
+=== M7a card check  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  port /Users/andrew/Downloads/julian/nle/port ===
+PASS golden   rdm_a0smoke_base_s801_e0 max|diff| 2.2e-13 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_a0smoke_base_s801_e0 max|diff| 1.4e-13 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 1.4e-13]
+PASS golden   rdm_a0smoke_aff_s801_e0  max|diff| 2.7e-13 (< 1e-10)  [25 sets x 23 times; affine TRUE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_a0smoke_aff_s801_e0  max|diff| 9.2e-14 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 9.2e-14]
+PASS golden   rdm_a0smoke_dt_s801_e0   max|diff| 7.1e-13 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre t0; 5 sets at A = 0]
+PASS dev-nle  rdm_a0smoke_dt_s801_e0   max|diff| 5.3e-14 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 4.6e-14]
+PASS golden   rdm_a0smoke_both_s801_e0 max|diff| 1.6e-13 (< 1e-10)  [25 sets x 23 times; affine TRUE, pre t0; 5 sets at A = 0]
+PASS dev-nle  rdm_a0smoke_both_s801_e0 max|diff| 5.5e-14 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 5.5e-14]
+=== 4 tag(s), 0 failing line(s) ===

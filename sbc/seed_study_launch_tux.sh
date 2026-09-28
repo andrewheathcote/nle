@@ -11,9 +11,20 @@
 #          (slurm/train_conditioner_rdm_affine_log_deep_clip_box.sh: affine, log
 #          inputs, two hidden layers of 128, 12 bins, clipping, box v 0:8,
 #          s and b 0.25:3.5, 100k steps of 64 x 500 simulated online)
-# Arms 1-4 share data (rdm16m), architecture ([256,128], 64 bins), batch 1024,
-# 300 epochs and context order (v, B, [t0,] s, A on the log scale, scaler), so
-# each differs from the baseline in one thing. Arm 5 differs in everything.
+# Arms 1-4 share data, architecture ([256,128], 64 bins), batch 1024, 300
+# epochs and context order (v, B, [t0,] s, A, scaler), so each differs from the
+# baseline in one thing. Arm 5 differs in everything.
+#
+# AMENDED 2026-09-28, before any run had started and before any number existed
+# (AH's decision; handover/RDM_A0_BOX_PLAN.md): arms 1-4 train on the A = 0 box,
+# data/train/rdm24m_a0 (24e6 rows; A 70% uniform on [0, 2], 15% uniform in
+# asinh(A / 0.05), 15% exactly 0) with --zerobox-A, i.e. A is conditioned on as
+# asinh(A / 0.05) and v, B, t0, s on their logs. The baseline arm is therefore
+# also the candidate set for the new RDM flow. Consequences for what follows:
+# in the A0 cell our flows are evaluated at A = 0 exactly, and the first caveat
+# below is WITHDRAWN (kept in the text, marked, so the record shows what was
+# registered first). ZEROBOX=0 TRAIN=data/train/rdm16m/RDM/trials VAL= restores
+# the study as first registered.
 #
 # ---------------------------------------------------------------------------
 # CRITERION, REGISTERED HERE BEFORE ANY NUMBER EXISTS (2026-09-28, stage M7a)
@@ -29,7 +40,8 @@
 #
 # Cells. "std": the standard RDM cell (v, v_lMTRUE, B, A, t0 sampled).
 #        "A0": the comparison cell, the standard cell minus A (A = 0 exactly in
-#        the truth; our flows are evaluated at A = 1e-4, the edge of their box).
+#        the truth; our flows are evaluated at A = 0 exactly [as amended; as
+#        first registered: at A = 1e-4, the edge of the old box]).
 # Arms aff, dt, both are judged against base in the std cell. Arm malte has no
 # A, so it is judged against base in the A0 cell.
 #
@@ -45,7 +57,8 @@
 # best checkpoint.
 #
 # Known before the numbers, and to be read with them:
-#  * A0 handicaps our flows. rdm_b1k_e242, |g| <= 0.004 in the std cell, has
+#  * [WITHDRAWN by the amendment above: it describes flows trained on the old
+#    box, rdm16m.] A0 handicaps our flows. rdm_b1k_e242, |g| <= 0.004 in the std cell, has
 #    |g| 0.09-0.33 in the A0 cell, because A is sampled uniformly on [1e-4, 2]
 #    and conditioned on its log: 0.5% of the training draws have A < 0.01, and
 #    the density error there is 0.066 against 0.014 at A = 0.3 (measured in
@@ -66,7 +79,11 @@
 #   CORE0   first core used when taskset is available (0)
 #   PREFIX  tag prefix (ss)           ARMS     "base aff dt both malte"
 #   SEEDS   ours "801 802 803 804"    MSEEDS   his "2026 2027 2028 2029"
-#   EPOCHS 300  KEEP 30  TRAIN data/train/rdm16m/RDM/trials  VAL (script default)
+#   EPOCHS 300  KEEP 30  ZEROBOX 1 (pass --zerobox-A)
+#   TRAIN data/train/rdm24m_a0/RDM/trials   VAL data/val/RDM_a0/RDM/trials
+#   ONLY   if set, a space-separated list of run tags: only these are run (for
+#          a wave that uses part of the machine); the marker is written only
+#          when every run of the study is complete
 #   MSTEPS 100000  MEVERY 1000
 #   DRY=1   print the commands and the preflight, start nothing
 set -u
@@ -76,7 +93,12 @@ PY=${PY:-$ROOT/flow/.venv/bin/python}; PYM=${PYM:-$ROOT/malte/.venv/bin/python}
 JOBS=${JOBS:-8}; THREADS=${THREADS:-9}; CORE0=${CORE0:-0}
 PREFIX=${PREFIX:-ss}; ARMS=${ARMS:-"base aff dt both malte"}
 SEEDS=${SEEDS:-"801 802 803 804"}; MSEEDS=${MSEEDS:-"2026 2027 2028 2029"}
-EPOCHS=${EPOCHS:-300}; KEEP=${KEEP:-30}; TRAIN=${TRAIN:-data/train/rdm16m/RDM/trials}; VAL=${VAL:-}
+EPOCHS=${EPOCHS:-300}; KEEP=${KEEP:-30}; ZEROBOX=${ZEROBOX:-1}; ONLY=${ONLY:-}
+if [ "$ZEROBOX" = 1 ]; then
+  TRAIN=${TRAIN:-data/train/rdm24m_a0/RDM/trials}; VAL=${VAL-data/val/RDM_a0/RDM/trials}; ZFLAG="--zerobox-A"
+else
+  TRAIN=${TRAIN:-data/train/rdm16m/RDM/trials}; VAL=${VAL:-}; ZFLAG=""
+fi
 MSTEPS=${MSTEPS:-100000}; MEVERY=${MEVERY:-1000}; DRY=${DRY:-0}
 OUT=sbc/seed_study/$PREFIX; mkdir -p "$OUT/logs"
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
@@ -126,11 +148,21 @@ for a in $ARMS; do
       *) say "ABORT: unknown arm $a"; exit 1;; esac
     for s in $SEEDS; do
       JOB_TAG+=("${PREFIX}_${a}_s$s")
-      JOB_CMD+=("$PY flow/scripts/train_race.py --model RDM --tag ${PREFIX}_${a}_s$s --train-data $TRAIN ${VAL:+--val-data $VAL} --epochs $EPOCHS --keep-checkpoints $KEEP --seed $s --shuffle-seed $s $f")
+      JOB_CMD+=("$PY flow/scripts/train_race.py --model RDM --tag ${PREFIX}_${a}_s$s --train-data $TRAIN ${VAL:+--val-data $VAL} --epochs $EPOCHS --keep-checkpoints $KEEP --seed $s --shuffle-seed $s $ZFLAG $f")
     done
   fi
 done
-N=${#JOB_TAG[@]}; say "  $N runs, $JOBS at a time, $THREADS cores each"
+NALL=${#JOB_TAG[@]}
+if [ -n "$ONLY" ]; then            # a wave: keep the listed runs, in the list's order
+  T2=(); C2=()
+  for o in $ONLY; do hit=0
+    for ((i = 0; i < NALL; i++)); do
+      [ "${JOB_TAG[$i]}" = "$o" ] && { T2+=("$o"); C2+=("${JOB_CMD[$i]}"); hit=1; }; done
+    [ $hit = 1 ] || { say "ABORT: ONLY names $o, which is not a run of this study"; exit 1; }
+  done
+  ALL_TAG=("${JOB_TAG[@]}"); JOB_TAG=("${T2[@]}"); JOB_CMD=("${C2[@]}")
+else ALL_TAG=("${JOB_TAG[@]}"); fi
+N=${#JOB_TAG[@]}; say "  $N runs${ONLY:+ (a wave of the $NALL)}, $JOBS at a time, $THREADS cores each"
 
 # A finished run is never restarted: train_race.py wipes its checkpoint
 # directory when it starts.
@@ -152,6 +184,10 @@ worker() {            # slot k runs jobs k, k + JOBS, k + 2 JOBS, ...
   for ((i = k; i < N; i += JOBS)); do
     local tag=${JOB_TAG[$i]}
     if finished "$tag"; then say "  $tag already complete, skipped"; continue; fi
+    # a run in progress (an earlier wave) must not be started again: starting
+    # wipes its checkpoint directory
+    if pgrep -f -- "(--tag $tag |malte_runs/$tag )" >/dev/null 2>&1; then
+      say "  $tag is running in another launch, skipped"; continue; fi
     if [ "$DRY" = 1 ]; then echo "DRY slot $k: $pin ${JOB_CMD[$i]}"; continue; fi
     say "  start $tag (slot $k)"
     if XLA_FLAGS="--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=$THREADS" \
@@ -176,4 +212,7 @@ for ((i = 0; i < N; i++)); do
   printf "%-24s %-9s %s\n" "$tag" "$st" "${l:-NA}"
 done
 say "=== $nok of $N runs complete ==="
-if [ "$nok" = "$N" ]; then echo "seed study training done $(date), prefix $PREFIX, $N runs" > "$OUT/train_done.marker"; else exit 1; fi
+[ "$nok" = "$N" ] || exit 1
+nall=0; for t in "${ALL_TAG[@]}"; do finished "$t" && nall=$((nall + 1)); done
+if [ "$nall" = "$NALL" ]; then echo "seed study training done $(date), prefix $PREFIX, $NALL runs" > "$OUT/train_done.marker"
+else say "=== study: $nall of $NALL runs complete; marker not written yet ==="; fi

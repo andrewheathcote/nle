@@ -29,6 +29,9 @@ by default so that existing tags train exactly as before:
                      3K+1 spline outputs: log t = loc + scale * spline(z)
   --decision-time    t0 leaves the context and the flow is trained on rt - t0
                      (card field pre = "t0"); RDM only
+  --zerobox-A        A is conditioned on as asinh(A / 0.05), so the box can
+                     reach A = 0 (handover/RDM_A0_BOX_PLAN.md); needs data
+                     from simulation/sim_rdm_a0.R
   --shuffle-seed     seeds the batch order, which is otherwise drawn from the
                      OS and makes a run irreproducible even at a fixed --seed
 """
@@ -92,6 +95,29 @@ def with_decision_time(dset, ctx_full):
     return ds.dataset(tbl.append_column(DATA_DECTIME, d))
 
 
+# --zerobox-A: the box reaches A = 0 (handover/RDM_A0_BOX_PLAN.md). The data
+# store log A, -Inf at exactly zero; the network sees asinh(A / c), which is 0
+# at zero, linear below c and log-like above. The exporter writes the constant
+# into the card's zerobox_c and must use the same number.
+ZEROBOX_C = {"A": 0.05}
+
+
+def with_zerobox(dset, columns):
+    """The dataset with each ZEROBOX_C column replaced by asinh(exp(x) / c).
+
+    Computed in float64 from the stored log value, in this one place for
+    training and validation alike. Rows stay in file order.
+    """
+    tbl = dset if isinstance(dset, pa.Table) else dset.to_table(columns=columns)
+    for name, c in ZEROBOX_C.items():
+        x = tbl[name].to_numpy()
+        u = np.arcsinh(np.exp(x) / c)
+        if not np.all(np.isfinite(u)):
+            raise SystemExit(f"non-finite asinh({name} / {c}) in the data")
+        tbl = tbl.set_column(tbl.schema.get_field_index(name), name, pa.array(u))
+    return ds.dataset(tbl)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="RDM", choices=sorted(CONTEXT))
@@ -112,6 +138,9 @@ def main():
                     help="per-context location and scale on log time")
     ap.add_argument("--decision-time", action="store_true",
                     help="train on rt - t0 with t0 dropped from the context")
+    ap.add_argument("--zerobox-A", dest="zerobox_A", action="store_true",
+                    help="condition on asinh(A / 0.05) instead of log A; for "
+                         "data whose box reaches A = 0 (simulation/sim_rdm_a0.R)")
     ap.add_argument("--shuffle-seed", type=int, default=None,
                     help="seed for the batch order (default: unseeded, the "
                          "historical behaviour)")
@@ -138,6 +167,12 @@ def main():
     if args.decision_time:
         dset_train = with_decision_time(dset_train, CTX_FULL)
         dset_val = with_decision_time(dset_val, CTX_FULL)
+    if args.zerobox_A:
+        if args.model != "RDM":
+            raise SystemExit("--zerobox-A is implemented for the RDM only")
+        cols = [DATA_COL, *CTX, TARGET]
+        dset_train = with_zerobox(dset_train, cols)
+        dset_val = with_zerobox(dset_val, cols)
     n_train = dset_train.count_rows()
     widths = [int(w) for w in args.widths.split(",")]
     dims = [len(CTX)] + widths            # no +1: a race flow has no response code
@@ -145,7 +180,8 @@ def main():
           f"train={n_train} rows  context={CTX}  dims={dims}  "
           f"bins={args.num_bins}  batch={args.batch}  epochs={args.epochs}"
           + ("  affine" if args.affine else "")
-          + (f"  data={DATA_COL} (decision time)" if args.decision_time else ""),
+          + (f"  data={DATA_COL} (decision time)" if args.decision_time else "")
+          + (f"  zerobox {ZEROBOX_C}" if args.zerobox_A else ""),
           flush=True)
 
     rngs = nnx.Rngs(default=jax.random.key(args.seed),
@@ -186,7 +222,8 @@ def main():
     with open(out_base / "variant_config.json", "w") as f:
         # "context": the order the network was trained on, checked by the
         # exporter against its own registry (the transposed-A-and-s trap)
-        json.dump({**vars(args), "context": CTX}, f)
+        json.dump({**vars(args), "context": CTX,
+                   **({"zerobox_c": ZEROBOX_C} if args.zerobox_A else {})}, f)
 
     t0 = time.time()
     train_model(conditioner, optimizer, train_metrics, val_metrics,

@@ -45,6 +45,9 @@
 #   context_scale = "natural"  inputs on the natural scale (Malte's cards);
 #                              otherwise log, as every card of ours
 #   an input named b           the threshold, b = B + A
+#   context_transforms "zerobox"  the input is asinh(x / zerobox_c); such a
+#                              card's box reaches 0, so in the A0 cell it is
+#                              evaluated at A = 0 exactly, not at A_FLOOR
 
 SBR_LIB <- Sys.getenv("SBR_LIB", "")
 if (nzchar(SBR_LIB)) {
@@ -106,7 +109,9 @@ fl_logL <- function(fl, th, rt, R) {
   cn <- unlist(fl$context_names)
   natural <- identical(fl$context_scale, "natural")
   bnd <- if (natural) fl$bounds_natural else fl$bounds_sampled
+  zb <- names(fl$zerobox_c)
   mk <- function(p) sapply(cn, function(nm) {
+    if (nm %in% zb) return(asinh(p[1, nm] / fl$zerobox_c[[nm]]))   # exact at 0
     x <- if (nm == "b") p[1, "B"] + p[1, "A"]          # threshold
          else if (nm == "A") max(p[1, "A"], A_FLOOR)    # binds in the A0 cell only
          else p[1, nm]

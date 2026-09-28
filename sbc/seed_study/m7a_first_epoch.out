@@ -3,3 +3,4 @@
 pre  (git HEAD 08207cd): FIRST_EPOCH train 1.1992952823638916 val 0.7444201707839966
 post (working tree):     FIRST_EPOCH train 1.1992952823638916 val 0.7444201707839966
 # rdm_b1k's recorded first epoch (train 1.2014626264572144, val 0.7499110698699951) cannot be reproduced by any code: its batch order came from an unseeded np.random.default_rng().
+post, after the zero-box edits (2026-09-28): FIRST_EPOCH train 1.1992952823638916 val 0.7444201707839966

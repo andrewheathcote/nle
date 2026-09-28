@@ -62,6 +62,11 @@ MIN_KNOT_SLOPE = 1e-4
 AFFINE_MIN_SCALE = 1e-3
 AFFINE_OFFSET = math.log(math.expm1(1.0 - AFFINE_MIN_SCALE))
 SHIFT = "t0"          # the parameter a decision-time flow does not see
+# Zero-box A (train_race.py --zerobox-A, handover/RDM_A0_BOX_PLAN.md): the
+# network's input is asinh(A / c) and the box is A in [0, 2]. dev-nle's card
+# contract, as for the zero-box DDM: context_transforms "zerobox", the constant
+# in zerobox_c, bounds_sampled on the network's scale, bounds_natural natural.
+ZEROBOX_BOUNDS_NAT = {"A": (0.0, 2.0)}
 
 # Model-specific facts. Context order must match the training notebook's
 # CONTEXT list; bounds/transforms come from simulation/designs.R (the
@@ -90,12 +95,15 @@ MODEL_REGISTRY = {
 
 
 def sampled_bounds(spec):
-    def tf(v, t):
+    zc = spec.get("zerobox_c") or {}
+    def tf(v, t, p):
+        if t == "zerobox":                      # the network's scale
+            return float(np.arcsinh(v / zc[p]))
         return float(np.log(v)) if t == "log" else float(v)
     tfs = [spec["transforms"][p] for p in spec["context"]]
     return {
-        "lower": [tf(v, t) for v, t in zip(spec["bounds_natural"]["lower"], tfs)],
-        "upper": [tf(v, t) for v, t in zip(spec["bounds_natural"]["upper"], tfs)],
+        "lower": [tf(v, t, p) for v, t, p in zip(spec["bounds_natural"]["lower"], tfs, spec["context"])],
+        "upper": [tf(v, t, p) for v, t, p in zip(spec["bounds_natural"]["upper"], tfs, spec["context"])],
     }
 
 
@@ -380,12 +388,24 @@ def main():
                                   for k in ("lower", "upper")}
         shift_bounds = [full_bounds[k][full_context.index(SHIFT)]
                         for k in ("lower", "upper")]
+    zerobox_c = dict(vcfg.get("zerobox_c") or {}) if vcfg.get("zerobox_A") else {}
+    if zerobox_c:
+        if set(zerobox_c) != set(ZEROBOX_BOUNDS_NAT):
+            raise ValueError(f"zerobox_c {zerobox_c} names inputs this exporter "
+                             f"has no box for ({sorted(ZEROBOX_BOUNDS_NAT)})")
+        spec["transforms"] = {p: ("zerobox" if p in zerobox_c else t)
+                              for p, t in spec["transforms"].items()}
+        spec["bounds_natural"] = {
+            k: [ZEROBOX_BOUNDS_NAT[p][j] if p in zerobox_c else b
+                for p, b in zip(spec["context"], spec["bounds_natural"][k])]
+            for j, k in enumerate(("lower", "upper"))}
+        spec["zerobox_c"] = zerobox_c
     if "context" in vcfg and list(vcfg["context"]) != list(spec["context"]):
         raise ValueError(f"the run was trained on context {vcfg['context']} but "
                          f"this export would declare {spec['context']}: the "
                          f"card would permute the network's inputs")
     print(f"options: affine={affine}  decision_time={decision_time}  "
-          f"context={spec['context']}", flush=True)
+          f"zerobox_c={zerobox_c or None}  context={spec['context']}", flush=True)
     n_par = sum(W.size + b.size for W, b in layers) + \
         (sum(s.size + b.size for s, b in norms) if norms else 0)
     widths = [layers[0][0].shape[0]] + [W.shape[1] for W, _ in layers]
@@ -421,6 +441,11 @@ def main():
     rng = np.random.default_rng(20260707)
     lo = np.array(bounds_s["lower"]); hi = np.array(bounds_s["upper"])
     theta = rng.uniform(lo, hi, size=(args.n_param_sets, len(lo)))
+    # Zero-box inputs: theta is on the network's scale, where an exact zero is
+    # 0. The first five parameter sets sit exactly there, so the golden file
+    # tests the corner the box was extended for.
+    for p in zerobox_c:
+        theta[:min(5, args.n_param_sets), spec["context"].index(p)] = 0.0
     theta = theta.astype(np.float32).astype(np.float64)  # identical inputs everywhere
     rt = np.geomspace(0.005, 20.0, 23).astype(np.float32).astype(np.float64)
 
@@ -488,6 +513,7 @@ def main():
         "context_names": spec["context"],
         "context_transforms": spec["transforms"],
         "parameter_scale": "sampled",
+        **({"zerobox_c": zerobox_c} if zerobox_c else {}),
         "bounds_sampled": bounds_s,
         "bounds_natural": spec["bounds_natural"],
         # options (stage M7a); a card without the fields is a plain rt flow
