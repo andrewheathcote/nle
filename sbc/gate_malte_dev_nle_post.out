@@ -1,0 +1,62 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+=== Malte-flow acceptance  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  2026-09-28 15:09 ===
+   rdm_small: max |ll(dev-nle compiled) - ll(gate reference)| 1.0e-13 over 600 trial x particle, 600 unfloored
+PASS  0. gate self-test: reference race likelihood == dev-nle on shipped rdm_small; crdm.cpp compiles
+PASS  1a. rdm_final, rdm_plain, crdm_final (hybrid and all-flow) register
+   rdm_final pre t0 | transforms identity | c_name NN | hybrid NULL | A bound [0, 0]
+   rdm_plain pre t0 | transforms identity | c_name NN | hybrid NULL | A bound [0, 0]
+   hybrid    pre t0 | transforms identity | c_name NN | hybrid amp | A bound [0, 0]
+   allflow   pre t0 | transforms identity | c_name NN | hybrid NULL | A bound [0, 0]
+   hybrid: p_types amp -Inf, tau -2.30259 | exception amp 0 | amp bound [0, 1]
+   refused: A_not_fixed TRUE  hybrid_without_amp TRUE  pre_contradicts_card TRUE 
+PASS  1b. pre = t0 from the card; identity inputs; compiled; A fixed at 0; amp default -Inf with exception 0; three refusals
+   rdm_final max |log pdf diff| 6.6e-12 (1183 points), max |cdf diff| 1.6e-13; zeros agree at 317 points (rt <= t0, out of box): TRUE
+   rdm_plain max |log pdf diff| 8.7e-12 (1207 points), max |cdf diff| 2.7e-15; zeros agree at 293 points (rt <= t0, out of box): TRUE
+PASS  2. rdm_final and rdm_plain: dfun, pfun == R port (< 1e-7 log pdf, < 1e-8 cdf); 0 for rt <= t0 and out of box
+   hybrid   max |log pdf diff| 6.4e-13, max |cdf diff| 3.0e-15; 615 network rows, 615 Wald rows (unpulsed vs closed-form Wald 1.1e-13); zeros agree: TRUE
+   allflow  max |log pdf diff| 6.0e-12, max |cdf diff| 6.1e-15; 1279 network rows, 0 Wald rows (amp = 0 goes to the network); zeros agree: TRUE
+PASS  3. crdm_final: hybrid (network where amp > 0, Wald where amp == 0) and all-flow dfun, pfun == references
+      S     D    lR    lM    lD     v B A  t0 s amp tau
+1  left  left  left  TRUE  TRUE 3.297 1 0 0.3 1 0.4 0.1
+2  left  left right FALSE FALSE 2.000 1 0 0.3 1 0.0 0.1
+3 right  left  left FALSE  TRUE 2.000 1 0 0.3 1 0.4 0.1
+4 right  left right  TRUE FALSE 3.297 1 0 0.3 1 0.0 0.1
+5  left right  left  TRUE FALSE 3.297 1 0 0.3 1 0.0 0.1
+6  left right right FALSE  TRUE 2.000 1 0 0.3 1 0.4 0.1
+7 right right  left FALSE FALSE 2.000 1 0 0.3 1 0.0 0.1
+8 right right right  TRUE  TRUE 3.297 1 0 0.3 1 0.4 0.1
+   hybrid CRDM: max |ll(dev-nle compiled) - ll(reference race)| 1.2e-13 over 600 trial x particle, 600 unfloored
+   rdm_final:   max |ll - ll(reference race)| 1.5e-13 over 600, 600 unfloored; mapped A 0
+PASS  4. amp ~ 0 + lD with amp_lDFALSE = -Inf: mapped_pars exact zeros, A = 0; sampled likelihood == reference race (< 1e-7)
+   CRDM() dfun/pfun vs dcrdm_volterra (dt 5e-4) and Wald at amp = 0: max |pdf diff| / peak 5.9e-16, max |cdf diff| 3.3e-16
+   240 rows, 6 distinct parameter rows (4 pulsed), dfun + pfun in 0.43 s (one solve per row and call: ~0.7 s; per trial: ~28 s)
+PASS  5a. CRDM() twin: dfun, pfun == Volterra reference (dt 5e-4), Wald at amp = 0, one solve per distinct row
+   congruent   P(pulsed wins) simulated 0.829, reference 0.817 (se 0.012); rt of those 829 trials vs reference: KS p 0.417
+   incongruent P(pulsed wins) simulated 0.510, reference 0.497 (se 0.016); rt of those 510 trials vs reference: KS p 0.846
+PASS  5b. make_data() on the hybrid model: simulator races the pulse against a Wald (choice within 4 se, KS p > 0.001)
+Since SBC can take a while it's highly recommended to specify a fileName to save temporary results in case of crashes
+Processing 4 data sets in parallel
+Running data set 1
+Running data set 2
+    model  parameter   std_bias        bias coverage        ks_p in_envelope n
+1 network          v  0.9561960  0.19126842      0.5 0.011446326       FALSE 2
+2 network   v_lMTRUE -0.3201632 -0.07139379      0.5 0.526212081        TRUE 2
+3 network          B  0.2902970  0.04659155      0.5 0.566105185        TRUE 2
+4 network         t0  0.5627833  0.05322168      0.5 0.501928918       FALSE 2
+5 network        tau -6.6319745 -0.15516842      0.0 0.000307418       FALSE 2
+6 network amp_lDTRUE -5.0256442 -0.70819848      0.0 0.036631053       FALSE 2
+Since SBC can take a while it's highly recommended to specify a fileName to save temporary results in case of crashes
+Processing 4 data sets in parallel
+Running data set 1
+Running data set 2
+    model parameter   std_bias        bias coverage         ks_p in_envelope n
+1 network         v  2.1177320  0.46658075      0.0 2.963137e-07       FALSE 2
+2 network  v_lMTRUE -2.3513771 -0.36904979      0.0 3.663105e-02       FALSE 2
+3 network         B  7.8964795  0.39124009      0.0 2.701896e-07       FALSE 2
+4 network        t0 -0.2782068 -0.05066071      0.5 5.463566e-01        TRUE 2
+   controls: CRDM (CRDM cell), RDM (RDM cell)
+PASS  6. nn_cell(functions = ) builds the cell with its control; 2-replicate nn_sbc_cell() completes (hybrid CRDM, rdm_final)
+
+=== 9 passed, 0 failed, 0 skipped in 0.7 min ===
+GATE PASSED: dev-nle at /Users/andrew/R/nle-sbc-lib takes Malte's flows and the hybrid CRDM race

@@ -36,7 +36,7 @@ requested from Malte by email.
 | M1 | Converter, golden vectors, R port additions | **Sonnet** | Malte's code only (random-initialised conditioners are enough for an exactness check) | nothing |
 | M2 | CRDM simulator and Volterra reference in C++ (standalone Rcpp), validated against `eamax` | **Sonnet** | `eamax` | nothing |
 | M3 | Prompt for the EMC2 session + the NLE-side acceptance gate for it | **Fable / Opus** | M1, M2 | nothing else |
-| — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | — |
+| — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | **done 2026-09-28**, dev-nle 14c12c79 (local, not pushed) |
 | M4 | Register trained cards; score bias and posterior shift for both RDM flows | **Sonnet** to adapt scripts, **Haiku** to run | trained checkpoints; dev-nle with M3 | Malte; EMC2 session |
 | M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4 | tux26 free |
 | M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
@@ -215,6 +215,70 @@ the EMC2 session.
 
 ---
 
+## Stage M7a — seed study: the training-code change  (Fable / Opus)
+
+Written 2026-09-28, when its inputs existed (M1; dev-nle 14c12c79 evaluates affine and
+decision-time race cards). M7a is the code and a laptop smoke test. The 20 training runs
+(M7b, Haiku) wait for compute after 1 Oct.
+
+**Deliverables**
+
+1. `flow/src/flow/config.py`, `flow/scripts/train_race.py`: two options for the RDM flow,
+   off by default so that existing tags train bit-identically:
+   - `--affine`: two more conditioner outputs after the `3K + 1` spline outputs, `loc` and
+     `raw_scale`, `scale = softplus(raw_scale + c) + 1e-3`, `c = log(expm1(1 - 1e-3))`,
+     `log t = loc + scale * spline(z)`. Exactly the card semantics of
+     `port/R/flow_race.R` (`affine`, `affine_scale`), so the export needs no new evaluator.
+   - `--decision-time`: `t0` leaves the context and the flow is trained on `rt - t0`
+     (card field `pre = "t0"`), as `train_ddm.py --decision-time` does for the DDM.
+2. `flow/scripts/export_flow.py`: writes `affine`, `affine_scale`, `pre`; its golden
+   vectors and port check cover both options. Context stays ours (`v, B, [t0,] s, A`, log
+   scale, `scaler`), so an arm differs from the baseline in one thing only.
+3. `sbc/seed_study_launch_tux.sh` and `sbc/seed_study_screen.sh`: five arms x four seeds
+   (baseline; + affine; + decision-time; + both; his configuration as published, trained
+   with his code in `malte/.venv` and exported by `flow/scripts/malte_to_card.py`), 30
+   retained checkpoints per run, every retained checkpoint screened with
+   `sbc/score_bias_race.R`. Output: one table of `|g|` per arm, seed, checkpoint, parameter.
+4. The criterion, registered in the launch script's header before any number exists: an
+   arm helps if its median `|g|` is below the baseline's best quartile
+   (`MALTE_CRDM_PLAN.md` section 3.2, B8).
+
+**Acceptance (one line each), laptop, 8 cores:** default options reproduce an existing
+tag's first-epoch loss to the last digit; for each of the four of our arms a 2-epoch smoke
+run on a 1% subset exports, passes the port golden check (< 1e-10 in float64), and
+registers in dev-nle with `dfun` equal to the R port (< 1e-7); the screen script runs on
+the four smoke cards and prints its table.
+
+### Prompt for M7a
+
+```
+Read handover/MALTE_STAGES.md section "Stage M7a" and its log, and
+handover/MALTE_CRDM_PLAN.md section 2 rows 1 and 2 and section 3.2 row B8. Do
+exactly that stage. Our code: flow/src/flow/config.py, flow/src/flow/training.py,
+flow/scripts/train_race.py, flow/scripts/export_flow.py; the decision-time
+precedent is flow/scripts/train_ddm.py and export_flow_ddm.py (search
+"decision_time"); the evaluator that defines the card is port/R/flow_race.R; his
+affine stage is confrdm_jax/flows_affine.py under
+malte/neural-race-model-estimation. Read only those.
+
+Traps already paid for: train_race.py's CONTEXT order must equal
+export_flow.py's MODEL_REGISTRY order (a transposed A and s gave a score bias
+500x too large with a healthy loss); EMC2 has its own copy of the port, so
+check dev-nle against port/R/flow_race.R and never against itself; prepend
+~/R/nle-sbc-lib (dev-nle 14c12c79) to .libPaths and assert find.package("EMC2")
+is under it; the shipped rdm_small is checkpoint 195, not e207; the port exists
+in two copies (port/ and handover/nle-methods/port/), patch both.
+
+Do not start the 20 training runs: compute is tux26-only until 1 Oct and tux26
+is committed to zero-box v2. Work in /Users/andrew/Downloads/julian/nle with
+absolute paths; at most 8 cores. When the acceptance lines pass, commit, append
+one line with the numbers to the log, and end by giving the model and full
+prompt for M7b (Haiku: launch, watch, screen, print the table, do not
+interpret).
+```
+
+---
+
 ## Stages M4 – M8
 
 Prompts are written when their inputs exist (trained checkpoints; dev-nle
@@ -305,3 +369,18 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
 - 2026-09-28 Model for the EMC2 session that implements `MALTE_FLOWS_PROMPT.md`: **Fable** (AH). Reason: compiled-likelihood changes
   (hybrid switch in the batched native path, exact zeros in the compiled mapping) where an error is a small bias, not a crash, and
   requirements in the prompt that the gate does not test (box on Wald rows, refusal of A != 0, package tests).
+- 2026-09-28 EMC2 session DONE, verified from the NLE side. dev-nle 14c12c79 (local, not pushed) installed in `~/R/nle-sbc-lib`
+  (built 04:57 UTC). `gate_malte_dev_nle.R` 9/9 (`sbc/gate_malte_dev_nle_post.out`): check 0 1.0e-13; 2: log pdf 6.6e-12 / 8.7e-12,
+  cdf <= 1.6e-13; 3: hybrid 6.4e-13 (Wald rows vs closed form 1.1e-13), all-flow 6.0e-12; 4: compiled vs reference race 1.2e-13 and
+  1.5e-13, exact zeros; 5a: 5.9e-16 of peak, 0.43 s; 5b: .829 vs .817 and .510 vs .497, KS p .417 / .846; 6: both SBC cells complete.
+  Zero-box gate 3/3, usability gate 5/5. Full package suite against the installed library, run here because the EMC2 session had not
+  re-run it: 1143 expectations, 0 failures, 94 skipped (tests marked CRAN-only and unconfigured cards).
+  One change outside the prompt: the training-region check holds a value built from several sampled parameters to +-k sd of the
+  combination, sqrt(sum sd^2), not the linear sum; caused by this gate's check-6 prior (v sd .15 + v_lMTRUE sd .1 reached 8.96 > 8).
+  Read and judged sound: the mapped value's prior is normal with that sd, so an effect now gets the same +-4 sd as an intercept;
+  intercept-only cells are unchanged. Awaiting AH's decision to keep or revert.
+  Traps for M5: EMC2's analytic `pWald` overflows for v b / s^2 > 354, which is inside his RDM box (v 8, b 3.5, s .25 gives 448), and
+  the RDM control uses it, so keep s fixed at 1 in the comparison cell (v b <= 28); hybrid Wald rows use a log-form Wald
+  (`src/nle_wald.h`) and differ from `pWald` by up to 2.5e-10. tux26: install 14c12c79 into a NEW library directory, not
+  `.Rlibs-nle`, so stage Z's cells run on the library they were gated on. Next: M7a (prompt above); M4-M6 wait for Malte's checkpoints.
+
