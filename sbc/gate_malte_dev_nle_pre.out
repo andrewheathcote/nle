@@ -1,0 +1,18 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+=== Malte-flow acceptance  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  2026-09-28 14:04 ===
+   rdm_small: max |ll(dev-nle compiled) - ll(gate reference)| 1.0e-13 over 600 trial x particle, 600 unfloored
+PASS  0. gate self-test: reference race likelihood == dev-nle on shipped rdm_small; crdm.cpp compiles
+   error: Neural likelihood 'card.json': the card has no context_transforms; give them with transforms 
+FAIL  1a. rdm_final, rdm_plain, crdm_final (hybrid and all-flow) register
+FAIL  1b. pre = t0 from the card; identity inputs; compiled; A fixed at 0; amp default -Inf with exception 0; three refusals
+FAIL  2. rdm_final and rdm_plain: dfun, pfun == R port (< 1e-7 log pdf, < 1e-8 cdf); 0 for rt <= t0 and out of box
+FAIL  3. crdm_final: hybrid (network where amp > 0, Wald where amp == 0) and all-flow dfun, pfun == references
+FAIL  4. amp ~ 0 + lD with amp_lDFALSE = -Inf: mapped_pars exact zeros, A = 0; sampled likelihood == reference race (< 1e-7)
+   error: dev-nle exports no CRDM() model function 
+FAIL  5a. CRDM() twin: dfun, pfun == Volterra reference (dt 5e-4), Wald at amp = 0, one solve per distinct row
+FAIL  5b. make_data() on the hybrid model: simulator races the pulse against a Wald (choice within 4 se, KS p > 0.001)
+FAIL  6. nn_cell(functions = ) builds the cell with its control; 2-replicate nn_sbc_cell() completes (hybrid CRDM, rdm_final)
+
+=== 1 passed, 8 failed, 0 skipped in 0.0 min ===
+GATE FAILED

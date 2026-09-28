@@ -291,3 +291,15 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   density is the Wald term itself; same in his solver). Real convergence, amp > 0, vs dt 0.00025, max |pdf err|/peak: 5.9e-3 (dt 0.002), 2.1e-3 (0.001), 5.6e-4 (0.0005),
   order ~1.5-1.9; max |cdf err| 1.8e-2, 2.6e-3, 6.1e-4. Simulator vs his draws KS p >= 0.33; vs Volterra CDF (dt 0.0005) KS p >= 0.084 (all five sets).
   Timing per call, t_max 3: 5 ms (dt 0.002), 22 ms (0.001), 86 ms (0.0005). dcrdm_volterra holds end values outside [dt, t_max] like his jnp.interp.
+
+- 2026-09-28 M3 DONE (deliverables written; the gate fails on today's dev-nle, as it must). Prompt:
+  `~/Documents/Projects/EMCpackage/SBC-staging/2026-09-24_dev-nle_phase6/MALTE_FLOWS_PROMPT.md` (copy in `handover/MALTE_FLOWS_PROMPT.md`).
+  Gate: `sbc/gate_malte_dev_nle.R`, references in `sbc/malte_reference.R` (hybrid accumulator, race assembly, `CRDM_ref` twin in plain R).
+  On dev-nle d49d190b (`~/R/nle-sbc-lib`): 1 passed, 8 failed; check 0 (gate's reference race vs compiled likelihood on shipped rdm_small) 1.0e-13;
+  check 1a stops at "the card has no context_transforms", 5a at "dev-nle exports no CRDM()"; no other error (`sbc/gate_malte_dev_nle_pre.out`).
+  Mock run (`GATE_MALTE_MOCK=1`, R references stand in for dev-nle): 7 passed, 2 skipped (`sbc/gate_malte_mock.out`). Reference simulator vs
+  quadrature race at 2e5 trials: P(pulsed wins) z = +0.69 / -0.26, KS p >= 0.22, mass 1.00000. Zero-box gate unchanged, 3/3.
+  Found: shipped rdm_small is checkpoint 195, not e207; design(functions = lD) with amp_lDFALSE = -Inf already maps to exact zeros in R
+  (the compiled mapping is untested until check 4 runs); nn_cell() has no `functions` argument. Interface fixed by the gate:
+  `pars = c("v","s","B")` with `exceptions = c(A = 0)`, `hybrid = "amp"`, exported `CRDM(dt, t_max, sim_dt)`.
+
