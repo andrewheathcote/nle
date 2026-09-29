@@ -1000,6 +1000,23 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   needs attention before this screen can be trusted for a real per-card verdict, and P's Laplace-against-Volterra route needs a
   cheaper method (or should be skipped in favour of going straight to the Gadi SBC cell, which is what the registered rule
   calls for on an invalid screen in any case).
+- 2026-09-29 AH had been reading an older draft; re-reviewed the PeerJ submission (`~/Downloads/Neural_Density_Estimation_
+  for_Race_Models__PeerJ_.pdf`) against `PAPER_REVIEW.md`'s ten items (full table:
+  `~/Documents/Projects/EMCpackage/SBC-staging/2026-09-29_malte_trained/PAPER_REVIEW.md`, "Update 2026-09-29" section, not
+  tracked by this repo's git). Fixed on his side: 1 (methods now match the results), 5 (Fig. 3's accuracy reference is now the
+  fixed fine grid, not matched-dt), 6 (MAD dropped for Wasserstein/KS), 10 (simulator description now matches the
+  Brownian-bridge port, and states the t_max-censoring rule). **Still open, unchanged from the version item 2 was written
+  against: item 2 (no CRDM posterior reference; Discussion still calls numerical inference "too slow"), item 4 (test data
+  simulated coarser, dt 0.001, than the network is trained on, dt 0.0005), item 8 (100 datasets, now up to 9 CRDM ones per
+  condition discarded for non-convergence, was 6), item 9 (one seed per configuration -- AH confirmed with Malte directly).**
+  Item 3 (C2ST rise) is now explained (posterior-width difference) rather than waved away, but still no standardised-shift
+  statistic and hierarchical C2ST (0.625-0.664) is still well above chance. Commit confirmed by Malte, full hash
+  `fae8addc52448c36f16b04068cf42f7acc0bc527` -- matches this repo's `confrdm fae8add` (M1, M7a): no change to our checkout.
+  Nothing here weakens the case for M6/M8; if anything items 2, 4, 8, 9 are exactly what our results speak to and the paper's
+  central CRDM inference claim still rests on parameter recovery alone. Point 2 is feasible and already built, not yet run:
+  the M6a bundles above (`crdm_net_N400`, `crdm_ctl_dt2e-3`, `crdm_ctl_dt5e-4`) are precisely the reference posterior and SBC
+  control this item calls for, smoke-tested, a few hours of wall-clock once Gadi is available -- the numeric rebuttal to
+  "too slow." Still blocked only on stage G.
 
 ### Prompt for the stage after M6a
 
