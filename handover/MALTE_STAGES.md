@@ -326,7 +326,8 @@ four `PRIMARY VERDICTS` lines; `table.csv` and `summary.csv` are on the laptop a
 ### Prompt for M7b
 
 Revised 2026-09-28 12:00 CEST: **every run of the study is running or queued on tux26**, so
-this stage launches no training. It waits, screens twice, and prints.
+this stage launches no training. **Amended 2026-09-29 (AH): it starts at step 3**, because the
+baseline arm was screened on the laptop in M4. It waits, screens once, and prints.
 
 ```
 Read handover/MALTE_STAGES.md section "Stage M7b" and the last six entries of
@@ -350,28 +351,23 @@ something fails, print the evidence named below, write it to the log, and
 stop. Judge how busy tux26 is from the idle figure of `top -bn1 | grep Cpu`,
 never from the load average.
 
-1. Wait for the baseline arm. Poll in the background, not by hand, e.g.
+Steps 1 and 2 are DONE and must not be repeated (amended 2026-09-29): the
+baseline arm finished training at 02:40 CEST on 29 Sep and was screened on
+the laptop in stage M4 (log entry "M4 part E"). Its results are on the laptop
+and committed: sbc/seed_study/ss/table_base.csv and summary_base.csv. Do not
+overwrite or delete those two files. Start at step 3.
+
+3. Wait for the whole study. Poll in the background, not by hand, e.g.
      until ssh andrew@tux26psy.fmg.uva.nl 'cd ~/emc2nn/nle-malte &&
        export PY=~/emc2nn/nle/flow/.venv/bin/python &&
-       [ $(STATUS=1 bash sbc/seed_study_launch_tux.sh |
-           grep -c "^ss_base_s80[1-4] *complete") = 4 ]'; do sleep 600; done
-   Expected about 01:00 CEST on 29 Sep. If a run shows "not started or
-   stopped" with more than 0 and fewer than 300 epochs, it died: print the
-   last 30 lines of sbc/seed_study/ss/logs/<run>.log and stop.
-
-2. Screen the baseline arm, the new RDM flow's candidates (about 1 h):
-     PREFIX=ss ARMS=base NEED_MARKER=0 CORES=16 nohup bash \
-       sbc/seed_study_screen.sh > sbc/seed_study_screen_base.out 2>&1 &
-   Required in the output: four runs with "30 exported, 0 failed",
-   "0 failing line(s)", every CONTROL below 0.001. Copy
-   sbc/seed_study/ss/table.csv and summary.csv to the laptop as
-   sbc/seed_study/ss/table_base.csv and summary_base.csv and commit them.
-   Print, verbatim, the lines for arm base in both cells. The verdict
-   section is empty at this point by design.
-
-3. Wait for the whole study, polling as in step 1, until the status line
-   reads "STATUS 20 complete, 0 running, 0 not started of 20". Expected
-   between 04:00 and 09:00 CEST on 29 Sep. Then, and only then, run
+       STATUS=1 bash sbc/seed_study_launch_tux.sh |
+         grep -q "^STATUS 20 complete, 0 running, 0 not started of 20"';
+       do sleep 600; done
+   On 29 Sep at 04:19 CEST six runs were still training (epochs 214 to 292
+   of 300), so expect completion that morning. If a run shows "not started
+   or stopped" with more than 0 and fewer than 300 epochs, it died: print the
+   last 30 lines of sbc/seed_study/ss/logs/<run>.log and stop. Then, and only
+   then, run
      bash sbc/seed_study_launch_tux.sh > sbc/seed_study_launch_final.out 2>&1
    It finds every run complete, starts nothing, prints the table of 20 runs
    and writes sbc/seed_study/ss/train_done.marker. Required: "20 of 20 runs
@@ -392,9 +388,16 @@ never from the load average.
    controls, seconds per epoch per arm (last epoch in each run's log), and
    the four PRIMARY VERDICTS lines as printed.
 
-6. End by naming the next stage, its model and its full prompt: selecting the
-   new RDM flow from the baseline arm and testing it (RDM_A0_BOX_PLAN.md
-   section 4) and M8 are both Fable / Opus; say which of M4-M6 are still open.
+6. The baseline arm is screened again here, on tux26, as part of the full
+   screen. Report in the log line whether it agrees with the laptop screen:
+   the number of failed exports in arm base (laptop: 1,
+   rdm_ss_base_s804_e279) and the base rows of the summary against
+   sbc/seed_study/ss/summary_base.csv. A difference is reported, not fixed.
+7. End by naming the next stage, its model and its full prompt. Our flow was
+   already selected in M4 (rdm_ss_base_s801_e271); what follows this stage is
+   the reading of the five arms against the registered rule, and whether the
+   shipped flow should be selected from another arm (Fable / Opus). Say which
+   of G, M5 and M6 are still open, from the log.
 ```
 
 ---
@@ -957,3 +960,6 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   (target .014: PASS); standard cell max |g| .0022 (rdm_b1k: .004: PASS). Files: `sbc/malte_m4/{G,D,P,verdict,flatA}.out`,
   `selection.csv`. Read for AH: the predicted difference between O and HF is 0.02 posterior sd, and the SBC cell the rule calls
   for resolves 0.13, so it will confirm that both pass rather than rank them. Next: M6a (prompt above), then G on 1 October.
+- 2026-09-29 M7b prompt amended at AH's request: steps 1 and 2 removed (baseline arm screened on the laptop in M4), it starts
+  at step 3 with its own polling command, protects `table_base.csv` and `summary_base.csv`, and compares the tux26 screen of
+  the baseline arm with the laptop's.
