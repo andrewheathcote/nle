@@ -1,0 +1,42 @@
+#!/bin/bash
+# Template PBS job for one M6a cell bundle (network cells: rdm_a0_N400/*, rdm_o_*, crdm_net_N400).
+# Copy into the bundle directory as job.pbs; PBS_O_WORKDIR is the bundle root (-l wd), so
+# run_cell.R (written by nn_sbc_cell(..., run = FALSE)) finds its own cell.rds and the card at
+# port/export/<tag>*.json relative to here. Asserts ~/R/nle-lib before running.
+#PBS -N crdm_net_N400
+#PBS -P tg53
+#PBS -q normal
+#PBS -l ncpus=48
+#PBS -l mem=128GB
+#PBS -l place=pack
+#PBS -l jobfs=10GB
+#PBS -l walltime=08:00:00
+#PBS -j oe
+#PBS -l wd
+
+export LD_PRELOAD=/apps/gcc/12.2.0/lib64/libstdc++.so.6
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export OMP_DYNAMIC=FALSE   MKL_DYNAMIC=FALSE   OPENBLAS_DYNAMIC=NO
+export KMP_INIT_AT_FORK=FALSE  MKL_DISABLE_FAST_MM=1
+export TMPDIR=/scratch/tg53/ajh575/tmp
+
+module purge
+module load gcc/12.2.0
+module load intel-compiler/2021.10.0
+module load R/4.5.0
+
+cd "$PBS_O_WORKDIR"
+LOG=crdm_net_N400.log
+{
+  echo "=========================================="
+  echo "Job Started: $(date)"; echo "PBS Job ID: $PBS_JOBID"; echo "Working dir: $PBS_O_WORKDIR"
+  qstat -f "$PBS_JOBID" | grep exec_host
+  Rscript -e 'cat(normalizePath("~/R/nle-lib"), "\n"); .libPaths(c(path.expand("~/R/nle-lib"), .libPaths())); suppressPackageStartupMessages(library(EMC2)); stopifnot(startsWith(normalizePath(find.package("EMC2")), normalizePath(path.expand("~/R/nle-lib")))); cat("EMC2 asserted under ~/R/nle-lib:", as.character(packageVersion("EMC2")), "\n")'
+  echo "=========================================="
+} > "$LOG" 2>&1
+
+cd bundle   # run_cell.R's own comment: "Re-runs this SBC cell; from this bundle directory"
+{ time Rscript run_cell.R ; } >> "../$LOG" 2>&1 || { echo "Error: run_cell.R failed" >> "../$LOG"; exit 1; }

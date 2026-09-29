@@ -1,0 +1,12 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+M6 G [SMOKE: masked, code check only] | cards dt0005 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005, dt005 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.005, dt05 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.05 | cores 4 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+G: 4 draws, 2.4 min at 4 cores (36.1 s / draw)
+usable draws: 4 / 4
+
+CONTROL G: max |g(analytic)| over v, v_lMTRUE, B, tau, amp_lDTRUE 0.02025 (must be below 1e-3; t0 excluded, see above)
+flow                  v   v_lMTRUE          B         t0        tau amp_lDTRUE
+analytic       -0.00018   -0.00009   -0.00040   +0.00001   -0.00008   -0.02025
+dt0005         +0.00390   +0.00164   -0.00770   +0.00112   +0.00114   -0.01906
+dt005          +0.00154   -0.00054   -0.00177   +0.00312   +0.00096   +0.00206
+dt05           +0.01754   +0.01155   -0.04877   +0.00327   +0.02175   -0.29740

@@ -1,0 +1,48 @@
+#!/bin/bash
+# Template PBS job for a chunked Volterra-control cell (crdm_ctl_dt2e-3, crdm_ctl_dt5e-4):
+# 16 chunks (seeds 9001-9016), each a run_chunk.R (written by build_crdm_cell.R ctl) in its own
+# chunk_<seed>/ subdirectory, 3 cores each, run side by side in one 48-cpu job. Joined afterwards
+# by join_control_chunks.R.
+#PBS -N crdm_ctl_dt2e3
+#PBS -P tg53
+#PBS -q normal
+#PBS -l ncpus=48
+#PBS -l mem=128GB
+#PBS -l place=pack
+#PBS -l jobfs=10GB
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -l wd
+
+export LD_PRELOAD=/apps/gcc/12.2.0/lib64/libstdc++.so.6
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export OMP_DYNAMIC=FALSE   MKL_DYNAMIC=FALSE   OPENBLAS_DYNAMIC=NO
+export KMP_INIT_AT_FORK=FALSE  MKL_DISABLE_FAST_MM=1
+export TMPDIR=/scratch/tg53/ajh575/tmp
+
+module purge
+module load gcc/12.2.0
+module load intel-compiler/2021.10.0
+module load R/4.5.0
+
+cd "$PBS_O_WORKDIR"
+LOG=crdm_ctl_dt2e3.log
+{
+  echo "Job Started: $(date)"; echo "PBS Job ID: $PBS_JOBID"
+  qstat -f "$PBS_JOBID" | grep exec_host
+} > "$LOG" 2>&1
+
+pids=()
+for seed in $(seq 9001 9016); do
+  d="chunk_${seed}"
+  ( cd "$d" && Rscript run_chunk.R > run_chunk.log 2>&1 ) &
+  pids+=($!)
+done
+fail=0
+for pid in "${pids[@]}"; do wait "$pid" || fail=1; done
+echo "all 16 chunks finished at $(date), fail=$fail" >> "$LOG"
+Rscript join_control_chunks.R . >> "$LOG" 2>&1
+exit $fail

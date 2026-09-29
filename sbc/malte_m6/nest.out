@@ -1,0 +1,10 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+M6 nest | cards CARD = malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005 | cores 1 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+     cell     kl                     ks                   
+[1,] "cong"   "5.43012957428717e-05" "0.00334294923243783"
+[2,] "incong" "2.88270217282387e-05" "0.0015185229450711" 
+     mad                   mass              
+[1,] "0.00814830364016416" "1.00000028679669"
+[2,] "0.00464256802873364" "1.00000038987096"
+NESTING malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005: max KL 5.430e-05, max KS 3.343e-03 (tests the flow at amp = 0, not the solver)

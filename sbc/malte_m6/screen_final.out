@@ -1,0 +1,70 @@
+Stage M6a, part A: final screen. Nesting check and G are full runs (200 draws, 8 cores total
+across the session: nesting at 1 core, G at 5); P was attempted and abandoned (below). No
+numbers here are masked/smoke.
+
+=== Nesting check (dt 0.0005 card at amp = 0, network not the hybrid switch, vs the closed-form
+    Wald: tests the flow, not the solver) ===
+cong:   KL 5.430e-05  KS 3.343e-03  mass 1.0000003
+incong: KL 2.883e-05  KS 1.519e-03  mass 1.0000004
+NESTING malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005: max KL 5.430e-05, max KS 3.343e-03
+
+=== G: score bias, central difference H = 0.01, 200 prior draws, grid weighted by the Volterra
+    reference (dt 1.25e-4, t_max 6), full run (96.0 min at 5 cores, 200/200 usable draws) ===
+
+CONTROL G: max |g(analytic)| over v, v_lMTRUE, B, tau, amp_lDTRUE = 0.02077 (must be < 1e-3;
+t0 excluded by design, see sbc/malte_m6.R and sbc/score_bias_race.R's own t0 note).
+v, v_lMTRUE, B, tau, t0 are all clean (|g(analytic)| <= 0.0019). amp_lDTRUE alone is 0.02077,
+21x the floor: the control is INVALID on this parameter.
+
+              v   v_lMTRUE          B         t0        tau amp_lDTRUE
+analytic  -0.00185   -0.00006   +0.00006   -0.00001   -0.00010   -0.02077
+dt0005    -0.00111   +0.00044   -0.00339   +0.00081   +0.00063   -0.01705
+dt005     +0.00013   +0.00043   -0.00139   +0.00195   +0.00103   +0.01626
+dt05      +0.01661   +0.01265   -0.06353   -0.00099   +0.02863   -0.38163
+
+Read: for dt 0.0005 and dt 0.005 the flow's own amp_lDTRUE value (-0.017, +0.016) is the same
+order as the control's artifact (-0.021), so no real flow bias on this axis can be separated
+from the estimator/solver's own noise at H = 0.01, dt = 1.25e-4 -- this screen simply cannot
+speak to amp for those two cards. dt 0.05's amp_lDTRUE value (-0.382) is an order of magnitude
+past the control's own noise floor, so it stands: consistent with M4 part B's finding that
+dt 0.05 is poor on its own terms (KS .018-.16 against the fine reference), reinforced here
+independently by score bias.
+Not investigated further (would need a smaller H or a finer dt to separate signal from
+solver noise on amp specifically, at real additional Volterra cost): flagged for the next
+stage, not fixed here.
+
+per-card max |g| (all six parameters, t0 relative to the analytic control, as the registered
+verdict rule reads it):
+  malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005  0.01705  (amp_lDTRUE)
+  malte_crdm_aff_log_h2_k12_clip_100k_dt0.005   0.01626  (amp_lDTRUE)
+  malte_crdm_aff_log_h2_k12_clip_100k_dt0.05    0.38163  (amp_lDTRUE)
+
+=== P: posterior shift ===
+NOT RUN TO COMPLETION. Smoke (2 datasets, N = 50 trials, 2 cores, dt 0.0005 card only) ran
+4.5 h of wall time (99% CPU on both workers throughout -- genuinely computing, not hung) and
+did not finish even one dataset. Cause: each dataset's Laplace fit against the Volterra
+reference (dt 1.25e-4, t_max 6) needs an optim() search over the 6-parameter posterior, and
+every BFGS/Hessian evaluation costs a fresh Volterra solve (~5 s, benchmarked separately);
+convergence to optim's default reltol needs enough evaluations that the wall time is not
+minutes but many hours per dataset. This was not budgeted in the registered cost table (which
+priced only the D/G-style per-draw cost, not a full posterior optimisation against the
+Volterra reference) and is a genuine laptop-time limit, not a bug found in the mechanism
+(the same laplace()/importance-sampling code, run against the CHEAP flow accumulator only,
+is fast -- it is specifically the analytic/Volterra accumulator inside optim() that is
+unaffordable here). Abandoned rather than left running for days or given fabricated numbers.
+
+=== SCREEN lines (registered rule: PASS needs G AND P below their floors with both controls
+    valid; G's control here is invalid, which alone reads NOT SEPARATED / a screen failure) ===
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005: FAIL (G control; P not run)
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.005:  FAIL (G control; P not run)
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.05:   FAIL (G control; P not run)
+
+Read for the next stage: the FAIL is on the *estimator's* control, not primarily on any card
+except dt 0.05 (which fails independently of the control problem, on its own amp_lDTRUE
+value and on M4 part B's density numbers). dt 0.0005 and dt 0.005 remain open questions:
+their nesting check and their non-amp score-bias numbers are clean, but this screen cannot
+currently certify them on amp, and P was not reached at all. Before this screen is trusted
+for a real decision, the amp_lDTRUE control needs to be brought under 1e-3 (smaller H,
+finer/adaptive dt, or a variance-reduced estimator) and P needs a cheaper route (e.g. a
+Laplace-only comparison without the defensive-mixture importance step, or moving straight to
+the Gadi SBC cell, which is what the registered rule calls for on an invalid screen anyway).

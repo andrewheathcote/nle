@@ -94,6 +94,11 @@ sbc/**/*.log
 # checkpoints via flow/scripts/export_flow_ddm.py. The lnr_* reference exports
 # committed earlier stay tracked (an ignore rule does not untrack anything).
 port/export/*
+# Gadi SBC-cell bundles (sbc/gadi/cells/) each carry their own copy of one
+# card, at the same relative path the bundle's run_cell.R expects (stage M6a).
+# Same reasoning as above: not tracked, regenerable by the bundle's own build
+# script, provenance kept as the card's SHA256 in the build log instead.
+sbc/gadi/cells/**/port/export/*
 
 # Malte Lueken flows: clones, environment, Orbax fixtures (regenerable by make_fixtures.py)
 malte/eamax/
