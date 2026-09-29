@@ -1,0 +1,45 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+=== Part 2: the first look on its own parameter draws, crude and proper ===
+rdm_aff_log_h2_k12_clip_100k, inner 96% (300 theta)
+   crude : KL median 1.29e-05  90% 3.18e-05  max 4.46e-04 | KS median 8.05e-04  90% 1.37e-03  max 4.19e-03
+   proper: KL median 1.40e-05  90% 3.03e-05  max 5.89e-05 | KS median 8.05e-04  90% 1.37e-03  max 4.19e-03 | W1 median 5.08e-04  90% 3.93e-03  max 1.62e-01
+   crude quadrature's reference mass: min 0.8391 median 1.0033 max 1.0033; proper: min 1.00000001 max 1.00000181
+   KL crude / proper: median ratio 1.00, range -22 to 20; rank correlation 0.829
+rdm_aff_log_h2_k12_clip_100k, inner 70% (300 theta)
+   crude : KL median 1.36e-05  90% 2.66e-05  max 3.91e-05 | KS median 7.80e-04  90% 1.21e-03  max 1.74e-03
+   proper: KL median 1.19e-05  90% 2.64e-05  max 3.89e-05 | KS median 7.80e-04  90% 1.21e-03  max 1.74e-03 | W1 median 5.36e-04  90% 1.51e-03  max 5.55e-03
+   crude quadrature's reference mass: min 0.9978 median 1.0033 max 1.0033; proper: min 1.00000008 max 1.00000112
+   KL crude / proper: median ratio 1.00, range -2.4 to 3; rank correlation 0.972
+rdm_plain_h1_k12_noclip_500k, inner 96% (300 theta)
+   crude : KL median 2.33e-04  90% 3.23e-01  max 7.62e+00 | KS median 3.58e-03  90% 4.83e-02  max 6.78e-01
+   proper: KL median 2.41e-04  90% 4.10e-01  max 1.43e+01 | KS median 3.58e-03  90% 4.83e-02  max 6.78e-01 | W1 median 3.65e-03  90% 7.02e-02  max 1.48e+01
+   crude quadrature's reference mass: min 0.7404 median 1.0033 max 1.0033; proper: min 1.00000000 max 1.00000317
+   KL crude / proper: median ratio 1.00, range -1.8 to 8; rank correlation 0.767
+rdm_plain_h1_k12_noclip_500k, inner 70% (300 theta)
+   crude : KL median 1.38e-04  90% 5.08e-04  max 9.93e-02 | KS median 2.83e-03  90% 5.57e-03  max 1.09e-02
+   proper: KL median 1.37e-04  90% 5.06e-04  max 9.92e-02 | KS median 2.83e-03  90% 5.57e-03  max 1.09e-02 | W1 median 2.39e-03  90% 9.68e-03  max 3.06e-02
+   crude quadrature's reference mass: min 0.9830 median 1.0033 max 1.0033; proper: min 1.00000005 max 1.00000155
+   KL crude / proper: median ratio 1.00, range -0.33 to 4; rank correlation 0.964
+crdm_aff_log_h2_k12_clip_100k_dt0.0005, inner 70% (60 theta)
+   crude : KL median 1.72e-05  90% 8.69e-05  max 4.58e-04 | KS median 1.10e-03  90% 2.05e-03  max 4.05e-03
+   proper: KL median 2.69e-05  90% 8.64e-05  max 4.64e-04 | KS median 1.10e-03  90% 2.05e-03  max 3.99e-03 | W1 median 4.66e-04  90% 1.75e-03  max 6.37e-03
+   crude quadrature's reference mass: min 0.9438 median 1.0071 max 1.0071; proper: min 1.00000098 max 1.00000169
+   KL crude / proper: median ratio 0.75, range -11 to 5.2; rank correlation 0.577
+crdm_aff_log_h2_k12_clip_100k_dt0.005, inner 70% (60 theta)
+   crude : KL median 2.25e-05  90% 2.96e-04  max 1.09e-03 | KS median 1.40e-03  90% 3.21e-03  max 5.27e-03
+   proper: KL median 5.12e-05  90% 3.30e-04  max 1.10e-03 | KS median 1.40e-03  90% 3.23e-03  max 5.27e-03 | W1 median 5.44e-04  90% 1.89e-03  max 3.24e-03
+   crude quadrature's reference mass: min 0.9601 median 1.0071 max 1.0071; proper: min 1.00000119 max 1.00000200
+   KL crude / proper: median ratio 0.87, range -2 to 1.2; rank correlation 0.690
+crdm_aff_log_h2_k12_clip_100k_dt0.05, inner 70% (60 theta)
+   crude : KL median 1.57e-02  90% 8.02e-02  max 3.17e-01 | KS median 1.82e-02  90% 6.36e-02  max 1.63e-01
+   proper: KL median 1.56e-02  90% 7.97e-02  max 3.15e-01 | KS median 1.82e-02  90% 6.36e-02  max 1.63e-01 | W1 median 3.11e-03  90% 7.20e-03  max 1.64e-02
+   crude quadrature's reference mass: min 0.9410 median 1.0071 max 1.0071; proper: min 1.00000109 max 1.00000153
+   KL crude / proper: median ratio 1.01, range 0.67 to 1.4; rank correlation 1.000
+Plain RDM flow, proper KS by region of its box [0,8] x [0,5] x [0,5]:
+   s, b in [0.25, 3.5] (final's box)  n 138  KS median 3.06e-03  90% 1.67e-02  max 1.83e-01 | KL median 2.18e-04  90% 1.07e-02  max 2.42e+00
+   s or b below 0.25                  n  19  KS median 5.54e-02  90% 6.36e-01  max 6.78e-01 | KL median 3.31e-02  90% 1.26e+01  max 1.43e+01
+   s, b at least 0.5                  n 250  KS median 3.09e-03  90% 1.06e-02  max 1.33e-01 | KL median 1.99e-04  90% 3.59e-02  max 1.69e+00
+   b below 0.5                        n  26  KS median 2.18e-01  90% 5.79e-01  max 6.78e-01 | KL median 3.01e+00  90% 1.09e+01  max 1.43e+01
+   s below 0.5, b at least 0.5        n  24  KS median 2.37e-02  90% 5.14e-02  max 8.11e-02 | KL median 1.46e-02  90% 2.51e-02  max 3.31e-02
+   s or b above 3.5                   n 149  KS median 3.67e-03  90% 1.20e-01  max 6.78e-01 | KL median 2.37e-04  90% 1.51e+00  max 1.43e+01

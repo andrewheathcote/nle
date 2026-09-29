@@ -37,10 +37,11 @@ requested from Malte by email.
 | M2 | CRDM simulator and Volterra reference in C++ (standalone Rcpp), validated against `eamax` | **Sonnet** | `eamax` | nothing |
 | M3 | Prompt for the EMC2 session + the NLE-side acceptance gate for it | **Fable / Opus** | M1, M2 | nothing else |
 | — | *EMC2 session implements M3's prompt in dev-nle* | **Fable** (its own session; AH, 2026-09-28) | M3 | **done 2026-09-28**, dev-nle 14c12c79 (pushed to origin/dev-nle) |
-| M4 | Register trained cards; score bias and posterior shift for both RDM flows | **Sonnet** to adapt scripts, **Haiku** to run | trained checkpoints; dev-nle with M3 | Malte; EMC2 session |
+| M4 | **Re-scoped 2026-09-29: the deciding stage for the RDM.** Density error, score bias and posterior shift against the Wald, A = 0 cell, s = 1: his final flow, his plain flow, our flow selected from the seed study's baseline arm. Criteria in "Stages M4 – M6, re-scoped" below | **Fable / Opus** | trained checkpoints (arrived 2026-09-29); baseline arm trained | nothing; laptop, 8 cores |
+| G | **Gadi library**: copy the bundle `SBC-pending/2026-10-01_gadi_dev-nle`, install dev-nle 14c12c79 into `~/R/nle-lib`, run `check_nle_lib.pbs`; required before any cell: `TESTS expectations 783 failed 0 errors 0` and mean log-likelihoods 131.286 / 131.325 / 131.359 | **Haiku** | SSH key (works since 2026-09-29) | **not before 1 Oct** (allocation) |
 | T | **tux26 library**: install dev-nle 14c12c79 into a new library, run the three gates there | **Haiku** | dev-nle pushed (done) | **done 2026-09-28**; redo for any later dev-nle commit |
-| M5 | RDM SBC cells on tux26 (A = 0 cell, N = 100 and 400, both flows + control) | **Haiku** | M4, **T** | tux26 free |
-| M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, network SBC cell, step-size sensitivity, one Volterra control cell at 250 replicates | **Sonnet** to adapt, **Haiku** to run | M3 done in dev-nle; CRDM checkpoints | compute after 1 Oct |
+| M5 | RDM SBC cells **on Gadi** (not tux26): our selected flow with its analytic control, A = 0 cell and standard cell, N = 100 and 400. **His RDM flows are in M5 only if M4's rule says NOT SEPARATED** | **Haiku** to run, **Fable / Opus** to read | M4, **G** | Gadi allocation, from 1 Oct |
+| M6 | CRDM tests: nesting check, score bias and posterior shift against Volterra, step-size sensitivity (laptop); network SBC cell, Volterra control **250 replicates at dt 2e-3 plus 50 at dt 5e-4** (Gadi) | **Sonnet** to adapt, **Haiku** to run | CRDM cards (exported 2026-09-29), **G** | Gadi allocation, from 1 Oct |
 | M7 | Seed study: our pipeline with the affine stage and decision-time option, four seeds per arm, screened; **since 2026-09-28 on the A = 0 box** (`RDM_A0_BOX_PLAN.md`), so its baseline arm is the new RDM flow | **Fable / Opus** for the training-code change (M7a, **done 2026-09-28**), **Haiku** to run (M7b) | M1 | M7b: **wave 1 of 5 runs launched 2026-09-28 08:46 CEST**; the other 11 + Malte's 4 need cores (stage Z overlap) |
 | M8 | Read M4–M7 against the registered expectations; write the comparison section | **Fable / Opus** | M4–M7 | — |
 | Z | Zero-box v2: export → screen → select → four SBC cells → read | **Haiku** to run, **Fable / Opus** to read the cells | tux26 pipeline marker | training (~09:00 CEST 29 Sep) |
@@ -452,6 +453,119 @@ Each will follow the same form: read this file's log, do one stage, print
 the acceptance lines, log, stop. Registered expectations are in
 `MALTE_CRDM_PLAN.md` §3.3 and must not be edited after M4 begins.
 Any of them that runs on tux26 uses `~/emc2nn/nle/.Rlibs-malte` and requires stage T's marker.
+
+---
+
+## Stages M4 – M6, re-scoped 2026-09-29 (AH's decisions; registered before any M4 number)
+
+Source: `~/Documents/Projects/EMCpackage/SBC-staging/2026-09-29_malte_trained/PLAN.md` section 5.
+This section replaces the M4 – M6 rows of `MALTE_CRDM_PLAN.md` section 3.2 (B4 – B6) where they
+differ. Section 3.3 of that file (the registered expectations) stands unedited.
+
+**What was known when this was written** (so the registration can be read for what it is).
+Known: the density error of *his* flows over their whole boxes and on his own grid (part B of
+this stage, log below), including a quick look in the region of the cell (s = 1, b 0.6 to 1.6,
+v 1 to 4: KS median .0010 for his final flow, .0035 for his plain flow). Not known: anything
+about *our* flow (no checkpoint of the baseline arm had been exported or screened: M7b's
+screen had not run), and no score bias or posterior shift of any of the three flows in this cell.
+
+### M4: is our RDM flow as good as or better than his?
+
+**Cell.** The A = 0 comparison cell: `v ~ lM`, `B ~ 1`, `t0 ~ 1` sampled (v, v_lMTRUE, B, t0),
+s constant at 1, A = 0 exactly (truth, control and every flow; his flows take b = B). Prior
+means log 1.5, 0.4, log 1, log 0.2, sd 0.1 on the sampled scale. Parameter draws: the 500
+stored draws of `sbc/nci/results/RDMnn_N100_R500.rds` with A dropped, as in the seed-study screen.
+Reference: the closed-form Wald, EMC2's from `~/R/nle-sbc-lib` (dev-nle 14c12c79, asserted).
+
+**Flows.** HF: his final flow (`malte_rdm_aff_log_h2_k12_clip_100k`). HP: his plain flow
+(`malte_rdm_plain_h1_k12_noclip_500k`). O: ours, selected as follows.
+
+**Selection of O, fixed before it is compared with anything.** The 120 retained checkpoints
+of `ss_base_s801..804` go through `sbc/seed_study_screen.sh` (`ARMS=base`), which measures
+score bias on **draws 1 to 200** in both cells (std and A0). O is the checkpoint with the
+smallest W = max over both cells and all parameters (t0 included) of |g_p|. The tests of
+`RDM_A0_BOX_PLAN.md` section 4 (density error flat in A, nesting at A = 0, the standard cell
+no worse than `rdm_b1k`) are reported for O; a failure is reported and does not change the
+selection. Carried beside it, outside the verdict: the checkpoint of median W (rank 60 of 120),
+to show what an unselected run gives. His flows are single runs, ours is one of 120: that is
+the procedure we would ship, and it is said wherever the comparison is reported.
+
+**Measures. All on draws 201 to 400, which the selection never saw.**
+
+| | measure | how | scalar used in the rule | floor |
+|---|---|---|---|---|
+| D | density error | per accumulator (two per draw, 400 parameter sets), decision-time grid of 4000 log-spaced points between the Wald's 1e-10 and 1 - 1e-10 quantiles, trapezoid, censored ends: KL(Wald \|\| flow), KS, and E_true \|log f_flow - log f\| | median KL over the 400 sets (90% point, maximum and KS reported) | 1e-4 nats per trial |
+| G | score bias | `sbc/score_bias_race.R`, `SBR_CELL=A0`, H = 0.01, t0 by the restricted-region estimator relative to the analytic value; analytic control must be below 1e-3 | max over v, v_lMTRUE, B, t0 of \|g_p\| | 0.005 |
+| P | posterior shift | 200 datasets of N = 400 trials simulated from the Wald race at prior draws (seeds 7001 to 7200), the **same datasets for every flow**; defensive mixture of the Laplace approximations of the analytic and of each flow's posterior (covariances times 1.5^2), 4000 draws, importance weights to each posterior. Per parameter: mean over datasets of (flow posterior mean - analytic posterior mean) / analytic posterior sd. Control: the analytic posterior's predicted standardised bias within +-0.15 for every parameter (2 se at 200 datasets; `MALTE_CRDM_PLAN.md` B5 registered +-0.15 at 48 to 60 datasets, where it is 1.2 se and fails by chance two times in three, hence 200) | max over the four parameters of \|mean shift\| | 0.10 posterior sd |
+
+Floors: below them a difference is immaterial. 1e-4 nats per trial is 0.04 nats on 400 trials;
+a shift of 0.10 sd is below what the screen resolves against SBC (+-0.15, memory
+`regression-baseline-sbc-result`) and far below the 0.5 gate; |g| 0.005 is the level of our
+shipped RDM flow in its own cell (0.004).
+
+**Reading one measure** (X is D, G or P; O against one of his flows H; se of X_O - X_H from
+2000 bootstrap resamples of draws or datasets, paired, because the scalars are medians and maxima):
+
+- **tie** if both X_O and X_H are below the floor, or |X_O - X_H| <= 2 se;
+- **ours better** if X_O < X_H by more than 2 se and X_H is above the floor;
+- **ours worse** if X_O > X_H by more than 2 se and X_O is above the floor.
+
+**Verdict, O against HF (primary) and O against HP (secondary):**
+
+| the three readings | verdict | SBC? |
+|---|---|---|
+| no "ours worse" | **OURS AS GOOD OR BETTER** | no |
+| no "ours better", and P reads "ours worse" | **HIS BETTER** | no; M8 reports it, and the remedy is sought in the seed study's other arms |
+| anything else (a "worse" beside a "better"; or "worse" on D or G only, P a tie) | **NOT SEPARATED** | yes |
+| a screen is invalid: G's control >= 1e-3, P's control outside +-0.15, or median importance ESS below 200 of 4000 for O or H | **NOT SEPARATED** | yes |
+
+P carries the second row because it is the only one of the three that measures what inference
+returns (prior included, all parameters moving together); D and G are its causes, not its
+substitutes (`PAPER_REVIEW.md` items 3 and 6).
+
+**The SBC cell, if the rule calls for one:** the A = 0 cell, N = 400, 250 replicates, for O
+and for the flow of his it was not separated from, with one analytic control (the cell is the
+same, so one control serves both). On Gadi, from 1 October. Read by standardised bias against
+the 0.5 gate and KS on the ranks; ours is as good or better if its worst |standardised bias|
+is not larger than his by more than 0.13 (2 se of a difference at 250 replicates).
+
+**Acceptance of M4** (what it must print, whatever the verdict): cards' SHA256; the three
+controls; the table of D, G, P with se for HF, HP, O and the median checkpoint; the two
+verdict lines, `VERDICT O vs HF: ...` and `VERDICT O vs HP: ...`.
+
+### M5: RDM SBC cells
+
+His RDM flows leave M5 unless M4 prints NOT SEPARATED. What stays is the validation of our
+own new flow (`RDM_A0_BOX_PLAN.md` section 4, test 5): O with its analytic control in the
+A = 0 cell and in the standard cell, N = 100 and 400. On Gadi, as self-contained bundles
+(`nn_sbc_cell(archive_dir = , run = FALSE)`), after stage G.
+
+### M6: CRDM
+
+Laptop (8 cores): the nesting check (flow at amp = 0 against the Wald; trap: at amp = 0 the
+Volterra recursion *is* the Wald at any dt, so this tests the flow, never the solver); score
+bias and posterior shift against Volterra; the step sensitivity (the dt 0.0005, 0.005 and 0.05
+cards against one reference). Reference for the screens: dt 1.25e-4 where a solve is
+affordable, because at dt 5e-4 the reference's own KS error (up to 1.5e-3) is the size of the
+dt 0.0005 flow's (part B). Never evaluate Volterra on grids out to 20 s: the cost is the
+square of the longest decision time.
+
+Gadi: the network SBC cell (hybrid race, N = 400, 500 replicates) and the Volterra control,
+**250 replicates at dt 2e-3 and 50 replicates at dt 5e-4** (AH). Items 2 to 5 of
+`PAPER_REVIEW.md` are what these cells test: the missing posterior reference (2), a constant
+shift that correlation cannot see (3), recovery against a coarser simulator (4), and
+references at the flow's own dt (5). The cost per cell is in the table below.
+
+(Cost table: measured in this stage and added here; it is a cost, not a result.)
+
+### Where things run
+
+Laptop: M4 and the M6 screens, **never more than 8 cores in total**, counting every job
+running at once; each job's core count is stated when it is started. tux26: the seed study's
+training and its screen, nothing else. Gadi: every SBC cell, from 1 October (project tg53,
+`/scratch/tg53/ajh575/`, PBS only, 48 cpus and 128 GB per cell job, single-threaded BLAS,
+library `~/R/nle-lib`, asserted by every cell; results come down promptly because scratch
+expires). Nothing is submitted to Gadi before 1 October or before stage G's two lines.
 
 ---
 

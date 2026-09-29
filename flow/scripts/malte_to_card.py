@@ -62,7 +62,23 @@ def read_state(ckpt_dir):
         step = mgr.latest_step()
         if step is None:
             raise SystemExit(f"no checkpoint step under {ckpt_dir}")
-        state = mgr.restore(step, args=ocp.args.StandardRestore())
+    # Restore every leaf as a numpy array. StandardRestore() without a target rebuilds each
+    # array on the device recorded at save time, so a checkpoint saved on a GPU ("cuda:0" in
+    # _sharding) stops on a CPU machine with "Topology mismatch". The sharding is placement
+    # only; the stored values and dtypes are read unchanged (checked 2026-09-29 against a
+    # target-tree restore and his own load_conditioner: identical to the bit).
+    import jax
+    item = Path(ckpt_dir).resolve() / str(step) / "default"
+    if not item.is_dir():
+        raise SystemExit(f"no item directory {item}; not a CheckpointManager layout")
+    handler = ocp.PyTreeCheckpointHandler()
+    meta = handler.metadata(item)
+    tree = meta.tree if hasattr(meta, "tree") else meta
+    restore_args = jax.tree_util.tree_map(lambda _: ocp.RestoreArgs(restore_type=np.ndarray), tree)
+    state = handler.restore(item, args=ocp.args.PyTreeRestore(restore_args=restore_args))
+    for x in jax.tree_util.tree_leaves(state):
+        if not (isinstance(x, np.ndarray) and x.dtype.kind == "f" and np.isfinite(x).all()):
+            raise SystemExit("checkpoint holds a leaf that is not a finite float array")
     return step, state
 
 

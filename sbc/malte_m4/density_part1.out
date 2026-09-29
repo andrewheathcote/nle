@@ -1,0 +1,55 @@
+Warning message:
+package ‘Rcpp’ was built under R version 4.6.1 
+=== Part 1: Malte's density_comparison.nc reproduced ===
+  RDM final      kl  his: median 1.40e-05  90% 3.46e-05  max 5.94e-05
+                     ours: median 1.40e-05  90% 3.46e-05  max 5.94e-05
+                     max |ours - his| 1.46e-07, max relative 7.85e-01, cor 0.999998
+  RDM final      w1  his: median 4.36e-04  90% 2.06e-03  max 4.50e-03
+                     ours: median 4.36e-04  90% 2.06e-03  max 4.50e-03
+                     max |ours - his| 1.40e-08, max relative 5.39e-05, cor 1.000000
+  RDM final      ks  his: median 9.39e-04  90% 2.07e-03  max 3.40e-03
+                     ours: median 9.39e-04  90% 2.07e-03  max 3.40e-03
+                     max |ours - his| 9.80e-08, max relative 4.98e-04, cor 1.000000
+FAIL  RDM final: his KL and KS reproduced set by set (KL < 1e-7, KS < 1e-6)
+  RDM plain, his grid (not in his file): KL median 7.81e-04  90% 2.98e-01  max 7.48e-01
+                                          KS median 6.50e-03  90% 4.53e-02  max 6.49e-02
+  Volterra references, 540 sets at dt 5e-4 and 1.25e-4, t_max 4: 222 s at 6 cores
+  reference dt 5e-4 against dt 1.25e-4: KL median 4.56e-08  90% 2.26e-05  max 3.38e-04
+                                                KS median 8.79e-06  90% 2.94e-04  max 1.51e-03
+  mass of the dt 1.25e-4 reference on [0, 4] + censored tail: min 0.999999 max 1.000005
+  CRDM dt 0.0005 kl  his: median 9.67e-05  90% 1.35e-03  max 7.85e-02
+                     ours: median 9.67e-05  90% 1.35e-03  max 7.85e-02
+                     max |ours - his| 8.98e-08, max relative 5.21e-03, cor 1.000000
+  CRDM dt 0.0005 w1  his: median 1.26e-03  90% 6.07e-03  max 2.76e-02
+                     ours: median 1.26e-03  90% 6.07e-03  max 2.76e-02
+                     max |ours - his| 5.45e-08, max relative 1.99e-05, cor 1.000000
+  CRDM dt 0.0005 ks  his: median 2.53e-03  90% 5.73e-03  max 2.36e-02
+                     ours: median 2.53e-03  90% 5.73e-03  max 2.36e-02
+                     max |ours - his| 2.84e-07, max relative 1.55e-04, cor 1.000000
+  CRDM dt 0.0005 against the dt 1.25e-4 reference: KL median 8.25e-05  90% 5.12e-04  max 1.09e-02
+                                                       KS median 2.54e-03  90% 5.75e-03  max 2.33e-02
+PASS  CRDM dt 0.0005: his KL and KS reproduced set by set (< 1e-6)
+  CRDM dt 0.005  kl  his: median 2.41e-04  90% 1.58e-02  max 6.17e-02
+                     ours: median 2.41e-04  90% 1.58e-02  max 6.17e-02
+                     max |ours - his| 8.94e-08, max relative 1.38e-02, cor 1.000000
+  CRDM dt 0.005  w1  his: median 1.46e-03  90% 7.39e-03  max 3.41e-02
+                     ours: median 1.46e-03  90% 7.39e-03  max 3.41e-02
+                     max |ours - his| 6.05e-08, max relative 6.40e-05, cor 1.000000
+  CRDM dt 0.005  ks  his: median 3.27e-03  90% 1.27e-02  max 4.88e-02
+                     ours: median 3.27e-03  90% 1.27e-02  max 4.88e-02
+                     max |ours - his| 2.62e-07, max relative 1.18e-04, cor 1.000000
+  CRDM dt 0.005  against the dt 1.25e-4 reference: KL median 2.04e-04  90% 1.49e-02  max 5.43e-02
+                                                       KS median 3.27e-03  90% 1.29e-02  max 4.98e-02
+PASS  CRDM dt 0.005: his KL and KS reproduced set by set (< 1e-6)
+  CRDM dt 0.05   kl  his: median 2.47e-02  90% 2.74e-01  max 1.17e+00
+                     ours: median 2.47e-02  90% 2.74e-01  max 1.17e+00
+                     max |ours - his| 2.10e-07, max relative 3.55e-03, cor 1.000000
+  CRDM dt 0.05   w1  his: median 5.22e-03  90% 1.34e-02  max 7.94e-02
+                     ours: median 5.22e-03  90% 1.34e-02  max 7.94e-02
+                     max |ours - his| 7.10e-08, max relative 1.94e-05, cor 1.000000
+  CRDM dt 0.05   ks  his: median 3.12e-02  90% 1.86e-01  max 4.30e-01
+                     ours: median 3.12e-02  90% 1.86e-01  max 4.30e-01
+                     max |ours - his| 1.58e-07, max relative 7.26e-05, cor 1.000000
+  CRDM dt 0.05   against the dt 1.25e-4 reference: KL median 2.47e-02  90% 2.74e-01  max 1.17e+00
+                                                       KS median 3.12e-02  90% 1.86e-01  max 4.30e-01
+PASS  CRDM dt 0.05: his KL and KS reproduced set by set (< 1e-6)
