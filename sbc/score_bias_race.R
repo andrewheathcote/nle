@@ -39,6 +39,7 @@
 #      SBR_CSV   if set, also write the score-bias table there, long format:
 #                cell, tag, par, g, se, n   (t0 relative to the analytic value)
 #      SBR_EXPORT  directory of the cards (default port/export)
+#      SBR_SKIP  drop the first k prior draws (default 0: the screen's draws)
 #
 # Card options understood (all evaluated by port/R/flow_race.R):
 #   pre = "t0"                 the flow takes rt - t0, and t0 is not an input
@@ -147,6 +148,9 @@ x <- readRDS("sbc/nci/results/RDMnn_N100_R500.rds")
 truth <- as.matrix(x$SBC$med$alpha) - as.matrix(x$SBC$bias$alpha)
 # A0: the same prior draws for the remaining parameters
 if (CELL == "A0") truth <- truth[, colnames(truth) != "A", drop = FALSE]
+# SBR_SKIP = k drops the first k draws, so a report can use draws the screen never saw
+SKIP <- as.integer(Sys.getenv("SBR_SKIP", "0"))
+if (SKIP > 0) truth <- truth[-seq_len(SKIP), , drop = FALSE]
 n_draws <- min(n_draws, nrow(truth))
 cat(sprintf("cell: %s   draws: %d   tags: %s   cores: %d\n\n", CELL, n_draws,
             if (length(tags) > 12) sprintf("%d tags", length(tags)) else paste(tags, collapse = ", "),

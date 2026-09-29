@@ -1,0 +1,54 @@
+[09-29 12:32:45] === seed study screen: prefix ss, arms [base], library /Users/andrew/R/nle-sbc-lib ===
+[09-29 12:32:45] === 1. export ===
+[09-29 12:35:06]   ss_base_s801: 30 exported, 0 failed
+[09-29 12:37:25]   ss_base_s802: 30 exported, 0 failed
+[09-29 12:39:46]   ss_base_s803: 30 exported, 0 failed
+[09-29 12:42:08]   ss_base_s804: 29 exported, 1 failed
+[09-29 12:42:08] === 2. card check, first card of each of our runs ===
+=== M7a card check  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  port /Users/andrew/Downloads/julian/nle/port ===
+PASS golden   rdm_ss_base_s801_e256    max|diff| 1.4e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s801_e256    max|diff| 9.2e-13 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 9.2e-13]
+PASS golden   rdm_ss_base_s802_e254    max|diff| 1.0e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s802_e254    max|diff| 8.0e-13 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 8.0e-13]
+PASS golden   rdm_ss_base_s803_e258    max|diff| 4.1e-13 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s803_e258    max|diff| 1.6e-12 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 1.6e-12]
+PASS golden   rdm_ss_base_s804_e245    max|diff| 1.1e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s804_e245    max|diff| 2.4e-12 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 2.4e-12]
+=== 4 tag(s), 0 failing line(s) ===
+[09-29 12:42:09] === 3. score-bias screen, 200 draws ===
+[09-29 12:42:32]   ss_base_s801 std: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B, A: 0.00021
+[09-29 12:42:50]   ss_base_s801 A0: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B: 0.00025
+[09-29 12:43:12]   ss_base_s802 std: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B, A: 0.00021
+[09-29 12:43:30]   ss_base_s802 A0: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B: 0.00025
+[09-29 12:43:53]   ss_base_s803 std: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B, A: 0.00021
+[09-29 12:44:11]   ss_base_s803 A0: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B: 0.00025
+[09-29 12:44:33]   ss_base_s804 std: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B, A: 0.00021
+[09-29 12:44:50]   ss_base_s804 A0: usable draws: 200 / 200, CONTROL max |g(analytic)| over v, v_lMTRUE, B: 0.00025
+[09-29 12:44:50] === 4. table ===
+=== seed study ss: 1080 rows -> sbc/seed_study/ss/table.csv ===
+
+Runs and checkpoints per arm (failed exports included, as |g| = Inf):
+  base   4 seeds, 120 checkpoints, 1 failed exports
+
+Analytic control, max over screens: A0 0.00025, std 0.00021   (registered ceiling 1e-3)
+
+Cell std: distribution of |g| over checkpoints (G = mean over parameters of |g| / baseline median)
+stat      arm       n       min       q25    median       q75       max  base q25  registered rule: median < base q25
+G         base    120   0.16086   0.59830   1.03717   1.46855       Inf   0.59830  
+v         base    120   0.00019   0.00510   0.00722   0.00924       Inf   0.00510  
+v_lMTRUE  base    120   0.00015   0.00285   0.00440   0.00591       Inf   0.00285  
+B         base    120   0.00001   0.00334   0.01001   0.01962       Inf   0.00334  
+A         base    120   0.00004   0.00068   0.00143   0.00242       Inf   0.00068  
+t0        base    120   0.00014   0.00228   0.00622   0.01320       Inf   0.00228  
+
+Cell A0: distribution of |g| over checkpoints (G = mean over parameters of |g| / baseline median)
+stat      arm       n       min       q25    median       q75       max  base q25  registered rule: median < base q25
+G         base    120   0.11205   0.38621   1.01919   1.68996       Inf   0.38621  
+v         base    120   0.00010   0.00121   0.00309   0.00723       Inf   0.00121  
+v_lMTRUE  base    120   0.00006   0.00069   0.00251   0.00536       Inf   0.00069  
+B         base    120   0.00008   0.00368   0.01124   0.01438       Inf   0.00368  
+t0        base    120   0.00012   0.00499   0.01087   0.01388       Inf   0.00499  
+
+PRIMARY VERDICTS
+  none (no baseline, or no judged arm)
+[09-29 12:44:50] === done: sbc/seed_study/ss/table.csv, sbc/seed_study/ss/summary.csv ===

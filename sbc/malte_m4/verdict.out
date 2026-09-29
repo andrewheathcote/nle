@@ -1,0 +1,65 @@
+M4 verdict | flows HF = malte_rdm_aff_log_h2_k12_clip_100k, HP = malte_rdm_plain_h1_k12_noclip_500k, O = rdm_ss_base_s801_e271, OMED = rdm_ss_base_s803_e295 | cores 1 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+
+P, N = 400, 200 datasets. Predicted standardised bias, shift from the analytic posterior in its sd (se), sd ratio
+flow      par        std bias       shift (se)  sd ratio   med ESS
+analytic  v            -0.145                                 1936
+analytic  v_lMTRUE     +0.142                                 1936
+analytic  B            -0.038                                 1936
+analytic  t0           +0.033                                 1936
+CONTROL P: max |analytic std bias| 0.145 (must be below 0.15)
+HF        v            -0.149   -0.004 (0.003)     1.001      1929
+HF        v_lMTRUE     +0.148   +0.007 (0.002)     0.999      1929
+HF        B            -0.015   +0.021 (0.003)     1.000      1929
+HF        t0           +0.020   -0.013 (0.003)     0.990      1929
+HP        v            -0.215   -0.069 (0.003)     0.999      1991
+HP        v_lMTRUE     +0.101   -0.045 (0.002)     1.001      1991
+HP        B            -0.330   -0.269 (0.007)     1.041      1991
+HP        t0           +0.487   +0.431 (0.010)     1.029      1991
+O         v            -0.106   +0.040 (0.002)     1.000      1909
+O         v_lMTRUE     +0.138   -0.005 (0.002)     1.000      1909
+O         B            +0.005   +0.041 (0.004)     1.001      1909
+O         t0           +0.003   -0.027 (0.006)     0.996      1909
+OMED      v            -0.172   -0.027 (0.002)     1.003      1965
+OMED      v_lMTRUE     +0.149   +0.007 (0.002)     1.004      1965
+OMED      B            -0.117   -0.072 (0.005)     1.002      1965
+OMED      t0           +0.155   +0.113 (0.007)     0.989      1965
+
+CONTROLS  G analytic 0.00025 (< 0.001: TRUE)   P analytic 0.145 (< 0.15: TRUE)   median ESS HF 1929, HP 1991, O 1909, OMED 1965
+
+    flow        scalar      boot se
+D   HF       2.702e-05     2.89e-07
+D   HP       4.432e-04     1.00e-05
+D   O        1.500e-04     3.07e-06
+D   OMED     1.584e-04     2.13e-06
+G   HF       4.276e-03     2.09e-04
+G   HP       3.710e-02     7.09e-04
+G   O        1.020e-03     1.57e-04
+G   OMED     7.598e-03     1.87e-04
+P   HF       2.131e-02     2.78e-03
+P   HP       4.313e-01     1.05e-02
+P   O        4.064e-02     3.34e-03
+P   OMED     1.133e-01     6.86e-03
+
+O against HF
+   D: O 1.500e-04, HF 2.702e-05, difference +1.230e-04 (se 3.02e-06), floor 0.0001 -> ours worse
+   G: O 1.020e-03, HF 4.276e-03, difference -3.256e-03 (se 2.91e-04), floor 0.005 -> tie
+   P: O 4.064e-02, HF 2.131e-02, difference +1.933e-02 (se 4.35e-03), floor 0.1 -> tie
+VERDICT O vs HF: NOT SEPARATED: SBC cell needed
+
+O against HP
+   D: O 1.500e-04, HP 4.432e-04, difference -2.932e-04 (se 9.56e-06), floor 0.0001 -> ours better
+   G: O 1.020e-03, HP 3.710e-02, difference -3.608e-02 (se 7.70e-04), floor 0.005 -> ours better
+   P: O 4.064e-02, HP 4.313e-01, difference -3.907e-01 (se 1.02e-02), floor 0.1 -> ours better
+VERDICT O vs HP: OURS AS GOOD OR BETTER: no SBC
+
+OMED against HF
+   D: OMED 1.584e-04, HF 2.702e-05, difference +1.314e-04 (se 2.08e-06), floor 0.0001 -> ours worse
+   G: OMED 7.598e-03, HF 4.276e-03, difference +3.322e-03 (se 3.25e-04), floor 0.005 -> ours worse
+   P: OMED 1.133e-01, HF 2.131e-02, difference +9.203e-02 (se 7.06e-03), floor 0.1 -> ours worse
+VERDICT OMED vs HF: HIS BETTER: no SBC   (outside the registered verdict: the unselected checkpoint)
+
+OMED against HP
+   D: OMED 1.584e-04, HP 4.432e-04, difference -2.848e-04 (se 9.50e-06), floor 0.0001 -> ours better
+   G: OMED 7.598e-03, HP 3.710e-02, difference -2.950e-02 (se 7.18e-04), floor 0.005 -> ours better
+   P: OMED 1.133e-01, HP 4.313e-01, difference -3.180e-01 (se 1.41e-02), floor 0.1 -> ours better
+VERDICT OMED vs HP: OURS AS GOOD OR BETTER: no SBC   (outside the registered verdict: the unselected checkpoint)

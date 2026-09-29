@@ -556,7 +556,29 @@ Gadi: the network SBC cell (hybrid race, N = 400, 500 replicates) and the Volter
 shift that correlation cannot see (3), recovery against a coarser simulator (4), and
 references at the flow's own dt (5). The cost per cell is in the table below.
 
-(Cost table: measured in this stage and added here; it is a cost, not a result.)
+**Cost per cell** (added 2026-09-29 after the registration above; costs, not results).
+AH's measured costs per likelihood evaluation on 400 trials: hybrid network 0.10 ms, `CRDM()`
+at dt 2e-3 1.4 ms, at dt 5e-4 18 ms. Measured here (`sbc/malte_m6/cost_per_replicate.R`, laptop,
+three chains on three cores, N = 400): one replicate of the network cell takes 33.5 core-s,
+of the dt 2e-3 control 392 core-s, of the dt 5e-4 control 4993 core-s (one replicate). So a
+replicate is about 280 000 likelihood evaluations (392 s / 1.4 ms), and the dt 5e-4 figure
+predicted from that, 280 000 x 18 ms = 5040 core-s, agrees with the measurement.
+
+| cell | replicates | laptop core-s per replicate | laptop core-hours | Gadi core-hours at 2x (to be replaced by the check job's timing lines) |
+|---|---|---|---|---|
+| network (hybrid race) | 500 | 33.5 | 4.7 | 9 |
+| Volterra control, dt 2e-3 | 250 | 392 | 27 | 54 |
+| Volterra control, dt 5e-4 | 50 | 4993 | 69 | 139 |
+| all three | | | 101 | about 200 (400 SU in the normal queue) |
+
+**Walltime is the constraint, not core-hours.** `run_sbc` runs replicates one after another
+with three chains, so a 48-cpu job used as it stands keeps 3 cores busy: 250 x 131 s = 9 h
+(dt 2e-3) and 50 x 1664 s = 23 h (dt 5e-4) on the laptop's cores, twice that on Gadi's, the
+second close to the 48 h limit. M6's bundles must therefore split each control into 16
+chunks of replicates with their own seeds, 16 x 3 chains = 48 cores, and join the chunks
+afterwards: about 1.2 h (dt 2e-3) and 3 h (dt 5e-4) of walltime at 2x. `cores_per_chain`
+is the alternative for the dt 5e-4 cell only (18 ms per evaluation is long enough for
+particle-level forks to pay); the chunked form is the default because its efficiency is known.
 
 ### Where things run
 
@@ -565,7 +587,157 @@ running at once; each job's core count is stated when it is started. tux26: the 
 training and its screen, nothing else. Gadi: every SBC cell, from 1 October (project tg53,
 `/scratch/tg53/ajh575/`, PBS only, 48 cpus and 128 GB per cell job, single-threaded BLAS,
 library `~/R/nle-lib`, asserted by every cell; results come down promptly because scratch
-expires). Nothing is submitted to Gadi before 1 October or before stage G's two lines.
+expires). **Everything uploaded to or run on Gadi is under `/scratch/tg53/ajh575`, because the
+home directory is small (AH, 2026-09-29): bundles, cells, logs, `TMPDIR`, and the library
+itself, which is installed in `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink to
+it** (stage G below). Nothing is submitted to Gadi before 1 October or before stage G's two lines.
+
+---
+
+## Stage G — dev-nle on Gadi  (Haiku)
+
+Written 2026-09-29. The SSH key works since that day
+(`ssh -o BatchMode=yes ajh575@gadi.nci.org.au hostname` printed `gadi-login-06.gadi.nci.org.au`),
+so the NLE session manages Gadi directly. **Nothing is copied, installed or submitted before
+1 October 2026**; `sbc/gadi/gadi_stage_G.sh` reads Gadi's date and refuses (tested 29 Sep:
+`REFUSED: Gadi's date is 20260929`).
+
+**Everything on Gadi lives under `/scratch/tg53/ajh575`** (AH, 2026-09-29: the home directory is
+small; 3.4 GB used on 29 Sep). The bundle goes to `/scratch/tg53/ajh575/2026-10-01_gadi_dev-nle`,
+temporary files to `/scratch/tg53/ajh575/tmp`, and the library to
+`/scratch/tg53/ajh575/R/nle-lib`, with `~/R/nle-lib` a symlink to it, so the agreed name and the
+assertion `find.package("EMC2")` under `~/R/nle-lib` (both sides through `normalizePath`) hold
+and home holds one symlink. Scratch expires: a purged library is rebuilt by `setup` from the
+tarball. `~/R/ss-lib`, `~/R/ssd-lib` and the default library are never touched.
+
+Read before the first run, 2026-09-29 (none of it has run on Gadi): `install_nle_lib.sh` takes
+`NLE_LIB` from the environment and builds with `-fp-model=precise` through a private
+`Makevars`; it needs the `module` function, so over ssh it runs under `bash -lc`. It installs
+WienR, jsonlite and testthat from CRAN on the login node (compute nodes have no network, so
+the check job must find them installed). `check_nle_lib.pbs` asks for 4 cpus, 16 GB, 40 min,
+and names no `storage`, like AH's working template `sbc/nci/SBCens_N400.pbs`. The bundle's
+README still says Claude has no login and that the library is in home; the script here
+supersedes both.
+
+**Acceptance:** `GADI CHECK PASS`, which requires in `check_nle_lib.log`
+`TESTS expectations 783 failed 0 errors 0`, the three mean log-likelihoods 131.286 / 131.325 /
+131.359, and EMC2 loaded from `nle-lib`. Then, and only then, cells.
+
+### Prompt for G
+
+```
+Read handover/MALTE_STAGES.md: section "Stage G", section "Stages M4 - M6,
+re-scoped" and the last six log entries. Do exactly stage G. Work from
+/Users/andrew/Downloads/julian/nle on the laptop, absolute paths. Do not edit
+any script. Nothing runs on tux26. The laptop never runs more than 8 cores in
+total.
+
+Everything uploaded to or run on Gadi is under /scratch/tg53/ajh575; nothing
+is written to the home directory except the symlink ~/R/nle-lib, which the
+script makes. PBS only. Never type or ask for a password: if
+  ssh -o BatchMode=yes ajh575@gadi.nci.org.au hostname
+does not print a gadi-login node, stop, print the commands with
+  DRY=1 bash sbc/gadi/gadi_stage_G.sh setup
+  DRY=1 bash sbc/gadi/gadi_stage_G.sh submit
+for AH to run, and say so.
+
+1. bash sbc/gadi/gadi_stage_G.sh setup   > sbc/gadi/stage_G_setup.out 2>&1
+   It refuses before 1 October 2026 (Gadi's date). Required at the end of the
+   output: "* DONE (EMC2)", the line "EMC2 3.4.1.9001 from ...nle-lib", "CRDM
+   exported: TRUE | hybrid argument: TRUE", and ~/R/nle-lib shown as a symlink
+   into /scratch/tg53/ajh575/R/nle-lib. If the BLAS printed is R's reference
+   BLAS, say so in the log line.
+2. bash sbc/gadi/gadi_stage_G.sh submit  (prints the job id). Poll with
+   bash sbc/gadi/gadi_stage_G.sh status   every 5 minutes, in the background,
+   until the job has left the queue. At most 40 minutes of walltime.
+3. bash sbc/gadi/gadi_stage_G.sh verify  > sbc/gadi/stage_G_verify.out 2>&1
+   Print that file verbatim. "GADI CHECK PASS" is the acceptance. On FAIL
+   print the failing tests from sbc/gadi/stage_G/check_nle_lib.log and stop:
+   a failure at exact zeros or -Inf points to fast-math (Makevars.icpx not
+   used). Submit no cell.
+4. Commit sbc/gadi/stage_G*. Append one log line: node, library path, BLAS,
+   the TESTS line, the three timing lines as printed, and the ratio of Gadi's
+   ms per evaluation to the laptop's (0.10, 18.1, 1.40), which replaces the
+   "2x" in the cost table of the re-scoped section.
+5. End with the next stage, its model and its full prompt: the cells built by
+   stage M6a (sbc/gadi/cells/), submitted in the order its log line gives.
+```
+
+---
+
+## Stage M6a — the cells for Gadi, and the CRDM screens on the laptop  (Sonnet to build, Haiku to run; Fable / Opus reads)
+
+Written 2026-09-29 at the end of M4. Can start at once: it needs nothing from Gadi.
+
+**Registered before any CRDM score bias or posterior shift exists** (known on 2026-09-29: the
+density numbers of part B only). Screens as in M4, with the Volterra reference at dt 1.25e-4
+and t_max 6 in place of the Wald, cell of `sbc/gate_malte_dev_nle.R` check 6 (v, v_lMTRUE, B,
+t0, tau, amp_lDTRUE; means log 2, .5, log 1, log .3, log .1, log .4; sd .15, .1, .15, .1, .2,
+.15), N = 400, 200 prior draws for G, 200 datasets for P. Floors as in M4: G 0.005, P 0.10
+posterior sd. A card **passes the screen** if G and P are below their floors with both
+controls valid (G's control below 1e-3; P's control within +-0.15; median ESS above 200).
+Expected: the dt 0.0005 card passes; the dt 0.05 card fails by a wide margin (its KS is .03
+at the median); the dt 0.005 card is the open one, and it is the test of `PAPER_REVIEW.md`
+item 5. Nesting check: the dt 0.0005 card at amp = 0 against the Wald, KS and KL as in part
+B; it tests the flow, not the solver.
+
+**Cells to build** as self-contained bundles under `sbc/gadi/cells/<name>/`, each with its
+PBS file (project tg53, 48 cpus, 128 GB, `place=pack`, `-l wd`, single-threaded BLAS exports,
+the three modules), each asserting `find.package("EMC2")` under `~/R/nle-lib`, each writing
+only under its own directory in `/scratch/tg53/ajh575`:
+
+| name | what | replicates | why |
+|---|---|---|---|
+| `rdm_a0_N400` | A = 0 cell, N = 400: O (`rdm_ss_base_s801_e271`), HF (`malte_rdm_aff_log_h2_k12_clip_100k`), one analytic control | 250 each | M4's verdict O vs HF was NOT SEPARATED |
+| `rdm_o_a0_N100`, `rdm_o_std_N100`, `rdm_o_std_N400` | O with its control | 500 network, 250 control | M5: validation of our new flow |
+| `crdm_net_N400` | hybrid race, dt 0.0005 card | 500 | M6 |
+| `crdm_ctl_dt2e-3` | Volterra control, 16 chunks | 250 | M6 (AH) |
+| `crdm_ctl_dt5e-4` | Volterra control, 16 chunks | 50 | M6 (AH) |
+
+### Prompt for M6a
+
+```
+Read handover/MALTE_STAGES.md: sections "Stages M4 - M6, re-scoped", "Stage
+G" and "Stage M6a", and the last eight log entries. Do stage M6a. Work in
+/Users/andrew/Downloads/julian/nle, absolute paths. HARD LIMIT: the laptop
+never runs more than 8 cores in total, counting everything running at once;
+check what is running before each job and state the core count of each job
+you start. Nothing runs on tux26. Nothing is copied to or run on Gadi in this
+stage. Do not edit the registered criteria; do not edit sbc/malte_m4*.R.
+
+Traps already paid for: prepend ~/R/nle-sbc-lib (dev-nle 14c12c79) to
+.libPaths and assert find.package("EMC2") is under it; keep s = 1 in every
+cell with an RDM control (pWald overflows for v b / s^2 > 354); CRDM()'s
+default t_max is 3; the Volterra solve costs the square of the longest
+decision time, so t_max 6 at most and never a grid to 20 s; at amp = 0 the
+recursion is the Wald at any dt and is no evidence about the solver;
+port/export is not tracked by git, so record the SHA256 of every card a
+bundle carries; our cards are port/export/<tag>_weights.json and condition on
+A through asinh(A / 0.05), evaluated at A = 0 exactly.
+
+A. CRDM screens (laptop). Adapt sbc/malte_m4_lib.R and sbc/malte_m4.R into
+   sbc/malte_m6_lib.R and sbc/malte_m6.R: the accumulator with the pulse
+   (amp, tau) uses the card, the other the Wald (the hybrid race); the
+   reference is dcrdm_volterra (port/src/crdm.cpp) at dt 1.25e-4, t_max 6,
+   one solve per distinct parameter row. Simulate data with EMC2's make_data
+   on the CRDM design. First a smoke run on 4 datasets with the numbers
+   masked, then the full run. Print per card (dt 0.0005, 0.005, 0.05): the
+   controls, G per parameter, P per parameter with se, and one line
+   "SCREEN <card>: PASS" or "FAIL (<which>)". Print the nesting check line.
+B. Bundles. For each row of the table in "Stage M6a", build the bundle with
+   nn_sbc_cell(archive_dir = , run = FALSE) where it applies; the two
+   Volterra controls are 16 chunks of replicates with seeds 9001 to 9016, run
+   side by side at 3 cores each inside one 48-cpu job, and a join script.
+   Walltimes from the cost table in the re-scoped section, doubled again for
+   safety, never above 48 h. Smoke every bundle on the laptop with 2
+   replicates (dt 5e-4: 1 replicate, 3 cores, about 30 min) and confirm the
+   result file is written and read back by the join script.
+C. Write sbc/gadi/cells/SUBMIT_ORDER.md: rdm_a0_N400 first, then the CRDM
+   cells, then the M5 cells, with core-hours per cell.
+D. Commit. Append one log line per part with its numbers. End with the next
+   stage, its model and its full prompt: stage G if it has not run (its
+   prompt is in the file), otherwise the submission of the cells.
+```
 
 ---
 
@@ -722,3 +894,66 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
   complete and skip them, so **its final "x of 15" count will be short and means nothing**. New `STATUS=1` mode of the launch script
   prints the state of all 20 runs and starts nothing; the M7b prompt is rewritten around it and launches no training. Expected: Malte's
   runs by the evening of 28 Sep, wave 1 about 01:00 on 29 Sep, everything between 04:00 and 09:00 on 29 Sep.
+- 2026-09-29 **State of M7b, found by reading tux26 at 04:19 CEST: it has not finished.** Training complete for the baseline arm
+  (4 of 4, last at 02:40), `aff` 3 of 4, `both` 3 of 4, `dt` 1 of 4, Malte's 4 of 4; six runs still training (epochs 214 to 292 of
+  300). No export, no screen, no table and no marker existed on tux26. M7b's steps 3 to 5 (wait, final status, full screen on tux26)
+  are still to do; its step 2 is superseded by the laptop screen of part E below.
+- 2026-09-29 M4 part A PASS (converter). Reproduced on Malte's RDM final checkpoint: `StandardRestore()` stops with "Topology
+  mismatch" (`_sharding` records `cuda:0`; the fixtures record `cpu:0`). Restoring every leaf as a numpy array is the right fix:
+  three independent routes to the weights of that checkpoint (numpy leaves; `StandardRestore` with a numpy target tree; his own
+  `load_conditioner` into his own conditioner) agree to the bit, max|diff| 0, float32, 6 leaves. Applied to
+  `flow/scripts/malte_to_card.py`, which now also refuses a non-finite or non-float leaf; **the copy under `handover/nle-methods`
+  did not exist and was created** (`handover/nle-methods/flow/scripts/malte_to_card.py`). `validate_malte.R`: ACCEPTANCE PASS,
+  log_pdf 7.3e-12 / 3.4e-11 / 3.6e-11, unchanged from M1; fixture cards re-converted with the patched converter differ from the
+  stored ones in the export date only, stored files' SHA256 unchanged. Five cards exported to `port/export/malte_<name>.json`:
+  **SHA256 identical to `cards/SHA256` in the staging folder, all five** (`sbc/malte_m4/cards.sha256`). The hash includes the export
+  date, so it reproduces on 2026-09-29 only.
+- 2026-09-29 M4 part B (first look checked; `sbc/malte_density_check.R`, outputs in `sbc/malte_m4/density_part*.out`, 6 cores).
+  **We reproduce Malte's `density_comparison.nc` set by set**: max |ours - his| over his 45 + 3 x 540 sets, KL 2.1e-7, W1 7.1e-8,
+  KS 2.8e-7 (his evaluator is float32; my preset 1e-7 for the RDM KL was missed at 1.5e-7). His medians: RDM final KL 1.4e-5,
+  KS 9.4e-4; CRDM dt 0.0005 KL 9.7e-5, KS 2.5e-3; dt 0.005 KL 2.4e-4, KS 3.3e-3; dt 0.05 KL 2.5e-2, KS 3.1e-2 (90% .19, max .43).
+  **`first_look.R`: its CDF numbers can be relied on, its KL numbers only as orders of magnitude, as it said.** On its own
+  parameter draws (reproduced exactly from the seed) the proper KS equals its KS to the digits printed; its KL has the right median
+  but single values off by factors of -22 to 20, because the rectangle rule on its grid puts the reference's mass between 0.74 and
+  1.003 (truncation at 20 s and below 1 ms) where the proper grid gives 1.0000000 to 1.0000032. Its worst RDM final KL, 4.5e-4, is
+  5.9e-5 done properly; its worst plain KL, 7.6, is 14.3. It evaluated `CRDM()` beyond that function's default t_max of 3.
+  **Verdict 1, plain RDM flow: confirmed, and the cause is not "s or b near 0" but the ratio b / s.** For b / s < 0.2 its KS equals
+  the reference's mass below exp(-5) = 6.7 ms to three decimals (median .49 for b / s < 0.1): without an affine stage its spline
+  lives on log t in [-5, 5], so it cannot put mass below 6.7 ms. It fails on his own grid too, at s = 3, b = 0.5 (KL .48 to .75),
+  which is inside the box of the final flow. For b / s > 3 it is poor as well (KS median .013). In the M4 cell (b / s about 1) it
+  is merely three to four times worse than the final flow. **Verdict 2, CRDM at dt 0.05: confirmed, and it is his own result**:
+  proper KS median .018, 90% .064, max .16 on the first look's draws; .031 / .19 / .43 on his grid, identical against a reference
+  at dt 1.25e-4. New: the dt 5e-4 Volterra reference has its own error, KS up to 1.5e-3 (90% 2.9e-4), KL up to 3.4e-4; his worst
+  KL for the dt 0.0005 flow, .079, is .011 against the finer reference, so that maximum is mostly the reference's error.
+- 2026-09-29 M4 part C DONE. M4 to M6 re-scoped in this file **before any M4 number existed** and committed as 4370337 before our
+  flow was exported (section "Stages M4 - M6, re-scoped"; what was already known is stated there). Cost per cell, measured:
+  network 33.5 core-s per replicate, control dt 2e-3 392, dt 5e-4 4993 (predicted from AH's per-evaluation costs: 5040); laptop
+  core-hours 4.7 (500 replicates), 27 (250), 69 (50); about 200 core-hours on Gadi at 2x. `run_sbc` uses 3 cores, so the controls
+  must be chunked (16 x 3 chains) to fit a 48-cpu job and the 48 h limit.
+- 2026-09-29 M4 part D: **the Gadi key works** (`gadi-login-06.gadi.nci.org.au`, no password). Nothing was copied, installed or
+  submitted: it is 29 September. Read-only look: home 3.4 GB used, no `~/R/nle-lib`, tg53 scratch 149 GiB of 1 TiB. AH, during the
+  stage: everything uploaded to or run on Gadi goes under `/scratch/tg53/ajh575` because home is small; incorporated in stage G
+  (library in scratch, `~/R/nle-lib` a symlink). `sbc/gadi/gadi_stage_G.sh` (setup, submit, status, verify) written and its date
+  guard tested; its setup and submit have not run. Bundle read: no fault found that blocks a first run; notes in stage G.
+- 2026-09-29 **M4 part E DONE. Registered verdicts: `O vs HF: NOT SEPARATED: SBC cell needed`; `O vs HP: OURS AS GOOD OR BETTER`.**
+  Baseline arm screened on the laptop (4 cores; checkpoints copied from tux26, scaler identical in the four runs, sha 24636e63):
+  119 of 120 exported (`rdm_ss_base_s804_e279` fails the float32 tolerance, 1.8e-2), card check 0 failing lines, controls .00021
+  (std) and .00025 (A0); `sbc/seed_study/ss/table_base.csv`, `summary_base.csv`. W over the 120: min .0022, quartiles .0103 /
+  .0139 / .0208; seed 801 holds the 5 best, seed 802's best is rank 85. **O = `rdm_ss_base_s801_e271`** (W .0022), median
+  checkpoint `rdm_ss_base_s803_e295` (W .0139). On draws 201 to 400 (5 cores; controls: G .00025, P .145, Wald mass 1.0000003 to
+  1.0000006, median ESS above 1900 of 4000):
+
+  | | D: median KL (KS median) | G: max \|g\| | P: max \|shift\|, posterior sd | worst parameter of P |
+  |---|---|---|---|---|
+  | HF, his final | 2.7e-5 (.0012) | .0043 | .021 (se .003) | B +.021 |
+  | HP, his plain | 4.4e-4 (.0039) | .0371 | .431 (se .010) | t0 +.431, B -.269 |
+  | O, ours selected | 1.5e-4 (.0025) | .0010 | .041 (se .003) | B +.041, v +.040 |
+  | ours, median checkpoint | 1.6e-4 (.0017) | .0076 | .113 (se .007) | t0 +.113 |
+
+  O against HF: D ours worse (KL 5.6 times his, above the floor), G tie (both below .005; ours is four times smaller), P tie
+  (both below 0.10 sd). A "worse" on D alone with P a tie is the third row of the registered table, hence NOT SEPARATED. The
+  unselected checkpoint against HF reads HIS BETTER on all three. P's control passed at .145 against .15, which is 2 se: it is
+  marginal, on v and v_lMTRUE. `RDM_A0_BOX_PLAN.md` section 4 for O: density error over A = 0 to 1 between .0068 and .0118
+  (target .014: PASS); standard cell max |g| .0022 (rdm_b1k: .004: PASS). Files: `sbc/malte_m4/{G,D,P,verdict,flatA}.out`,
+  `selection.csv`. Read for AH: the predicted difference between O and HF is 0.02 posterior sd, and the SBC cell the rule calls
+  for resolves 0.13, so it will confirm that both pass rather than rank them. Next: M6a (prompt above), then G on 1 October.

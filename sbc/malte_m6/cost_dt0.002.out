@@ -1,0 +1,8 @@
+control: twin 
+Since SBC can take a while it's highly recommended to specify a fileName to save temporary results in case of crashes
+Running data set 1
+Running data set 2
+Since SBC can take a while it's highly recommended to specify a fileName to save temporary results in case of crashes
+Running data set 1
+Running data set 2
+COST network: 11.2 s per replicate (wall, 3 chains on 3 cores) = 33.5 core-s | control dt 0.002: 130.7 s per replicate = 392.1 core-s | ratio 11.7

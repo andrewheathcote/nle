@@ -1,0 +1,26 @@
+M4 postshift | flows HF = malte_rdm_aff_log_h2_k12_clip_100k, HP = malte_rdm_plain_h1_k12_noclip_500k, O = rdm_ss_base_s801_e271, OMED = rdm_ss_base_s803_e295 | cores 5 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+usable datasets 200 of 200, N = 400, 4000 draws, 8.0 min at 5 cores
+
+P, N = 400, 200 datasets. Predicted standardised bias, shift from the analytic posterior in its sd (se), sd ratio
+flow      par        std bias       shift (se)  sd ratio   med ESS
+analytic  v            -0.145                                 1936
+analytic  v_lMTRUE     +0.142                                 1936
+analytic  B            -0.038                                 1936
+analytic  t0           +0.033                                 1936
+CONTROL P: max |analytic std bias| 0.145 (must be below 0.15)
+HF        v            -0.149   -0.004 (0.003)     1.001      1929
+HF        v_lMTRUE     +0.148   +0.007 (0.002)     0.999      1929
+HF        B            -0.015   +0.021 (0.003)     1.000      1929
+HF        t0           +0.020   -0.013 (0.003)     0.990      1929
+HP        v            -0.215   -0.069 (0.003)     0.999      1991
+HP        v_lMTRUE     +0.101   -0.045 (0.002)     1.001      1991
+HP        B            -0.330   -0.269 (0.007)     1.041      1991
+HP        t0           +0.487   +0.431 (0.010)     1.029      1991
+O         v            -0.106   +0.040 (0.002)     1.000      1909
+O         v_lMTRUE     +0.138   -0.005 (0.002)     1.000      1909
+O         B            +0.005   +0.041 (0.004)     1.001      1909
+O         t0           +0.003   -0.027 (0.006)     0.996      1909
+OMED      v            -0.172   -0.027 (0.002)     1.003      1965
+OMED      v_lMTRUE     +0.149   +0.007 (0.002)     1.004      1965
+OMED      B            -0.117   -0.072 (0.005)     1.002      1965
+OMED      t0           +0.155   +0.113 (0.007)     0.989      1965

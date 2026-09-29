@@ -1,0 +1,10 @@
+=== M7a card check  EMC2 3.4.1.9001 at /Users/andrew/R/nle-sbc-lib/EMC2  port /Users/andrew/Downloads/julian/nle/port ===
+PASS golden   rdm_ss_base_s801_e256    max|diff| 1.4e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s801_e256    max|diff| 9.2e-13 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 9.2e-13]
+PASS golden   rdm_ss_base_s802_e254    max|diff| 1.0e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s802_e254    max|diff| 8.0e-13 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 8.0e-13]
+PASS golden   rdm_ss_base_s803_e258    max|diff| 4.1e-13 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s803_e258    max|diff| 1.6e-12 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 1.6e-12]
+PASS golden   rdm_ss_base_s804_e245    max|diff| 1.1e-12 (< 1e-10)  [25 sets x 23 times; affine FALSE, pre NULL; 5 sets at A = 0]
+PASS dev-nle  rdm_ss_base_s804_e245    max|diff| 2.4e-12 (< 1e-07)  [registers; dfun and pfun vs this repo's R port, 25 theta x 60 rt; 12 theta at A = 0 exactly, max|diff| 2.4e-12]
+=== 4 tag(s), 0 failing line(s) ===

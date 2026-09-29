@@ -1,0 +1,18 @@
+M4 density | flows HF = malte_rdm_aff_log_h2_k12_clip_100k, HP = malte_rdm_plain_h1_k12_noclip_500k, O = rdm_ss_base_s801_e271, OMED = rdm_ss_base_s803_e295 | cores 5 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+CONTROL D: Wald mass on the grid in [1.00000027, 1.00000059]; EMC2 dRDM(A = 0) against the closed form, max |diff| / peak 1.2e-15
+D HF    kl  median 2.702e-05  90% 3.341e-05  max 3.511e-05  (n 400)
+D HF    ks  median 1.189e-03  90% 1.648e-03  max 1.766e-03  (n 400)
+D HF    mad median 4.676e-03  90% 5.189e-03  max 5.846e-03  (n 400)
+D HF    w1  median 1.237e-03  90% 1.646e-03  max 1.740e-03  (n 400)
+D HP    kl  median 4.432e-04  90% 5.809e-04  max 8.421e-04  (n 400)
+D HP    ks  median 3.934e-03  90% 5.117e-03  max 7.096e-03  (n 400)
+D HP    mad median 1.682e-02  90% 1.956e-02  max 2.335e-02  (n 400)
+D HP    w1  median 3.901e-03  90% 5.279e-03  max 7.977e-03  (n 400)
+D O     kl  median 1.500e-04  90% 2.169e-04  max 2.707e-04  (n 400)
+D O     ks  median 2.473e-03  90% 3.422e-03  max 4.241e-03  (n 400)
+D O     mad median 1.018e-02  90% 1.229e-02  max 1.399e-02  (n 400)
+D O     w1  median 3.104e-03  90% 6.371e-03  max 9.400e-03  (n 400)
+D OMED  kl  median 1.584e-04  90% 2.099e-04  max 2.988e-04  (n 400)
+D OMED  ks  median 1.741e-03  90% 2.277e-03  max 3.560e-03  (n 400)
+D OMED  mad median 9.664e-03  90% 1.069e-02  max 1.284e-02  (n 400)
+D OMED  w1  median 1.112e-03  90% 2.052e-03  max 4.839e-03  (n 400)

@@ -1,0 +1,20 @@
+cell: A0   draws: 200   tags: malte_rdm_aff_log_h2_k12_clip_100k, malte_rdm_plain_h1_k12_noclip_500k, rdm_ss_base_s801_e271, rdm_ss_base_s803_e295   cores: 5
+
+usable draws: 200 / 200
+
+VALIDATION — the estimator on the ANALYTIC likelihood must be ~0
+  v          -0.00010 (se 0.00000)
+  v_lMTRUE   -0.00007 (se 0.00000)
+  B          -0.00025 (se 0.00000)
+  (t0 is on a restricted region, so its analytic value is NOT 0 by design;
+   the flow is reported relative to it below)
+
+SCORE BIAS
+tag                        v    v_lMTRUE           B          t0
+malte_rdm_aff_log_h2_k12_clip_100k    -0.00224    -0.00113    +0.00428    +0.00206
+malte_rdm_plain_h1_k12_noclip_500k    -0.00525    -0.00623    +0.02085    +0.03710
+rdm_ss_base_s801_e271    +0.00102    +0.00050    +0.00102    -0.00016
+rdm_ss_base_s803_e295    -0.00052    -0.00022    +0.00323    +0.00760
+
+CONTROL max |g(analytic)| over v, v_lMTRUE, B: 0.00025
+wrote sbc/malte_m4/G.csv (16 rows)
