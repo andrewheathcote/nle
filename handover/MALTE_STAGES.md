@@ -962,3 +962,92 @@ lever (MALTE_CRDM_PLAN.md §2 item 4)."
 - 2026-09-29 M7b prompt amended at AH's request: steps 1 and 2 removed (baseline arm screened on the laptop in M4), it starts
   at step 3 with its own polling command, protects `table_base.csv` and `summary_base.csv`, and compares the tux26 screen of
   the baseline arm with the laptop's.
+- 2026-09-29 M6a part A (CRDM screens; `sbc/malte_m6_lib.R`, `sbc/malte_m6.R`, adapted from the M4 pair): nesting check (dt 0.0005
+  card at amp = 0 vs Wald) max KL 5.4e-5, max KS 3.3e-3 (`sbc/malte_m6/nest.out`). **G, full run, 200 draws, 5 cores, 96 min**
+  (`sbc/malte_m6/G_full.out`, `G.rds`): v, v_lMTRUE, B, tau, t0 controls all clean (<= 0.0019); **amp_lDTRUE control is 0.02077,
+  21x the 1e-3 floor — invalid**, which reads `SCREEN <card>: FAIL (G control)` for all three cards under the registered rule.
+  dt 0.0005 and dt 0.005's own amp_lDTRUE values (-0.017, +0.016) are the same order as the control's artifact, so this screen
+  cannot currently separate real flow bias from solver/estimator noise on that one parameter (H = 0.01, dt 1.25e-4); not
+  root-caused here (candidates: smaller H, finer or adaptive dt). dt 0.05's amp_lDTRUE (-0.382) stands independently of the
+  control problem and confirms M4 part B's finding that dt 0.05 is poor on its own terms. **P (posterior shift) not completed:**
+  a 2-dataset smoke (N = 50, 2 cores, one card) ran 4.5 h without finishing one dataset, genuinely computing throughout (99%
+  CPU) — each dataset's Laplace fit against the Volterra reference costs a fresh Volterra solve (~5 s, benchmarked directly)
+  per `optim()` evaluation, which compounds past laptop-affordable; not priced in the registered cost table (which covered only
+  D/G-style per-draw cost, not a full posterior optimisation against the reference). Abandoned rather than left running for days
+  or reported with fabricated numbers. Full readout: `sbc/malte_m6/screen_final.out`.
+- 2026-09-29 M6a part B (bundles; `sbc/gadi/cells/`): all 8 bundles built — `nn_sbc_cell(run = FALSE)` for the 6 network cells
+  (`rdm_a0_N400/{O,HF}`, `rdm_o_a0_N100`, `rdm_o_std_N100`, `rdm_o_std_N400`, `crdm_net_N400`), `run_sbc() + prior(type =
+  "single")` for the two chunked Volterra controls (`crdm_ctl_dt2e-3`, `crdm_ctl_dt5e-4`, 16 chunks each, seeds 9001-9016,
+  exact replicate counts 250 and 50 split across chunks). Every bundle smoke-run for real at the required settings (2
+  replicates/3 cores; 1 replicate/3 cores for dt 5e-4, ~76 min measured — the prompt's own "~30 min" estimate was short, real
+  chains run serially at cores_for_chains = 1 for a single replicate): result files confirmed written and read back
+  (`nn_sbc_summary()`, `summary.csv`, `sbc_nn.RData`/`sbc_control.RData`). Two real bugs found and fixed by these smoke runs:
+  an `Lbar()` indexing bug in M6a's own G mode (silently produced all-NA slopes on the first smoke); `nn_sbc_cell`'s
+  auto-generated `run_cell.R` has no `.libPaths()` before `library(EMC2)`, so it silently loads the wrong EMC2 unless `R_LIBS`
+  is exported first (the dual-install trap) — fixed in `pbs_template.sh`. Also fixed: `run_cell.R` runs from `bundle/`, not the
+  archive root, so each bundle's card copy now lives at `bundle/port/export/<tag>*.json`; cards' SHA256 recorded in each
+  build's log, files themselves not committed (`sbc/gadi/cells/**/port/export/*` added to `.gitignore`, matching the existing
+  rule for `port/export/*`).
+- 2026-09-29 M6a part C: `sbc/gadi/cells/SUBMIT_ORDER.md` written — `rdm_a0_N400` first (resolves M4's own verdict, cheapest),
+  then the CRDM cells in increasing cost, then the M5 `rdm_o_*` validation cells last. Core-hours per cell from the re-scoped
+  section's cost table (RDM cells' core-hours are a rough, unregistered estimate: no measured RDM per-replicate cost exists).
+  Measured (not just the cost table) one-replicate wall times from this session's smoke runs: dt 2e-3 ~15 min, dt 5e-4 ~76 min;
+  extrapolated per-chunk time on Gadi (replicates DO parallelise there at cores_per_chain = 3) is comfortably inside the
+  requested walltimes (4 h / 8 h). Noted explicitly: P's infeasibility (part A) does not gate any cell here — the cells' own
+  SBC machinery (`nn_sbc_cell` / plain `run_sbc`, ordinary MCMC) is unrelated code, already smoke-validated for every cell.
+- 2026-09-29 M6a part D: committed (`a371bfa`). Next: stage G (prompt below, unchanged from when it was written; Gadi's date
+  guard still refuses before 1 October). M6a's own finding for whoever reads this before G: the amp_lDTRUE score-bias control
+  needs attention before this screen can be trusted for a real per-card verdict, and P's Laplace-against-Volterra route needs a
+  cheaper method (or should be skipped in favour of going straight to the Gadi SBC cell, which is what the registered rule
+  calls for on an invalid screen in any case).
+
+### Prompt for the stage after M6a
+
+Stage G has not run (`sbc/gadi/gadi_stage_G.sh setup`/`submit` have not been called; Gadi's date guard refuses before 1
+October 2026). Its full prompt is unchanged from where it was written, "Stage G" above:
+
+```
+Read handover/MALTE_STAGES.md: section "Stage G", section "Stages M4 - M6,
+re-scoped" and the last six log entries. Do exactly stage G. Work from
+/Users/andrew/Downloads/julian/nle on the laptop, absolute paths. Do not edit
+any script. Nothing runs on tux26. The laptop never runs more than 8 cores in
+total.
+
+Everything uploaded to or run on Gadi is under /scratch/tg53/ajh575; nothing
+is written to the home directory except the symlink ~/R/nle-lib, which the
+script makes. PBS only. Never type or ask for a password: if
+  ssh -o BatchMode=yes ajh575@gadi.nci.org.au hostname
+does not print a gadi-login node, stop, print the commands with
+  DRY=1 bash sbc/gadi/gadi_stage_G.sh setup
+  DRY=1 bash sbc/gadi/gadi_stage_G.sh submit
+for AH to run, and say so.
+
+1. bash sbc/gadi/gadi_stage_G.sh setup   > sbc/gadi/stage_G_setup.out 2>&1
+   It refuses before 1 October 2026 (Gadi's date). Required at the end of the
+   output: "* DONE (EMC2)", the line "EMC2 3.4.1.9001 from ...nle-lib", "CRDM
+   exported: TRUE | hybrid argument: TRUE", and ~/R/nle-lib shown as a symlink
+   into /scratch/tg53/ajh575/R/nle-lib. If the BLAS printed is R's reference
+   BLAS, say so in the log line.
+2. bash sbc/gadi/gadi_stage_G.sh submit  (prints the job id). Poll with
+   bash sbc/gadi/gadi_stage_G.sh status   every 5 minutes, in the background,
+   until the job has left the queue. At most 40 minutes of walltime.
+3. bash sbc/gadi/gadi_stage_G.sh verify  > sbc/gadi/stage_G_verify.out 2>&1
+   Print that file verbatim. "GADI CHECK PASS" is the acceptance. On FAIL
+   print the failing tests from sbc/gadi/stage_G/check_nle_lib.log and stop:
+   a failure at exact zeros or -Inf points to fast-math (Makevars.icpx not
+   used). Submit no cell.
+4. Commit sbc/gadi/stage_G*. Append one log line: node, library path, BLAS,
+   the TESTS line, the three timing lines as printed, and the ratio of Gadi's
+   ms per evaluation to the laptop's (0.10, 18.1, 1.40), which replaces the
+   "2x" in the cost table of the re-scoped section.
+5. End with the next stage, its model and its full prompt: the cells built by
+   stage M6a (sbc/gadi/cells/), submitted in the order its log line gives
+   (sbc/gadi/cells/SUBMIT_ORDER.md). Before submitting, read
+   handover/MALTE_STAGES.md's M6a log entries: the amp_lDTRUE score-bias
+   control failed on the laptop screen and P (posterior shift) could not be
+   completed there: neither blocks a cell submission (the cells run ordinary
+   MCMC-based SBC, unrelated code, already smoke-tested), but both are open
+   questions this file should carry forward, not silently drop.
+```
+
+Model: Haiku (as originally assigned to stage G).
