@@ -345,8 +345,7 @@ which starts nothing and ends with a line
   STATUS c complete, r running, n not started of 20
 Ignore the "x of y runs complete" lines in sbc/seed_study_launch_wave*.out:
 the runs were launched in five overlapping batches and those counts are per
-batch. Malte's four runs go one after another, so "not started" is normal for
-them until the evening of 28 Sep. AH is asleep: do not ask questions; if
+batch. Malte's four runs were complete on 29 Sep. Do not ask questions; if
 something fails, print the evidence named below, write it to the log, and
 stop. Judge how busy tux26 is from the idle figure of `top -bn1 | grep Cpu`,
 never from the load average.
