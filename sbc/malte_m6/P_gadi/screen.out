@@ -1,0 +1,12 @@
+M6 screen | cards dt0005 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005, dt005 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.005, dt05 = malte_crdm_aff_log_h2_k12_clip_100k_dt0.05 | cores 1 | EMC2 /Users/andrew/R/nle-sbc-lib/EMC2
+
+CONTROLS  G analytic 0.02077 (< 0.001: FALSE)   P analytic 0.075 (< 0.15: TRUE)
+
+card malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005: G max|g| 0.01705 (floor 0.005), P max|shift| 0.017 posterior sd (floor 0.10), median ESS 1101
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005: FAIL (G control, G)
+
+card malte_crdm_aff_log_h2_k12_clip_100k_dt0.005: G max|g| 0.01626 (floor 0.005), P max|shift| 0.117 posterior sd (floor 0.10), median ESS 1115
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.005: FAIL (G control, G, P)
+
+card malte_crdm_aff_log_h2_k12_clip_100k_dt0.05: G max|g| 0.38163 (floor 0.005), P max|shift| 0.590 posterior sd (floor 0.10), median ESS 280
+SCREEN malte_crdm_aff_log_h2_k12_clip_100k_dt0.05: FAIL (G control, G, P)

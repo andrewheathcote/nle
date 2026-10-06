@@ -1139,3 +1139,18 @@ Model: Haiku (as originally assigned to stage G).
   4000 evals = 24.8 core-s each), cards 0.002 s; ESS analytic 1159, cards 551-1206 of 4000. Priced: ~29.5 core-h per
   dataset, 199 datasets ~6300 core-h = **~12.6 KSU (up to ~15 KSU with job padding)** of ~500 KSU available; submitted as
   9 jobs (2 cores per dataset, 24 per job, 30 h walltime; 180606934-42 less 43, plus 180606972 at 14 cpus for ds 194-200).
+- 2026-10-07 M6 on Gadi, part 2. **AH's ruling on the stop-and-ask:** the dt 5e-4 control's amp_lDTRUE envelope flag is
+  accepted as chance (1 of 18 control parameter-cells; network and dt 2e-3 control clean on amp; no network-control
+  disagreement beyond chance). **So the CRDM SBC verdict: the hybrid network (dt 0.0005 card) passes SBC at N 400 and is
+  indistinguishable from the Volterra reference at both dt** -- the reference posterior and SBC control of `PAPER_REVIEW.md`
+  item 2, and a full Volterra SBC cell at 2.7 h / 8.5 h of wall on 48 cores (item 2's "too slow"). **P (M6a's posterior shift,
+  full run)**: 9 jobs (180606934-42 less 43, 180606972), all 199 datasets + the smoke's 1 = 200/200 usable, wall 15.8-17.4 h,
+  **13 503 SU** (+107 smoke; priced at 12.6-15 KSU). Joined and screened on the Mac (`sbc/malte_m6/P_gadi/`: `P_join.out`,
+  `screen.out`; `malte_m6.R screen` with M6a's `G.rds`). **P control valid**: max |analytic predicted std bias| 0.075 (< 0.15),
+  median ESS 1102 of 4000. Max |shift| in analytic posterior sd (worst parameter, se): **dt 0.0005 0.017 (t0, .004) -- below
+  the 0.10 floor; dt 0.005 0.117 (t0, .008) -- over it, B -0.062 next; dt 0.05 0.590 (t0, .156)**, tau .50, amp .41, B .39,
+  sd ratio t0 0.72, ESS 280. Registered screen lines: all three `FAIL`, each including "G control" (the M6a amp_lDTRUE
+  score-bias control, 0.0208, still invalid); on P alone, which measures what inference returns, the registered expectations
+  hold exactly: dt 0.0005 passes, dt 0.05 fails by a wide margin, dt 0.005 (item 5's open card) fails narrowly, on t0.
+  M6 is complete except the G control's root cause (H, dt of the score-bias estimator on amp), which no verdict now needs.
+  Next: M7b's screen on Gadi (training complete on tux26 since 29 Sep, `train_done.marker` present, never screened).
