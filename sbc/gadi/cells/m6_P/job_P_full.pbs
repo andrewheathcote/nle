@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -N m6_P_full
+#PBS -P tg53
+#PBS -q normal
+#PBS -l ncpus=48
+#PBS -l mem=128GB
+#PBS -l jobfs=10GB
+#PBS -l walltime=30:00:00
+#PBS -j oe
+#PBS -l wd
+# M6 2026-10-06: M6a's posterior shift P, full run. Two cores per dataset (Laplace fits in parallel, importance weights
+# over 2 cores), up to 24 datasets FIRST..LAST side by side. Submit from the m6_P root with
+#   qsub -v FIRST=2,LAST=25 job_P_full.pbs
+# Priced from the 1-dataset smoke (job 180576122): Volterra reference 23.4 s per evaluation; per dataset ~331 Laplace
+# + 4000 importance evaluations = ~29.5 core-h; at 2 cores ~2.2 h + ~13.8 h = ~16 h wall; 30 h for the slowest.
+export LD_PRELOAD=/apps/gcc/12.2.0/lib64/libstdc++.so.6
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+export OMP_DYNAMIC=FALSE MKL_DYNAMIC=FALSE OPENBLAS_DYNAMIC=NO
+export KMP_INIT_AT_FORK=FALSE MKL_DISABLE_FAST_MM=1
+export TMPDIR=/scratch/tg53/ajh575/tmp R_PROFILE_USER=/dev/null R_LIBS=$HOME/R/nle-lib
+export R_MAKEVARS_USER=/scratch/tg53/ajh575/2026-10-01_gadi_dev-nle/Makevars.icpx
+export M6_OUT=results
+module purge
+module load gcc/12.2.0 intel-compiler/2021.10.0 R/4.5.0
+mkdir -p $TMPDIR logs
+cd "$PBS_O_WORKDIR"
+echo "Job $PBS_JOBID on $(hostname) at $(date): datasets $FIRST..$LAST" > "logs/m6_P_full_${FIRST}_${LAST}.log"
+for i in $(seq $FIRST $LAST); do
+  ( export M6_CPPCACHE=/scratch/tg53/ajh575/tmp/m6_P_cpp_${PBS_JOBID}_$i
+    { time Rscript sbc/malte_m6_P_gadi.R $i $i 2 dt0005=malte_crdm_aff_log_h2_k12_clip_100k_dt0.0005 \
+        dt005=malte_crdm_aff_log_h2_k12_clip_100k_dt0.005 dt05=malte_crdm_aff_log_h2_k12_clip_100k_dt0.05 ; } > "logs/ds_$i.log" 2>&1 ) &
+done
+wait
+echo "all done at $(date)" >> "logs/m6_P_full_${FIRST}_${LAST}.log"

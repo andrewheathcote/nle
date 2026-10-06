@@ -1,0 +1,12 @@
+
+======================================================================================
+                  Resource Usage on 2026-10-06 16:05:25:
+   Job Id:             180580939.gadi-pbs
+   Project:            tg53
+   Exit Status:        0
+   Service Units:      258.83
+   NCPUs Requested:    48                  CPU Time Used: 85:18:31        
+   Memory Requested:   128.0GB               Memory Used: 14.6GB          
+   Walltime Requested: 08:00:00            Walltime Used: 02:41:46        
+   JobFS Requested:    10.0GB                 JobFS Used: 0B              
+======================================================================================

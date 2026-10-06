@@ -1113,3 +1113,29 @@ Model: Haiku (as originally assigned to stage G).
   rdm_a0_N400 cell O and HF both pass (as M4's NOT SEPARATED predicted: the cell confirms both rather than ranking
   them). `run_sbc()` keeps no per-fit Rhat, so no convergence signature beyond the SBC itself is available.
   Open: the CRDM cells (`crdm_net_N400`, `crdm_ctl_dt2e-3`, `crdm_ctl_dt5e-4`) were not run (not part of this port).
+- 2026-10-06 M6 on Gadi, part 1: the CRDM SBC cells (Opus 5.5; library `~/R/nle-lib` = dev-nle 142bd497 = aa66e11d, MKL).
+  **crdm_net_N400** (hybrid race, dt 0.0005 card sha256 1241725b..., N 400, 500 reps, wrapper `port_nle_aa66/run_aa66.R`
+  + `job_crdm_net_N400.pbs`, job 180575616): 500/500, 21.8 min wall, 34.8 SU, no warning/error/singular line; |std bias|
+  <= 0.092, coverage .948-.966, all six rank ECDFs in the envelope (smallest KS p .063, B). **crdm_ctl_dt2e-3** (CRDM()
+  dt 2e-3, t_max 6, 250 reps, 16 chunks, job 180580939): 250/250, 2.7 h wall, 259 SU, |std bias| <= 0.153 (t0), coverage
+  .944-.972, all in envelope. **crdm_ctl_dt5e-4** (50 reps, job 180580940): 50/50, 8.5 h wall, 817 SU, |std bias| <= 0.156,
+  coverage .94-.98; **amp_lDTRUE's rank ECDF leaves the envelope** (KS p .066; 12 of 50 ranks in the lowest decile, 5
+  expected, binomial p ~ .003; median-bias signs 26/50; the same parameter is clean in the 250-rep dt 2e-3 control and in
+  the network). **Network vs each control** (`summarise_crdm.R` on the Mac, unpaired: std-bias difference / sqrt(1/n1 +
+  1/n2), two-proportion coverage z, two-sample KS on ranks; Bonferroni over 18 tests): no disagreement beyond chance
+  (smallest p .114 vs dt 2e-3, .075 vs dt 5e-4). Tables `sbc/gadi/cells/summary_crdm.csv`, `compare_crdm.csv`.
+  **Fixed in the M6a control bundles before they could run on Gadi:** chunk 9001's spec of both controls was corrupt
+  (replicates 9001, seed NA), so all 32 specs were regenerated (250 = 10 x 16 + 6 x 15, 50 = 2 x 4 + 14 x 3, seeds
+  9001-9016); every `run_chunk.R` held the Mac's absolute library path and a repo-relative `fileName` (both fixed in
+  `build_crdm_cell.R`); the job file lacked `R_PROFILE_USER`/`R_LIBS`. **Found by the Gadi smoke:** CRDM()'s Volterra cdf
+  exceeds 1 by up to 1.4e-5 in the far right tail (6% of parameter rows within 2 prior sd, both dt), `log(1 - cdf)` in
+  `log_likelihood_race` warns "NaNs produced" (it already floors the NaN to min_ll) and `run_sbc` discards any replicate
+  whose fit warns: the first smoke lost its only replicate. `run_chunk.R` now muffles exactly that warning around the
+  model's `log_likelihood` (values unchanged; EMC2 not edited). Walltimes: smoke 1 rep dt 2e-3 = 1470 s on Gadi, 1.56x the
+  cost table at 2.4x; requested 8 h / 24 h, used 2.7 h / 8.5 h. **STOP-AND-ASK:** the control's amp_lDTRUE envelope flag
+  (18 control parameter-cells, so one flag is expected ~60% of the time by chance, but the low-decile excess is sharp).
+  **P** (M6a's posterior shift, `sbc/malte_m6_P_gadi.R`, same estimator as `malte_m6.R` P): 1-dataset smoke (job
+  180576122, 12 cpus, 4.45 h, 107 SU): Volterra reference 23.4 s per evaluation (Laplace 331 evals = 2.15 h serial; IS
+  4000 evals = 24.8 core-s each), cards 0.002 s; ESS analytic 1159, cards 551-1206 of 4000. Priced: ~29.5 core-h per
+  dataset, 199 datasets ~6300 core-h = **~12.6 KSU (up to ~15 KSU with job padding)** of ~500 KSU available; submitted as
+  9 jobs (2 cores per dataset, 24 per job, 30 h walltime; 180606934-42 less 43, plus 180606972 at 14 cpus for ds 194-200).
