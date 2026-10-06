@@ -1096,8 +1096,8 @@ Model: Haiku (as originally assigned to stage G).
 - 2026-10-06 Port-NLE (Opus 5.5; `~/.claude/plans/sampler-hier-plan.md` section 9): `dev-sampler` at `aa66e11d` (final
   sampler, H5-H8: split-Rhat stop rule) merged into `dev-nle` as `142bd497` (clean; merged tree identical to `aa66e11d`;
   local, NOT pushed). Mac `~/R/nle-lib` reinstalled from it: `nn-` tests 783/0/0/5 (unchanged), stop-rule tests 27/0.
-  Gadi: library now at `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink (old H4 home library kept as
-  `~/R/nle-lib-h4-0083ed99`), MKL, `-fp-model=precise`; check job 180565240: TESTS 782/0/0/5, mean ll 131.286 / 131.325 /
+  Gadi: library now at `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink (old H4 library kept as
+  `/scratch/tg53/ajh575/R/nle-lib-h4-0083ed99`), MKL, `-fp-model=precise`; check job 180565240: TESTS 782/0/0/5, mean ll 131.286 / 131.325 /
   131.359 (= Mac), ms per evaluation 0.23 / 42.5 / 3.43 (hybrid, dt 5e-4, dt 2e-3) = 2.3x / 2.35x / 2.45x the laptop's.
   **Found:** the 2026-10-04 Gadi attempts at these cells (old H4 library) never fitted a replicate (memory
   bundle-absolute-card-path-trap) and their `run_cell.R` copies had been rewritten with wrong arguments; they are kept on
