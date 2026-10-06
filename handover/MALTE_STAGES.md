@@ -19,7 +19,20 @@ requested from Malte by email.
 - **Absolute paths.** The shell's working directory resets between calls, and
   the port exists in two copies (`port/` at the repo root and
   `handover/nle-methods/port/`); patch both, check `git status` on both.
-- **Limits:** 8 cores on the laptop; 72 on tux26. Commit after each stage.
+- **Compute (AH, 2026-10-06; supersedes the earlier laptop/tux26 split): all heavier computational work runs
+  on Gadi** -- SBC cells, screens, posterior-shift and score-bias runs, training, benchmarks, anything longer
+  than a few minutes or wider than a few cores. The laptop only edits, builds, smoke-tests (minutes, at most 8
+  cores in total) and summarises results brought back. tux26 takes no new work (its VPN drops); what is already
+  running there is finished or moved to Gadi. **On Gadi everything lives under `/scratch/tg53/ajh575`**:
+  bundles, scripts, inputs, results, logs, `TMPDIR`, and libraries (`/scratch/tg53/ajh575/R/nle-lib`, with
+  `~/R/nle-lib` only a symlink); nothing else is written to the home directory. PBS only (project tg53), never
+  computation on a login node beyond installs and file handling. The session drives Gadi itself through the ssh
+  key (`ssh -o BatchMode=yes gadi ...`, never a password): it uploads, qsubs without asking, monitors with a
+  background poll of `qstat` (write the ssh command out in the loop, do not hold it in a variable), reads logs,
+  resubmits or `qdel`s its own jobs, and brings results down promptly (scratch expires). Statistics on the Mac or
+  under `module load R/4.4.2`, never R/4.5.0's `pbinom`. Commit after each stage.
+- **Every stage runs in auto mode (AH, 2026-10-06).** Each handed-over prompt says so in its first line and the
+  stage refuses to start without it: Gadi work is long-running and must not stall on permission prompts.
 - **Every stage ends by handing over the next one.** After the commit and the
   log line, the final report names the next stage (from the table below, given
   what has passed), the **model** to set, and the **full prompt** to paste,
@@ -45,6 +58,10 @@ requested from Malte by email.
 | M7 | Seed study: our pipeline with the affine stage and decision-time option, four seeds per arm, screened; **since 2026-09-28 on the A = 0 box** (`RDM_A0_BOX_PLAN.md`), so its baseline arm is the new RDM flow | **Fable / Opus** for the training-code change (M7a, **done 2026-09-28**), **Haiku** to run (M7b) | M1 | M7b: **wave 1 of 5 runs launched 2026-09-28 08:46 CEST**; the other 11 + Malte's 4 need cores (stage Z overlap) |
 | M8 | Read M4–M7 against the registered expectations; write the comparison section | **Fable / Opus** | M4–M7 | — |
 | Z | Zero-box v2: export → screen → select → four SBC cells → read | **Haiku** to run, **Fable / Opus** to read the cells | tux26 pipeline marker | training (~09:00 CEST 29 Sep) |
+
+**Compute, 2026-10-06:** wherever a row or section below says laptop or tux26 for real computation (M6's screens
+and posterior shift, M7b's remaining training and screen, Z), read Gadi under `/scratch/tg53/ajh575` instead (Compute
+rule at the top). M6a's posterior shift (P), infeasible on the laptop, is a Gadi job now, not an abandoned item.
 
 M1 and M2 are independent and can run in either order or in parallel
 sessions. M3 should not start before both have passed, because their outputs
@@ -584,15 +601,20 @@ particle-level forks to pay); the chunked form is the default because its effici
 
 ### Where things run
 
-Laptop: M4 and the M6 screens, **never more than 8 cores in total**, counting every job
-running at once; each job's core count is stated when it is started. tux26: the seed study's
-training and its screen, nothing else. Gadi: every SBC cell, from 1 October (project tg53,
-`/scratch/tg53/ajh575/`, PBS only, 48 cpus and 128 GB per cell job, single-threaded BLAS,
-library `~/R/nle-lib`, asserted by every cell; results come down promptly because scratch
-expires). **Everything uploaded to or run on Gadi is under `/scratch/tg53/ajh575`, because the
-home directory is small (AH, 2026-09-29): bundles, cells, logs, `TMPDIR`, and the library
-itself, which is installed in `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink to
-it** (stage G below). Nothing is submitted to Gadi before 1 October or before stage G's two lines.
+**Superseded 2026-10-06 by the Compute rule at the top of this file:** all heavier computational work runs on Gadi,
+under `/scratch/tg53/ajh575`, driven over the ssh key; the laptop builds, smoke-tests and summarises only; tux26 takes
+no new work. The 2026-09-29 text below is kept for history.
+
+> Laptop: M4 and the M6 screens, **never more than 8 cores in total**, counting every job
+> running at once; each job's core count is stated when it is started. tux26: the seed study's
+> training and its screen, nothing else. Gadi: every SBC cell, from 1 October (project tg53,
+> `/scratch/tg53/ajh575/`, PBS only, 48 cpus and 128 GB per cell job, single-threaded BLAS,
+> library `~/R/nle-lib`, asserted by every cell; results come down promptly because scratch
+> expires). **Everything uploaded to or run on Gadi is under `/scratch/tg53/ajh575`, because the
+> home directory is small (AH, 2026-09-29): bundles, cells, logs, `TMPDIR`, and the library
+> itself, which is installed in `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink to
+> it** (stage G below). Nothing is submitted to Gadi before 1 October or before stage G's two lines.
+> 
 
 ---
 
