@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -N rdm_o_std_N400
+#PBS -P tg53
+#PBS -q normal
+#PBS -l ncpus=48
+#PBS -l mem=144GB
+#PBS -l jobfs=10GB
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -l wd
+# Port-NLE 2026-10-06: EMC2 dev-nle 142bd497 (= dev-sampler aa66e11d). Submit from the cell directory.
+export LD_PRELOAD=/apps/gcc/12.2.0/lib64/libstdc++.so.6
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+export OMP_DYNAMIC=FALSE MKL_DYNAMIC=FALSE OPENBLAS_DYNAMIC=NO
+export KMP_INIT_AT_FORK=FALSE MKL_DISABLE_FAST_MM=1
+export TMPDIR=/scratch/tg53/ajh575/tmp R_PROFILE_USER=/dev/null R_LIBS=$HOME/R/nle-lib
+module purge
+module load gcc/12.2.0 intel-compiler/2021.10.0 R/4.5.0
+cd "$PBS_O_WORKDIR/bundle"
+{ echo "Job $PBS_JOBID on $(hostname) at $(date)"; time Rscript run_aa66.R 400 500 TRUE 48; } > "../rdm_o_std_N400_aa66.log" 2>&1

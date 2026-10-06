@@ -1068,3 +1068,26 @@ for AH to run, and say so.
 ```
 
 Model: Haiku (as originally assigned to stage G).
+
+### Log after M6a
+
+- 2026-10-06 Port-NLE (Opus 5.5; `~/.claude/plans/sampler-hier-plan.md` section 9): `dev-sampler` at `aa66e11d` (final
+  sampler, H5-H8: split-Rhat stop rule) merged into `dev-nle` as `142bd497` (clean; merged tree identical to `aa66e11d`;
+  local, NOT pushed). Mac `~/R/nle-lib` reinstalled from it: `nn-` tests 783/0/0/5 (unchanged), stop-rule tests 27/0.
+  Gadi: library now at `/scratch/tg53/ajh575/R/nle-lib` with `~/R/nle-lib` a symlink (old H4 home library kept as
+  `~/R/nle-lib-h4-0083ed99`), MKL, `-fp-model=precise`; check job 180565240: TESTS 782/0/0/5, mean ll 131.286 / 131.325 /
+  131.359 (= Mac), ms per evaluation 0.23 / 42.5 / 3.43 (hybrid, dt 5e-4, dt 2e-3) = 2.3x / 2.35x / 2.45x the laptop's.
+  **Found:** the 2026-10-04 Gadi attempts at these cells (old H4 library) never fitted a replicate (memory
+  bundle-absolute-card-path-trap) and their `run_cell.R` copies had been rewritten with wrong arguments; they are kept on
+  Gadi as `results_h4_20261004` and locally as `results_gadi`, superseded. The 2026-10-04 tux26 relaunch was not checked
+  (tux26 unreachable); it predates the final sampler and is superseded too. **Rerun from scratch** with wrapper
+  `sbc/gadi/cells/port_nle_aa66/run_aa66.R` (pre-warms the evaluator from the bundled card) and `job_*.pbs` there, args
+  from the committed `run_cell.R` (O/HF a0 N400: 250 reps; rdm_o_*: 500 reps, network + control), 48 cpus each, jobs
+  180565509/11/12/13/14, 7-23 min wall each. Results `*/results_aa66/`, table `port_nle_aa66/summary_aa66.csv`
+  (`summarise_aa66.R`, on the Mac). **All clean:** |std bias| <= 0.13 everywhere (network and control), coverage
+  .92-.98, no warning/error/singular-covariance line in any log; 2 of 40 rank ECDFs touch the envelope (control t0 in
+  rdm_a0_N400/O, KS p .057; network v_lMTRUE in rdm_o_std_N400, KS p .052) -- the chance rate, and the analytic control
+  does it as often as the network. So M5 (our O flow, A = 0 and standard cells, N 100 and 400) passes, and in the
+  rdm_a0_N400 cell O and HF both pass (as M4's NOT SEPARATED predicted: the cell confirms both rather than ranking
+  them). `run_sbc()` keeps no per-fit Rhat, so no convergence signature beyond the SBC itself is available.
+  Open: the CRDM cells (`crdm_net_N400`, `crdm_ctl_dt2e-3`, `crdm_ctl_dt5e-4`) were not run (not part of this port).
