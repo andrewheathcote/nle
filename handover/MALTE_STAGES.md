@@ -1162,3 +1162,63 @@ Model: Haiku (as originally assigned to stage G).
   cores busy), 342 GB available. Budget: M7b screen 32 cores ~2 h; Z screen 16 cores ~1 h (alongside M7b: ~66 busy);
   Z S4 cells 36 cores each (3 chains x 12), one at a time (~5-6 h per cell, ~1 day for four), or two at a time (72) only
   when `top` shows >= 80 idle cores. Gadi: no further work from these stages. CRDM work is complete and handed to Malte.
+
+### Prompts for M7b and Z on tux26 (2026-10-07; the two can run in parallel sessions)
+
+M7b (**Haiku**, auto mode):
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/MALTE_STAGES.md: "Stage M7b" and its prompt (steps 4-7 apply), the log entries "State of M7b"
+(2026-09-29), "M4 part E", and the last entry of "Log after M6a" (compute re-scoped 2026-10-07). Do M7b's steps 4 to 7
+on tux26, unchanged except as below. Work from /Users/andrew/Downloads/julian/nle on the laptop (absolute paths) and
+over ssh -o BatchMode=yes andrew@tux26psy.fmg.uva.nl, from ~/emc2nn/nle-malte with
+  export PY=~/emc2nn/nle/flow/.venv/bin/python LIB=~/emc2nn/nle/.Rlibs-malte
+Training is complete (STATUS 20 complete; sbc/seed_study/ss/train_done.marker present since 29 Sep): skip step 3.
+Nothing on Gadi. Do not interpret the numbers, edit any script, or change the criterion, seeds, arms or defaults.
+VPN: tux26 drops connections. Start the screen with
+  setsid nohup env CORES=32 bash sbc/seed_study_screen.sh > sbc/seed_study_screen.out 2>&1 < /dev/null &
+(CORES=16 if `top -bn2 -d 3 | grep Cpu | tail -1` shows under 40% idle; 48 physical cores, 96 threads). Poll in the
+background for sbc/seed_study/ss/screen_done.marker, writing the ssh command out inside the until loop with
+-o ConnectTimeout=20, and treat a failed ssh as "retry", never as "finished". About 2 h. Then steps 5-7 as written
+(copy results to the laptop, commit, one log line in "Log after M6a", compare the base arm with the laptop screen).
+Step 7's next stage: the reading of the five arms (Fable / Opus), in auto mode, with its full prompt.
+```
+
+Z (**Sonnet** to run, auto mode; Fable / Opus reads afterwards as written under "Stage Z"):
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/ZERO_BOX_RETRAIN_PLAN.md section 11 and its progress log (last eight lines), handover/MALTE_STAGES.md
+"Stage Z" and the last entry of "Log after M6a" (compute re-scoped 2026-10-07); memories zero-box-retrain-plan,
+port-nle-final-sampler, emc2-dual-install-trap, crdm-cdf-warning-kills-sbc. Do stage Z on tux26 (andrew@tux26psy.fmg.uva.nl,
+ssh -o BatchMode=yes -o ConnectTimeout=20), nothing on Gadi; the laptop (/Users/andrew/Downloads/julian/nle, absolute
+paths) only copies, smoke-tests (minutes, <= 8 cores) and summarises. The zb2 cards were exported on tux26 on 29 Sep
+(~/emc2nn/nle/handover/nle-methods/zb2_pipeline.marker: "0 export failures; 90 cards"); never screened or SBC'd.
+tux26: 48 physical cores (96 threads); check `top -bn2 -d 3 | grep Cpu | tail -1` before each launch. VPN: start every
+job with `setsid nohup ... < /dev/null &`; poll in the background with the ssh written out inside the until loop and
+treat a failed ssh as "retry", never as "finished".
+
+1. Library. The SBC cells must start from the final sampler, EMC2 dev-nle 142bd497 (= aa66e11d). tux26's .Rlibs-nle
+   predates it. Copy ~/Documents/Projects/EMCpackage/SBC-pending/2026-10-01_gadi_dev-nle/EMC2_dev-nle_142bd497.tar.gz to
+   tux26 and install it into a NEW library ~/emc2nn/nle/.Rlibs-nle-aa66 (R CMD INSTALL -l, R_LIBS of only that library
+   plus site; never touch .Rlibs-nle or .Rlibs-malte). Assert find.package("EMC2") under it in a fresh
+   R_PROFILE_USER=/dev/null process, then run sbc/gate_zerobox_dev_nle.R with it: required "3 passed".
+2. Screen. Copy sbc/zerobox_screen_all.sh, zerobox_screen.R, zerobox_postshift.R, zerobox_select.R to ~/emc2nn/nle/sbc/
+   on tux26; run it there with LIB=~/emc2nn/nle/.Rlibs-nle-aa66 SB_CORES=16 PS_CORES=16 PREFIX=zb2, skipping its step 1
+   rsync (the cards are already in handover/nle-methods/port/export; run zerobox_card_normalise.py on them, idempotent)
+   -- make that the only change, in a copy named zerobox_screen_all_tux.sh, and say so in the log. About 1 h. Bring
+   sbc/zerobox_screen/ and sbc/zerobox_postshift/ down to the laptop; print selection.out and the posterior-shift lines.
+3. S4 cells. With the selected card, from ~/emc2nn/nle:
+     LIB=~/emc2nn/nle/.Rlibs-nle-aa66 OUT=sbc/nci/results_zerobox_v2 CARD=<selected card> \
+       setsid nohup bash sbc/zerobox_s4_launch.sh > sbc/zerobox_s4_v2.out 2>&1 < /dev/null &
+   Check first that zerobox_s4_launch.sh honours LIB (if it hard-codes .Rlibs-nle, pass the library the way the
+   script expects and record how). One cell at a time at 36 cores (3 chains x 12); two at a time (72) only when top
+   shows >= 80% idle. About 5-6 h per cell. A replicate dropped on a warning (p_vector_rep*.Rdata without rep_*.rds) is
+   evidence, not noise: count them per cell; more than an occasional one, or a fit stopped by a singular covariance,
+   is a STOP-AND-ASK -- do not fix the sampler inline.
+4. When sbc/nci/results_zerobox_v2/done.marker exists, bring the four cells' results down, print each summary.csv,
+   append the numbers to the plan's progress log, log one line in MALTE_STAGES.md "Log after M6a", commit, and end
+   with the reading session's model (Fable / Opus, auto mode) and its full prompt. Note in that prompt that v1's S4 ran
+   on an older sampler, so v1-v2 differences confound the flow with the sampler.
+```
