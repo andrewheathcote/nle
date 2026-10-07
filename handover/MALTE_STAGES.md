@@ -33,6 +33,11 @@ requested from Malte by email.
   under `module load R/4.4.2`, never R/4.5.0's `pbinom`. Commit after each stage.
 - **Every stage runs in auto mode (AH, 2026-10-06).** Each handed-over prompt says so in its first line and the
   stage refuses to start without it: Gadi work is long-running and must not stall on permission prompts.
+- **One stage at a time; never below Sonnet 4.6 (AH, 2026-10-07).** A stage hands over exactly ONE next stage: one model
+  and one prompt, never two in parallel. No stage is ever assigned a model below Sonnet 4.6 (no Haiku), because every stage
+  runs in auto mode. Where a row or prompt below says Haiku, read Sonnet. Order now: M7b (tux26) -> Z (tux26; its prompt
+  is under "Prompts for M7b and Z on tux26", handed over by M7b's final report) -> the reading of M7b's five arms and of
+  Z's cells (Fable / Opus).
 - **Every stage ends by handing over the next one.** After the commit and the
   log line, the final report names the next stage (from the table below, given
   what has passed), the **model** to set, and the **full prompt** to paste,
@@ -1163,9 +1168,9 @@ Model: Haiku (as originally assigned to stage G).
   Z S4 cells 36 cores each (3 chains x 12), one at a time (~5-6 h per cell, ~1 day for four), or two at a time (72) only
   when `top` shows >= 80 idle cores. Gadi: no further work from these stages. CRDM work is complete and handed to Malte.
 
-### Prompts for M7b and Z on tux26 (2026-10-07; the two can run in parallel sessions)
+### Prompts for M7b and Z on tux26 (2026-10-07; run one after the other, M7b first: one stage at a time)
 
-M7b (**Haiku**, auto mode):
+M7b (**Sonnet**, auto mode):
 
 ```
 AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
@@ -1182,10 +1187,10 @@ VPN: tux26 drops connections. Start the screen with
 background for sbc/seed_study/ss/screen_done.marker, writing the ssh command out inside the until loop with
 -o ConnectTimeout=20, and treat a failed ssh as "retry", never as "finished". About 2 h. Then steps 5-7 as written
 (copy results to the laptop, commit, one log line in "Log after M6a", compare the base arm with the laptop screen).
-Step 7's next stage: the reading of the five arms (Fable / Opus), in auto mode, with its full prompt.
+Step 7's next stage: Z (Sonnet, auto mode), its prompt below, adjusted for anything M7b learned; only that one.
 ```
 
-Z (**Sonnet** to run, auto mode; Fable / Opus reads afterwards as written under "Stage Z"):
+Z (**Sonnet** to run, auto mode; handed over by M7b, not started before M7b ends; Fable / Opus reads afterwards):
 
 ```
 AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
