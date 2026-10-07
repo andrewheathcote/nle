@@ -1227,3 +1227,61 @@ treat a failed ssh as "retry", never as "finished".
    with the reading session's model (Fable / Opus, auto mode) and its full prompt. Note in that prompt that v1's S4 ran
    on an older sampler, so v1-v2 differences confound the flow with the sampler.
 ```
+
+### Unified prompt: M7b + Z together on tux26, 40 cores (AH 2026-10-07; supersedes the two prompts above as the handover)
+
+Model: **Sonnet 5.5**, auto mode. Budget (estimates, not measurements): M7b screen ~64 core-h (tux26 "2 h at 32 cores");
+Z screen ~10-20 core-h; Z S4 ~190 core-h per cell (v1: three cells in ~8 h at 72 cores), four cells ~770 core-h. Split
+for a common finish: Z 36 cores (screen at 36, then one cell at a time at 3 chains x 12), M7b 4 cores: Z ~1-2 h + 4 x
+~5.3 h = ~22 h, M7b ~16 h. Z dominates and its cells cannot be split further, so this is as close as is practical.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/MALTE_STAGES.md: the rules at the top (one-stage-at-a-time, Sonnet minimum, Compute), "Stage M7b" and its
+prompt (steps 4-6 apply), "Stage Z", the last two entries of "Log after M6a", and "Unified prompt: M7b + Z"; also
+handover/ZERO_BOX_RETRAIN_PLAN.md section 11 and the last eight lines of its progress log; memories zero-box-retrain-plan,
+port-nle-final-sampler, emc2-dual-install-trap, crdm-cdf-warning-kills-sbc. This session runs M7b and Z TOGETHER on tux26
+(ssh -o BatchMode=yes -o ConnectTimeout=20 andrew@tux26psy.fmg.uva.nl), nothing on Gadi; the laptop
+(/Users/andrew/Downloads/julian/nle, absolute paths) only copies, smoke-tests (minutes, <= 8 cores) and summarises.
+
+CORE CEILING: 40 in total on tux26 for this session, at every moment: Z 36, M7b 4. tux26 has 48 physical cores
+(96 threads); before each launch print `top -bn2 -d 3 | grep Cpu | tail -1` and `uptime`, and say what else is running.
+VPN: tux26 drops connections. Start every job with `setsid nohup ... < /dev/null &`; poll in the background with the ssh
+command written out inside the until loop, and treat a failed ssh as "retry", never as "finished". Do not edit the
+registered criteria, seeds, arms, draws, regimes or defaults; where a script must change, change a copy and say so.
+
+M7b (RDM seed study; ~/emc2nn/nle-malte; export PY=~/emc2nn/nle/flow/.venv/bin/python LIB=~/emc2nn/nle/.Rlibs-malte).
+Training is complete (STATUS 20 complete; sbc/seed_study/ss/train_done.marker): M7b's steps 1-3 are done. Launch step 4 at
+once with CORES=4:
+  setsid nohup env CORES=4 bash sbc/seed_study_screen.sh > sbc/seed_study_screen.out 2>&1 < /dev/null &
+(expect ~16 h). When sbc/seed_study/ss/screen_done.marker exists, do M7b's steps 5 and 6 as written (copy table.csv,
+summary.csv, card_check.out, failed_exports.txt and the .out files to the laptop's sbc/seed_study/ss/; do not overwrite
+table_base.csv or summary_base.csv; compare the base arm with the laptop screen; print the run table and the four
+PRIMARY VERDICTS lines verbatim; one log line). A failed export in more than one run per arm is a STOP-AND-ASK.
+
+Z (DDM zero-box v2; ~/emc2nn/nle; 90 zb2 cards exported 29 Sep, zb2_pipeline.marker), in parallel with M7b:
+1. Library: copy ~/Documents/Projects/EMCpackage/SBC-pending/2026-10-01_gadi_dev-nle/EMC2_dev-nle_142bd497.tar.gz to
+   tux26 and install it into a NEW library ~/emc2nn/nle/.Rlibs-nle-aa66 (never touch .Rlibs-nle or .Rlibs-malte). In a
+   fresh R_PROFILE_USER=/dev/null process assert find.package("EMC2") under it, then sbc/gate_zerobox_dev_nle.R with it:
+   required "3 passed".
+2. Screen: copy sbc/zerobox_screen_all.sh, zerobox_screen.R, zerobox_postshift.R, zerobox_select.R to ~/emc2nn/nle/sbc/
+   on tux26 as zerobox_screen_all_tux.sh (+ the three R files), changed ONLY to: LIB=~/emc2nn/nle/.Rlibs-nle-aa66,
+   SB_CORES=36 PS_CORES=36, and step 1 without rsync (the cards are already in handover/nle-methods/port/export; run
+   zerobox_card_normalise.py on them, idempotent). Run with PREFIX=zb2. Bring sbc/zerobox_screen/ and
+   sbc/zerobox_postshift/ down; print selection.out and the posterior-shift lines.
+3. S4 cells with the selected card: copy sbc/zerobox_s4_launch.sh to zerobox_s4_launch_v2.sh, changed ONLY to take LIB
+   from the environment and to run the four cells ONE AT A TIME (full, st00, all0, sv0) at CPC=12 CFC=3 (36 cores):
+     LIB=~/emc2nn/nle/.Rlibs-nle-aa66 OUT=sbc/nci/results_zerobox_v2 CARD=<selected card> \
+       setsid nohup bash sbc/zerobox_s4_launch_v2.sh > sbc/zerobox_s4_v2.out 2>&1 < /dev/null &
+   ~5-6 h per cell. Count replicates dropped on a warning (p_vector_rep*.Rdata without rep_*.rds) per cell; more than an
+   occasional one, or a fit stopped by a singular covariance, is a STOP-AND-ASK -- do not fix the sampler inline.
+4. When sbc/nci/results_zerobox_v2/done.marker exists, bring the four cells down, print each summary.csv, and append the
+   numbers to the plan's progress log.
+
+Report progress in one line per event (launch, phase end, marker). When BOTH are done: one log line each in
+MALTE_STAGES.md "Log after M6a" (M7b: runs, failed exports per arm, the two controls, PRIMARY VERDICTS; Z: library and
+gate, selected card, screen controls, the four cells' worst |std bias| and envelope, dropped replicates, core-hours and
+wall time of each), commit, and end with ONE next stage: the reading of M7b's five arms and Z's four cells (Fable or
+Opus, auto mode) and its full prompt. Note in that prompt that v1's S4 ran on an older sampler, so v1-v2 differences
+confound the flow with the sampler.
+```
