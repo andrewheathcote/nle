@@ -1154,3 +1154,11 @@ Model: Haiku (as originally assigned to stage G).
   hold exactly: dt 0.0005 passes, dt 0.05 fails by a wide margin, dt 0.005 (item 5's open card) fails narrowly, on t0.
   M6 is complete except the G control's root cause (H, dt of the score-bias estimator on amp), which no verdict now needs.
   Next: M7b's screen on Gadi (training complete on tux26 since 29 Sep, `train_done.marker` present, never screened).
+- 2026-10-07 **Compute re-scoped (AH): Gadi SU are under pressure from several directions, so M7b (seed-study screen)
+  and Z (zero-box v2 screen + S4 cells) run on tux26, where their checkpoints and cards already are** (M7b: 20 runs
+  trained, `train_done.marker`, 2.0 GB under `~/emc2nn/nle-malte/sbc/seed_study/ss`; Z: 90 zb2 cards exported 29 Sep,
+  `zb2_pipeline.marker`). The VPN drops are managed, not avoided: every tux26 job starts under `setsid nohup`, and every
+  poll treats a failed ssh as "unknown, retry", never as "finished". tux26 on 7 Oct: 96 cores, 377 GB, ~81% idle (~18
+  cores busy), 342 GB available. Budget: M7b screen 32 cores ~2 h; Z screen 16 cores ~1 h (alongside M7b: ~66 busy);
+  Z S4 cells 36 cores each (3 chains x 12), one at a time (~5-6 h per cell, ~1 day for four), or two at a time (72) only
+  when `top` shows >= 80 idle cores. Gadi: no further work from these stages. CRDM work is complete and handed to Malte.
