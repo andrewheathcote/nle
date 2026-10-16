@@ -23,6 +23,24 @@ Do not write package code in this stage beyond throw-away probes needed to answe
 - `handover/MALTE_*` and `handover/EMC2_IMPLEMENTATION_BRIEF.md` for the other flow families we ingest (Malte's RDM/CRDM) and
   the ONNX-reader argument.
 
+## Scope: the package is built around two worked examples, the RDM and DDMnle
+nleFlow is to be developed with the RDM and DDMnle as its worked examples (they become vignettes and tests), so the plan must
+cover them in detail, not only the DDM. For each, write a short factual section stating how it was built with the current code,
+and which package function or specification would reproduce it:
+- **DDMnle** (scaled DDM): inputs (κ, η, Z, SZ), exact rescaling for s and a, t0 shift, st0 by CDF difference, exact zeros,
+  the checkpoint-screening recipe, the six-model SBC, the compiled EMC2 path, and what is still missing (ONNX export).
+  Sources: `handover/SCALED_DDM_PLAN.md`, `simulation/scaled.R`, `port/R/ddm_scaled.R`, `sbc/scaled_cell.R`.
+- **RDM** (race diffusion): the simulator and box, the A = 0 regime, the seed study and checkpoint screening, the SBC cells, and the
+  separate Malte RDM/CRDM flows ingested through a converter. Sources: `handover/nle-methods/docs/METHODS.md` §2,
+  `handover/MALTE_CRDM_PLAN.md`, `handover/MALTE_STAGES.md`, `handover/ZERO_BOX_RETRAIN_PLAN.md`, `sbc/seed_study/`,
+  `sbc/gadi/cells/`, and `handover/nle-methods/artefacts/rdm_small.rds` with its weights card.
+- **What the two share and where they differ** (response structure, classifier or none, exact zeros, closed-form transforms,
+  analytic control available or not). The shared part is the package core; the differences define the model-specification
+  interface. Say which of the existing hard-coded pieces this exposes, and list the details of each example that the package
+  documentation would need that are not written down yet (ask AH if only he knows them).
+- Where an example needs weights that are not in the repo, say so rather than guessing; the committed cards are DDMnle's
+  top three checkpoints, the RDM card above and the classifier weights.
+
 ## What the plan must settle
 1. **Scope and audience.** Who would use it (EMC2 users training their own models? HSSM users wanting EMC2? us only?) and what
    they would do that they cannot do now. Overlap with EMC2 itself, with HSSM/LANfactory and with BayesFlow. Where should each
@@ -34,7 +52,7 @@ Do not write package code in this stage beyond throw-away probes needed to answe
 3. **Interfaces.** The card format (version it, document it), the model specification a user supplies (simulator, parameter
    transforms and bounds, context order), ONNX signatures (trial-wise vs shared-theta), the ONNX-to-card converter's supported
    graph patterns, and how validation (golden vectors, score bias, SBC) is built in so that a card cannot be exported without passing.
-4. **What is reusable now** from the repo, what needs generalising away from the DDM/RDM (hard-coded context order, regimes,
+4. **What is reusable now** (including what the two examples need to run end to end inside the package) from the repo, what needs generalising away from the DDM/RDM (hard-coded context order, regimes,
    box, classifier), and what is missing (e.g. DDMnle's ONNX export with CDF difference for st0).
 5. **Effort, risk, maintenance.** Rough work breakdown in days, the main risks (format drift against EMC2 `dev-nle` which is not
    yet on GitHub, ONNX operator coverage, JAX/numpy version churn), and who maintains it.
