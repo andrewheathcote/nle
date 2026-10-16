@@ -41,6 +41,22 @@ and which package function or specification would reproduce it:
 - Where an example needs weights that are not in the repo, say so rather than guessing; the committed cards are DDMnle's
   top three checkpoints, the RDM card above and the classifier weights.
 
+## Installation documentation (required)
+The package documentation must tell a new user how to install everything needed to use it, and the plan must scope that work:
+- **Inventory** of requisite software for each function group (train, export to EMC2, export to ONNX, convert ONNX to EMC2, SBC and
+  score-bias checks): R and its version, EMC2 (the `dev-nle` build, which is not on GitHub, see `handover/emc2/`), a C++ toolchain
+  for the compiled evaluator, Python and JAX (CPU and GPU, with the float64 setting the exports need), the ONNX and onnxruntime
+  packages, and any R packages (for example reticulate, jsonlite). Take versions from what this repo actually ran with
+  (`handover/nle-methods/` environment files, scripts and logs), and say where no version is recorded.
+- **Per-platform steps** for macOS, Linux and a cloud instance, in order, with a check after each step (a one-line command whose
+  output shows it worked). Include the traps we hit: the dev build and the CRAN build both report version 3.4.1 and overwrite each
+  other, so install into a dedicated library and check `find.package("EMC2")`; the numeric precision settings for exports; and the
+  weights path baked into a card.
+- **A single verification command** (a function or script) that installs nothing but confirms the whole chain works: it loads a
+  committed card, evaluates it in EMC2, and matches its golden vectors.
+- **Decision for the plan:** whether installation is scripted by the package (a setup function or container) or only documented,
+  with effort and risk. Test the steps on this cloud instance where possible and report which steps you ran and which you only wrote.
+
 ## What the plan must settle
 1. **Scope and audience.** Who would use it (EMC2 users training their own models? HSSM users wanting EMC2? us only?) and what
    they would do that they cannot do now. Overlap with EMC2 itself, with HSSM/LANfactory and with BayesFlow. Where should each
