@@ -2,9 +2,15 @@
 #   Rscript run_cell.R
 # with the EMC2 build named in session.txt (R_LIBS=<its library>). An interrupted run
 # resumes from the replicates saved in ../results.
+# tux26: ~/R/nle-lib is a symlink to ~/emc2nn/nle/.Rlibs-malte (EMC2 3.4.1.9001,
+# dev-nle 14c12c79). The default library holds an unrelated EMC2 3.4.1 with no nn_sbc_cell,
+# so assert where EMC2 came from rather than trusting the search path.
+.libPaths(c(path.expand("~/R/nle-lib"), .libPaths()))
 library(EMC2)
+stopifnot(startsWith(normalizePath(find.package("EMC2")), normalizePath(path.expand("~/R/nle-lib"))))
+cat("EMC2:", as.character(packageVersion("EMC2")), "@", find.package("EMC2"), "\n")
 cell <- readRDS("cell.rds")
 EMC2:::nle_artefact_info(cell$model)
 cat("BLAS:", sessionInfo()$BLAS, "\n")
-res <- nn_sbc_cell(cell, trials = 100, replicates = 500, run_control = TRUE, archive_dir = "..", cores_per_chain = 48L, cores_for_chains = 1L)
+res <- nn_sbc_cell(cell, trials = 100, replicates = 500, run_control = TRUE, archive_dir = "..", cores_per_chain = 16L, cores_for_chains = 3L)
 print(res$summary)

@@ -51,7 +51,9 @@ CONFIGS = {
 }
 
 
-ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}   # matches simulation/zerobox.R
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002, "eta": 0.01}   # simulation/zerobox.R, scaled.R
+# Scaled DDM (handover/SCALED_DDM_PLAN.md): P(R) depends on (kappa, eta, Z, SZ) only.
+CONTEXT_SCALED = ["kappa", "eta", "Z", "SZ"]
 
 
 def zerobox_encode(X, ctx):
@@ -102,6 +104,9 @@ def main():
                     help="zero-box build: encode sv, SZ, st0 as asinh(x/c) to match "
                          "a flow trained with train_ddm.py --zerobox; pair with "
                          "--data-suffix _zerobox")
+    ap.add_argument("--scaled", action="store_true",
+                    help="scaled DDM: inputs (kappa, eta, Z, SZ), zero-box encoded; pair "
+                         "with --data-suffix _scaled")
     ap.add_argument("--scaler-from", default="large",
                     help="budget whose flow scaler the classifier must match; "
                          "the export asserts the two agree")
@@ -111,7 +116,9 @@ def main():
                          "yet, as for a fresh st0=0 build)")
     a = ap.parse_args()
 
-    CTX = CONTEXT_ST0ZERO if a.st0_zero else CONTEXT
+    if a.scaled:
+        a.zerobox = True
+    CTX = CONTEXT_SCALED if a.scaled else CONTEXT_ST0ZERO if a.st0_zero else CONTEXT
     Xtr, ytr = load("train", a.data_suffix, CTX, zerobox=a.zerobox)
     Xva, yva = load("val", a.data_suffix, CTX, zerobox=a.zerobox)
     print(f"targets: data/choice_prob/*{a.data_suffix}.parquet", flush=True)

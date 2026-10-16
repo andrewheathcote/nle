@@ -82,7 +82,9 @@ def _norm_cdf(x):
 # re-expresses sv, SZ and st0 as asinh(x / c), which is exactly 0 at 0, linear
 # below c and log-like above it, so one network can be conditioned on exact
 # zeros. Constants match simulation/zerobox.R and are written into the export.
-ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}
+# "eta" (= sv a / s^2) is the scaled DDM's input (handover/SCALED_DDM_PLAN.md); it is stored on
+# the log scale like sv, and only the columns present in a context are encoded.
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002, "eta": 0.01}
 
 
 def apply_context_encoding(context, context_names, encoding):

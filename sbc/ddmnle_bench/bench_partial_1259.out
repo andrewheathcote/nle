@@ -1,0 +1,24 @@
+     case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 2 st0+SZ 100     0.303            0.65      13.6 0.0475
+     case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 2 st0+SZ 400      1.31            2.45      69.5  0.128
+     case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 3 st0+sv 100    0.0925             0.4      0.55 0.0475
+     case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 3 st0+sv 400     0.363             1.3      1.95  0.127
+    case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 4 sv+SZ 100      0.09             0.4      0.45  0.035
+    case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 4 sv+SZ 400     0.353             1.1       1.3 0.0775
+  case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 5 st0 100     0.095             0.4       0.6   0.05
+  case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 5 st0 400     0.415             1.8       1.8  0.135
+ case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 7 SZ 100     0.095            0.45      0.45 0.0375
+ case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 7 SZ 400     0.387             1.3      1.35 0.0825
+  case   N wienr_5e3 wienr_5e3_Rpath wienr_1e8 ddmnle
+ 8 all 100     0.323             0.7      17.5   0.05
+Error: all(abs(EMC2:::calc_ll_manager(X[1:3, , drop = FALSE], dc, r_prec(1e-08)) -  .... is not TRUE
+Execution halted

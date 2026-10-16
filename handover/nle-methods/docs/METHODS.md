@@ -351,6 +351,10 @@ t0 = 0.3 s — so the correction is multiplicative:
 
     t0_corrected = t0_hat · exp(−0.00276) = t0_hat · 0.99724
 
+> **2026-10-13: superseded on the final sampler.** An exact test with saved draws finds that 0.00276
+> over-corrects at N = 800 (KS p .007). The rank-centring shift there is about 0.0019, and it has not yet
+> been tested out of sample. See OPEN_ITEMS.md.
+
 A fixed millisecond subtraction is the wrong shape. Estimated leave-one-N-out,
 it restores rank uniformity at every N where it had failed (KS p 7.2e-4 → 0.33,
 6.7e-8 → 0.93, 2.0e-6 → 0.40 at N = 200/400/800) and shrinks the standardised

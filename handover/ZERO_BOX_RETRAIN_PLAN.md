@@ -441,3 +441,95 @@ parameters held at zero); posterior-shift screen per regime; select; then S4.
 - 2026-09-27 16:45 CEST S4 launched on tux26 on dev-nle (installed there at `~/emc2nn/nle/.Rlibs-nle`; gate 5/5 and zero-box acceptance 3/3 on that install): cells full, st0 = 0, all-zero, sv = 0 with zb_s903_e271, each with its matched analytic control (the twin DDM in the same design), N = 400, 500 replicates, zeros as named constants at -Inf, `mapped_pars()` asserted for both designs (`sbc/zerobox_s4_cell.R`, `sbc/zerobox_s4_launch.sh`; two cells at a time at 36 cores). Results: `~/emc2nn/nle/sbc/nci/results_zerobox/<regime>/`.
 - 2026-09-28 00:45 CEST S4: three of four cells in (N = 400, 500 reps, matched analytic controls all clean). **all-zero: PASS, ranks uniform on every parameter** (worst std bias t0 +0.08, KS >= 0.4) — the first network cell in the project with clean ranks throughout. **st0 = 0: passes the gate** (worst a -0.21, t0 +0.18), ranks non-uniform on a (KS 2e-4) and t0 (0.025); better than the dedicated z0_s503_e282 build (worst +0.28, three rank failures). **full: FAILS the gate on st0 (+0.60, KS 1e-26, coverage 0.928)**, v +0.18 and a -0.22 with non-uniform ranks; t0 +0.08 with KS 0.32 — the shipped flow's t0 problem (+0.32, KS 2e-7) is absent. sv = 0 network run (control at 410/500): st0 +0.61, a -0.44, Z -0.35, v +0.26, t0 clean — same pattern. The posterior-shift screen predicted st0 +0.32/+0.38 for these two: ranked right, under-predicted by ~0.25 again. The score-bias screen had the signal: g_st0 +0.0119 vs cap256w_c4 +0.0036 (3.3x) and g_Z 2.6x, on the same draws — the selection rule ranked on g_a alone. Q1 (exact zero): passes. Q2 (still as good above the floor): FAILS on st0 -> per §4, ship both unless retrained. Mechanism hypothesis, testable: st0 free in 62% of rows, uniform in asinh(x/0.002) over [0, 6.19], puts 12% of the data in the SBC prior's st0 region [0.03, 0.10] against 31% for cap256w_c4's log-uniform [0.01, 0.49] — 2.6x less resolution where the cell measures.
 - 2026-09-28 ~03:00 CEST v2 decided and launched on tux26 (`zerobox_v2_pipeline_tux.sh`; §11). v1 screen outputs kept in `sbc/zerobox_screen_v1/`, `sbc/zerobox_postshift_v1/`.
+- 2026-10-12/13 Eight-case review (AH), laptop, final sampler (dev-nle 142bd497 = aa66e11d).
+  - **Cases** (listed parameters free, the rest pinned at exactly 0):
+    1. none (dropped)
+    2. st0+SZ: v2
+    3. st0+sv: v2
+    4. sv+SZ: v1
+    5. st0: v2
+    6. sv (dropped)
+    7. SZ: v1
+    8. all: `cap256w_c4` with the t0 correction
+
+    Cases 1 and 6 were dropped because the analytic DDM is faster there (the flow runs at 0.3x).
+  - **Runs.** Script `sbc/zerobox_s4_cell_8case.R`. N = 400 cells are in `sbc/nci/results_8case/`. N = 800 network-only cells are in `sbc/nci/results_8case_N800/`. Each has 500 replicates.
+  - **Out of the 95% rank-ECDF envelope (network):**
+
+    | Case | N = 400 | N = 800 |
+    |---|---|---|
+    | 2 | a, st0 | a, Z, st0 |
+    | 3 | a, st0 | a, t0, st0 |
+    | 4 | a, t0 | a, t0 |
+    | 5 | t0, st0 | a, t0, Z, st0 |
+    | 7 | Z | v, t0, Z, SZ |
+    | 8 | t0, Z | t0, Z |
+
+    Standardised bias grows with N, about as a fixed offset would. The analytic controls are clean, except that t0 in case 5 is also out for the control. Case 2's control finished 2026-10-13 21:18 and is clean: all 6 parameters inside the envelope, worst |std bias| 0.145 (t0), against the network's a -0.26 (KS 1e-4) and st0 +0.22 (KS 4e-4). Its network half was reused from the 2026-10-07 run; the control alone took about 31.5 h wall at 2 cores.
+  - **Likelihood speed-up** (`sbc/ddm_8case_bench.R`, N = 400, single thread): about 5x with one integral (cases 3, 4, 5, 7) and about 17x for st0+SZ (cases 2, 8).
+  - **Sampling speed-up** (same cell, 6 cores): 5.9x / 5.1x / 4.4x / 4.2x for cases 3 / 4 / 5 / 7.
+  - **Constant-shift correction, fitted at N = 400 and applied at N = 800** (normal-posterior approximation):
+    - a: fixed in cases 2, 3 and 4.
+    - st0: fixed in case 2; not in case 3, where the offset grows from 0.060 to 0.085.
+    - Z: fixed in case 8.
+    - t0: inconclusive, because the approximation disagreed with itself in sign.
+- 2026-10-13 **Exact test of the cap256w_c4 t0 correction: the fixed 0.00276 FAILS on the final sampler.**
+  - Method: `sbc/t0corr_exact.R` repeats run_SBC_subject step for step and saves the draws, so corrected ranks are exact. Output is in `sbc/nci/results_t0corr/full_N800`. Case 8 cell, N = 800, 500 replicates.
+  - Check: the uncorrected ranks reproduce run_sbc's failure (KS p 2e-9, mean rank .422).
+  - With t0 x exp(-0.00276): mean rank .534, KS p .007, out of the envelope. It over-corrects.
+  - In-sample shift scan:
+
+    | Shift | Mean rank | KS p | Envelope |
+    |---|---|---|---|
+    | 0.0015 | .483 | .10 | in |
+    | 0.0020 | .503 | .31 | in |
+    | 0.00245 | .521 | .04 | out |
+
+    The shift that centres the ranks (about 0.0019) is smaller than the mean median bias (0.00245, down from about 0.0027 on the old sampler). The old correction was sized by the median bias, under the approximation.
+  - The bias also rises with the true a (slope +0.009 per unit log a, t = 4). The analytic DDM shows no such slope, so this is the network's. The SZ and st0 slopes appear in the analytic control as well, so they are posterior trade-offs.
+  - Open: an out-of-sample exact test with the shift pre-fixed at about 0.0019 (N = 1600 proposed; not launched). Until then, report case 8's t0 as carrying a small upward offset with near-nominal coverage (.92-.94), and treat METHODS 3.5's 0.00276 as superseded for the final sampler.
+- 2026-10-13 **S1 of the st0-convolution idea** (rating-work/rtcon2/SUGGEST_DDM_ST0_CONVOLUTION.md): score-bias screen, no training.
+  - Method: `sbc/st0conv_screen.R` (a copy of zerobox_screen.R), outputs in `sbc/st0conv_screen/`. 300 prior draws; truths as in S3.
+  - `conv:<card>` = the card evaluated at st0 = 0 and smeared exactly over the window [t0, t0 + st0] by 16-node Gauss-Legendre quadrature, over the support only. WienR's lower-edge convention was confirmed: the analytic convolution matches dWDM to 2e-6.
+  - The analytic controls and `conv:analytic` are below 8e-5 in every regime.
+  - **sum|g| (lower is better):**
+
+    | Regime | v1 | conv:v1 | v2 | conv:v2 | c4 |
+    |---|---|---|---|---|---|
+    | full | .044 | .0098 | **.0079** | .017 | .023 |
+    | sv0 | .037 | **.0165** | .028 | .032 | — |
+    | SZ0 | .066 | **.0135** | .037 | .042 | — |
+    | st0only | .030 | .019 | **.0084** | .020 | — |
+    | st00 (no smear) | **.0101** | = | .0158 | = | — |
+
+  - Reading: the smear removes most of the network's own st0 error. For v1, g_st0 falls from +.009-.014 to +.0016-.0038 and g_Z falls 2-15x.
+  - What is left is the st0 = 0 slice's own error (the st00 row, about .010). In SBC that is case 4: a and t0 out at std bias about 0.1-0.2.
+  - conv:v1 beats v2 in sv0 and SZ0 (cases 2 and 3, the worst st0 failures). It loses to v2 in full and st0only.
+  - Smearing v2 makes v2 worse, because v2's st0 = 0 slice is weaker.
+  - Verdict: one network (v1 plus the exact smear) for all six cases is plausible at about case-4 quality. It is not clean, and it is no better than the best per-case choice everywhere.
+
+### 2026-10-13 15:00 — N=1600 t0 test queued behind S2 (AH approved, no further sign-off)
+Delta pre-fixed at 0.0019 (rank-centring value from the N=800 exact run); fresh prior draws (seed 20261013+1600). Same pass rule. Launcher: sbc/nci/results_t0corr/launch_N1600_after_S2.sh.
+
+### 2026-10-14 02:49 — S2 result: the exact st0 smear fixes case 3
+Cell `sbc/st0conv_cell.R SZ0` (v1 `zb_s903_e271` at st0 = 0 plus 16-node Gauss-Legendre smear, N = 400, 500 reps, laptop 2x3).
+
+| parameter | S2 std bias (KS p) | v2 network (KS p) | analytic control |
+|---|---|---|---|
+| v | -0.07 (.17) | +0.09 (.10) | -0.01 |
+| a | -0.02 (.98) | **-0.17 (6e-4)** | +0.07 |
+| t0 | +0.12 (.33, envelope out) | -0.01 (.31) | +0.07 |
+| Z | +0.06 (.15) | +0.05 (.45) | +0.11 |
+| sv | +0.02 (.87) | -0.02 (.44) | -0.05 |
+| st0 | +0.12 (.06) | **+0.50 (2e-20)** | -0.04 |
+
+Prediction met: st0 drops from +0.50 to +0.12 (declared <= 0.2) and a returns to the envelope.
+Only t0 touches the envelope edge, with a KS p of .33 (not a clear failure). Coverage .94-.96 throughout.
+Cost: the R-level smear runs at 1.44 ms per likelihood vs analytic 0.32 (4.5x slower), so this is a correctness
+result, not a speed one. The scaled network's CDF route (two evaluations, SCALED_DDM_PLAN.md) is the fast form of the same idea.
+
+### 2026-10-14 04:48 — N=1600 t0 test: PASS (out of sample)
+Case 8 (c4, full), fresh prior draws, δ pre-fixed at 0.0019 from the N=800 run. Corrected t0: mean rank .505, KS p .26, inside the envelope.
+Uncorrected: mean rank .407, KS p 2e-10. The t0 posterior-median offset is +0.00216 (N=800 gave about 0.0019), so the bias behaves as a fixed shift.
+The window is narrow: of the grid, only δ = .0019 is inside the envelope (.0015 and .0020 just miss it).
+At N=1600 the other parameters fail on their own: v +0.23 (KS 3e-4), Z −0.29 (2e-7), SZ −0.17 (2e-3). Case 8 needs more than the t0 shift; the scaled network is the route.

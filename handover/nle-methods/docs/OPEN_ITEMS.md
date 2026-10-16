@@ -28,6 +28,11 @@ the four places: `docs/METHODS.md` §4, `docs/RECIPE.md`, `README.md`,
 - **CLOSED — an independent cell for the t0 correction** (2026-09-24): N = 250,
   300 replicates, predicted delta 0.002764 against observed 0.002765; corrected
   standardised bias +0.000, KS p 0.22. Phase 27 is closed.
+- **REOPENED 2026-10-13 — the t0 correction on the final sampler.** An exact test (draws saved,
+  `sbc/t0corr_exact.R`, N = 800, 500 reps) finds that the fixed delta 0.00276 over-corrects: mean rank .534,
+  KS p .007, out of the envelope. The rank-centring shift in that cell is about 0.0019 (in-sample). The
+  2026-09-24 check used the normal-posterior rank approximation, which is not reliable here. An
+  out-of-sample exact test of about 0.0019 is pending. Details are in ZERO_BOX_RETRAIN_PLAN.md, progress log.
 - **`mlp_forward` through BLAS, at the next EMC2 rebase.** The evaluator's
   fixed cost is ~0.87 ms per call, all of it scalar-loop matrix multiplication
   in `port/src/flow_ddm.cpp` (§9 of `EMC2_INTEGRATION.md`); `dgemv_` should take

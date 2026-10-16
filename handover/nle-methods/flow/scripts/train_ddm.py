@@ -54,6 +54,10 @@ CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
 # 0.01, since log(0) = -Inf -- so this needs its own training data and its own
 # network. See handover/ST0_ZERO_RETRAIN.md.
 CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
+# Scaled DDM (handover/SCALED_DDM_PLAN.md): the unit-scale decision time u = (rt - t0)(s/a)^2,
+# conditioned on kappa = v a/s^2, eta = sv a/s^2, Z, SZ. t0, st0, a and s are applied exactly at
+# evaluation. Data from simulation/sim_ddm_scaled.R (its rt column is u); always zero-box encoded.
+CONTEXT_SCALED = ["kappa", "eta", "Z", "SZ"]
 TARGET = "ll"
 RESPONSE = "R"
 
@@ -105,6 +109,9 @@ def main():
                     help="7-parameter build with st0 absent (see "
                          "handover/ST0_ZERO_RETRAIN.md); requires training data "
                          "simulated with st0 = 0")
+    ap.add_argument("--scaled", action="store_true",
+                    help="scaled DDM: context (kappa, eta, Z, SZ), data from "
+                         "simulation/sim_ddm_scaled.R; implies --zerobox")
     ap.add_argument("--triple", action="store_true",
                     help="train on the (SZ0, SZ, SZ1) reparameterisation "
                          "instead of (a, Z, SZ); requires a dataset written "
@@ -173,7 +180,11 @@ def main():
     # downstream is driven by this list, so nothing else needs to change.
     if args.st0_zero and args.triple:
         raise SystemExit("--st0-zero and --triple are mutually exclusive")
-    CTX = (CONTEXT_ST0ZERO if args.st0_zero
+    if args.scaled and (args.st0_zero or args.triple or args.geometry or args.edge_amp is not None):
+        raise SystemExit("--scaled excludes --st0-zero, --triple, --geometry and --edge-amp")
+    if args.scaled:
+        args.zerobox = True
+    CTX = (CONTEXT_SCALED if args.scaled else CONTEXT_ST0ZERO if args.st0_zero
            else CONTEXT_TRIPLE if args.triple else CONTEXT)
 
     out_base = REPO_ROOT / "results" / "model_states" / f"{args.tag}_budget"

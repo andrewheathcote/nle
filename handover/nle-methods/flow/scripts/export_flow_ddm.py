@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy import stats as sstats
+import jax
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 from flax import nnx
@@ -54,6 +55,10 @@ CONTEXT_TRIPLE = ["v", "SZ0", "t0", "s", "SZw", "SZ1", "sv", "st0"]
 # 0.01, since log(0) = -Inf -- so this needs its own training data and its own
 # network. See handover/ST0_ZERO_RETRAIN.md.
 CONTEXT_ST0ZERO = ["v", "a", "t0", "s", "Z", "SZ", "sv"]
+# Scaled DDM (handover/SCALED_DDM_PLAN.md): the flow is over the unit-scale decision time
+# u = (rt - t0)(s/a)^2 and conditioned on kappa = v a/s^2, eta = sv a/s^2, Z, SZ. Its card is
+# evaluated by port/R/ddm_scaled.R (DDMsc), which applies t0, st0, a and s exactly.
+CONTEXT_SCALED = ["kappa", "eta", "Z", "SZ"]
 
 # --step exports a NAMED checkpoint instead of the best-val one. Needed to study
 # variation WITHIN a single training run: with one checkpoint per run there is
@@ -66,8 +71,8 @@ _FORCE_STEP = [None]
 # --zerobox: sv, SZ, st0 are conditioned on asinh(x / c) so that exact zeros
 # (stored as -Inf on the EMC2 scale) are representable. Constants match
 # simulation/zerobox.R and flow/src/flow/data.py; they are written into the export.
-ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002}
-ZEROBOX_BOUNDS_NAT = {"sv": (0.0, 4.0), "SZ": (0.0, 0.99), "st0": (0.0, 0.49)}
+ZEROBOX_C = {"sv": 0.01, "SZ": 0.05, "st0": 0.002, "eta": 0.01}
+ZEROBOX_BOUNDS_NAT = {"sv": (0.0, 4.0), "SZ": (0.0, 0.99), "st0": (0.0, 0.49), "eta": (0.0, 8.0)}
 
 
 def emc2_to_zerobox(theta, ctx):
@@ -104,12 +109,14 @@ def emc2_to_triple(theta):
     th[:, 5] = np.log(np.maximum(SZ1, eps))
     return th
 TRANSFORMS = {"v": "identity", "a": "log", "t0": "log", "s": "log",
-              "Z": "probit", "SZ": "probit", "sv": "log", "st0": "log"}
+              "Z": "probit", "SZ": "probit", "sv": "log", "st0": "log",
+              "kappa": "identity", "eta": "log"}
 # Keyed by parameter, not positional: a positional list silently mis-pairs
 # bounds with columns as soon as the context is a subset (the st0 = 0 build).
 BOUNDS_NAT = {"v": (-6.0, 6.0), "a": (0.05, 5.0), "t0": (0.05, 1.0),
               "s": (0.1, 2.0), "Z": (0.1, 0.9), "SZ": (0.05, 0.99),
-              "sv": (0.01, 4.0), "st0": (0.01, 0.49)}
+              "sv": (0.01, 4.0), "st0": (0.01, 0.49),
+              "kappa": (-10.0, 10.0), "eta": (0.01, 8.0)}
 BOUNDS_NATURAL = {"lower": [BOUNDS_NAT[p][0] for p in CONTEXT],
                   "upper": [BOUNDS_NAT[p][1] for p in CONTEXT]}
 
@@ -201,6 +208,8 @@ def CTX_SEL(args):
     """Context column list for this build. The exporter writes this into
     context_names and the R/C++ port builds theta from it, so it MUST match
     what training used -- a mismatch silently permutes the inputs."""
+    if getattr(args, "scaled", False):
+        return CONTEXT_SCALED
     if getattr(args, "st0_zero", False):
         return CONTEXT_ST0ZERO
     return CONTEXT_TRIPLE if args.triple else CONTEXT
@@ -224,13 +233,31 @@ def main():
                          "simulated with st0 = 0")
     ap.add_argument("--triple", action="store_true",
                     help="flow was trained with train_ddm.py --triple")
+    ap.add_argument("--scaled", action="store_true",
+                    help="flow was trained with train_ddm.py --scaled (implies --zerobox)")
     ap.add_argument("--port-tol", type=float, default=5e-3,
                     help="max |dlog_pdf| allowed between the float64 port and "
                          "JAX float32 in the gated region. Raise only for "
                          "diagnostic exports, and only when the percentile "
                          "distribution matches a known-good flow.")
+    ap.add_argument("--ref", choices=["f32", "f64"], default=None,
+                    help="precision of the JAX reference the port is gated against. "
+                         "f64 (default under --scaled) gates at --port-tol-f64 and reports "
+                         "the float32 gap for information only; f32 is the original gate.")
+    ap.add_argument("--port-tol-f64", type=float, default=1e-8,
+                    help="max |dlog_pdf| between the port and JAX float64 (--ref f64)")
     ap.add_argument("--n-param-sets", type=int, default=25)
     args = ap.parse_args()
+    if args.scaled:
+        args.zerobox = True
+    if args.ref is None:
+        args.ref = "f64" if args.scaled else "f32"
+    # The scaled grid reaches u = 4, far into the right tail, where JAX float32 alone
+    # differs from the float64 port by up to ~3e-2 in log density while JAX float64
+    # agrees with it to 1e-10 (SCALED_DDM_PLAN.md, 2026-10-14; flow/scripts/port_x64_check.py).
+    # Every float32 array below is cast explicitly, so enabling x64 leaves that path unchanged.
+    if args.ref == "f64":
+        jax.config.update("jax_enable_x64", True)
 
     base = REPO_ROOT / "results" / "model_states" / f"{args.budget}_budget"
     out_dir = REPO_ROOT / "port" / "export"
@@ -304,7 +331,8 @@ def main():
     lo = np.array(bounds_s["lower"]); hi = np.array(bounds_s["upper"])
     theta = rng.uniform(lo, hi, size=(args.n_param_sets, len(lo)))
     theta = theta.astype(np.float32).astype(np.float64)
-    rt = np.geomspace(0.005, 20.0, 23).astype(np.float32).astype(np.float64)
+    rt = (np.geomspace(1e-4, 4.0, 23) if args.scaled else np.geomspace(0.005, 20.0, 23)
+          ).astype(np.float32).astype(np.float64)
 
     # theta is always the EMC2 draw - that is the port's public interface and
     # what the golden CSV records. Under --triple the FLOW additionally needs
@@ -319,11 +347,14 @@ def main():
         # parameter at a time; both heads take the network scale, and the
         # golden CSV records the EMC2-scale theta (-Inf at zeros).
         n12 = theta.shape[0] // 12
-        for i, name in enumerate(("sv", "SZ", "st0")):
+        zb_names = [p for p in ("sv", "SZ", "st0", "eta") if p in CTX]
+        for i, name in enumerate(zb_names):
             theta[i * n12:(i + 1) * n12, CTX.index(name)] = 0.0
         theta_flow = theta.copy()
         theta = theta_flow.copy()
         for name, c in ZEROBOX_C.items():
+            if name not in CTX:
+                continue
             j = CTX.index(name); nat = np.sinh(theta_flow[:, j]) * c
             with np.errstate(divide="ignore"):
                 theta[:, j] = sstats.norm.ppf(nat) if name == "SZ" else np.log(nat)
@@ -335,75 +366,93 @@ def main():
                            clf_scaler_mean=clf_scaler_mean,
                            clf_scaler_scale=clf_scaler_scale) for R in (1, 2)}
     # --- cross-check against the authoritative JAX joint_log_prob ---
+    # The same network in JAX at precision dt; float32 is what training ran in,
+    # float64 (--ref f64) is the exact reference for the port.
     dims_flow = f_widths[:-1]
-    cond = make_mlp_conditioner(nnx.Rngs(0), dims=dims_flow, num_bins=num_bins,
-                                num_splines=1, use_norm=flow_norms is not None,
-                                range_min=range_min, range_max=range_max)
-    for i, (W, b) in enumerate(flow_layers[:-1]):
-        cond.linears[i].kernel.value = jnp.asarray(W, dtype=jnp.float32)
-        cond.linears[i].bias.value = jnp.asarray(b, dtype=jnp.float32)
-    cond.out.kernel.value = jnp.asarray(flow_layers[-1][0], dtype=jnp.float32)
-    cond.out.bias.value = jnp.asarray(flow_layers[-1][1], dtype=jnp.float32)
-    clf = make_choice_classifier(nnx.Rngs(0), dims=c_widths[:-1])
-    for i, (W, b) in enumerate(clf_layers):
-        clf.layers[i].kernel.value = jnp.asarray(W, dtype=jnp.float32)
-        clf.layers[i].bias.value = jnp.asarray(b, dtype=jnp.float32)
-
-    ctx32 = ((theta_flow - scaler_mean) / scaler_scale).astype(np.float32)
-    clf_ctx32 = (None if theta_clf is None else
-                 ((theta_clf - clf_scaler_mean) / clf_scaler_scale).astype(np.float32))
     ll_floor = float(np.log(1e-10))
-    _ALL_D = []
-    max_lp = max_lp_used = 0.0
-    for R in (1, 2):
-        for i in range(theta.shape[0]):
-            lp = joint_log_prob(cond, clf,
-                                jnp.asarray(rt, dtype=jnp.float32),
-                                jnp.tile(jnp.asarray(ctx32[i]), (len(rt), 1)),
-                                jnp.full((len(rt),), R, dtype=jnp.int32),
-                                clf_params=(None if clf_ctx32 is None else
-                                            jnp.tile(jnp.asarray(clf_ctx32[i]),
-                                                     (len(rt), 1))))
-            d = np.abs(np.asarray(lp) - res[R][1][i])
-            max_lp = max(max_lp, float(np.max(d)))
-            # gate on the usable region: above the min_ll floor AND away from
-            # the spline range boundaries, where float32 can flip between the
-            # last bin and the identity tail (a ~1e-2 log-density branch
-            # artifact at points of negligible density)
-            u = np.log(rt)
-            interior = (np.abs(u - range_max) > 1e-2) & (np.abs(u - range_min) > 1e-2)
-            used = (res[R][1][i] > ll_floor) & interior
-            if used.any():
-                max_lp_used = max(max_lp_used, float(np.max(d[used])))
-                _ALL_D.extend(np.asarray(d[used]).ravel().tolist())
-    if _ALL_D:
-        _a = np.array(_ALL_D)
-        print("  |dlog_pdf| distribution over %d gated points: "
-              "median %.2e  p90 %.2e  p99 %.2e  max %.2e ; frac>1e-3 = %.4f"
-              % (_a.size, np.median(_a), np.percentile(_a,90),
-                 np.percentile(_a,99), _a.max(), float((_a>1e-3).mean())))
-    print(f"float64 port vs JAX float32 joint_log_prob: "
-          f"max |dlog_pdf| = {max_lp:.3e} overall, {max_lp_used:.3e} in the "
-          f"gated region (above min_ll floor, away from range boundaries)")
-    # The guard is a MAX over ~1080 sampled points, so it has a fat-tailed
-    # failure mode: a single unlucky draw can trip it while the distribution is
-    # indistinguishable from a flow that passed (measured: tpt40 median 9.6e-6 /
-    # p90 1.4e-4 / p99 7.7e-4 vs arch64w 1.1e-5 / 1.6e-4 / 7.6e-4, and distill1
-    # PASSED with 3x tpt40's fraction above 1e-3). Keep the default strict for
-    # ship candidates; --port-tol raises it explicitly for diagnostic exports.
-    if max_lp_used >= args.port_tol:
-        raise AssertionError(
-            "float64 port disagrees with JAX beyond float32 tolerance in the "
-            f"gated region ({max_lp_used:.3e} >= {args.port_tol:.1e}). Check the "
-            "distribution line above: if only the max is an outlier and the "
-            "percentiles match a known-good flow, re-run with --port-tol.")
-    if args.port_tol > 5e-3:
-        print(f"  NOTE: exported with a relaxed port tolerance "
-              f"({args.port_tol:.1e}); default is 5.0e-3")
+    u = np.log(rt)
+    # gate on the usable region: above the min_ll floor AND away from
+    # the spline range boundaries, where float32 can flip between the
+    # last bin and the identity tail (a ~1e-2 log-density branch
+    # artifact at points of negligible density)
+    interior = (np.abs(u - range_max) > 1e-2) & (np.abs(u - range_min) > 1e-2)
+
+    def jax_gap(dt, npdt):
+        cond = make_mlp_conditioner(nnx.Rngs(0), dims=dims_flow, num_bins=num_bins,
+                                    num_splines=1, use_norm=flow_norms is not None,
+                                    range_min=range_min, range_max=range_max)
+        for i, (W, b) in enumerate(flow_layers[:-1]):
+            cond.linears[i].kernel.value = jnp.asarray(W, dtype=dt)
+            cond.linears[i].bias.value = jnp.asarray(b, dtype=dt)
+        cond.out.kernel.value = jnp.asarray(flow_layers[-1][0], dtype=dt)
+        cond.out.bias.value = jnp.asarray(flow_layers[-1][1], dtype=dt)
+        clf = make_choice_classifier(nnx.Rngs(0), dims=c_widths[:-1])
+        for i, (W, b) in enumerate(clf_layers):
+            clf.layers[i].kernel.value = jnp.asarray(W, dtype=dt)
+            clf.layers[i].bias.value = jnp.asarray(b, dtype=dt)
+        ctxj = ((theta_flow - scaler_mean) / scaler_scale).astype(npdt)
+        clf_ctxj = (None if theta_clf is None else
+                    ((theta_clf - clf_scaler_mean) / clf_scaler_scale).astype(npdt))
+        all_d, mx, mx_used = [], 0.0, 0.0
+        for R in (1, 2):
+            for i in range(theta.shape[0]):
+                lp = joint_log_prob(cond, clf,
+                                    jnp.asarray(rt, dtype=dt),
+                                    jnp.tile(jnp.asarray(ctxj[i]), (len(rt), 1)),
+                                    jnp.full((len(rt),), R, dtype=jnp.int32),
+                                    clf_params=(None if clf_ctxj is None else
+                                                jnp.tile(jnp.asarray(clf_ctxj[i]),
+                                                         (len(rt), 1))))
+                assert lp.dtype == dt, f"JAX reference ran in {lp.dtype}, expected {dt}"
+                d = np.abs(np.asarray(lp, dtype=np.float64) - res[R][1][i])
+                mx = max(mx, float(np.max(d)))
+                used = (res[R][1][i] > ll_floor) & interior
+                if used.any():
+                    mx_used = max(mx_used, float(np.max(d[used])))
+                    all_d.extend(np.asarray(d[used]).ravel().tolist())
+        name = "float32" if npdt == np.float32 else "float64"
+        if all_d:
+            _a = np.array(all_d)
+            print("  |dlog_pdf| distribution over %d gated points: "
+                  "median %.2e  p90 %.2e  p99 %.2e  max %.2e ; frac>1e-3 = %.4f"
+                  % (_a.size, np.median(_a), np.percentile(_a,90),
+                     np.percentile(_a,99), _a.max(), float((_a>1e-3).mean())))
+        print(f"float64 port vs JAX {name} joint_log_prob: "
+              f"max |dlog_pdf| = {mx:.3e} overall, {mx_used:.3e} in the "
+              f"gated region (above min_ll floor, away from range boundaries)")
+        return mx_used
+
+    max_lp_used = jax_gap(jnp.float32, np.float32)
+    if args.ref == "f64":
+        # The gate: the port must reproduce the network exactly. The float32 line
+        # above is information only (the rounding of the JAX reference itself).
+        max64 = jax_gap(jnp.float64, np.float64)
+        if max64 >= args.port_tol_f64:
+            raise AssertionError(
+                "float64 port disagrees with JAX float64 in the gated region "
+                f"({max64:.3e} >= {args.port_tol_f64:.1e}): a port defect, not rounding.")
+        print(f"  gate: port vs JAX float64 {max64:.1e} < {args.port_tol_f64:.0e} (PASS); "
+              f"the float32 gap is reported, not gated")
+    else:
+        # The guard is a MAX over ~1080 sampled points, so it has a fat-tailed
+        # failure mode: a single unlucky draw can trip it while the distribution is
+        # indistinguishable from a flow that passed (measured: tpt40 median 9.6e-6 /
+        # p90 1.4e-4 / p99 7.7e-4 vs arch64w 1.1e-5 / 1.6e-4 / 7.6e-4, and distill1
+        # PASSED with 3x tpt40's fraction above 1e-3). Keep the default strict for
+        # ship candidates; --port-tol raises it explicitly for diagnostic exports.
+        if max_lp_used >= args.port_tol:
+            raise AssertionError(
+                "float64 port disagrees with JAX beyond float32 tolerance in the "
+                f"gated region ({max_lp_used:.3e} >= {args.port_tol:.1e}). Check the "
+                "distribution line above: if only the max is an outlier and the "
+                "percentiles match a known-good flow, re-run with --port-tol.")
+        if args.port_tol > 5e-3:
+            print(f"  NOTE: exported with a relaxed port tolerance "
+                  f"({args.port_tol:.1e}); default is 5.0e-3")
 
     # --- weights JSON ---
     weights = {
-        "model": "DDM", "budget": args.budget,
+        "model": "DDMsc" if args.scaled else "DDM", "budget": args.budget,
         "checkpoint_step_flow": f_step, "checkpoint_step_classifier": c_step,
         "exported": str(date.today()),
         "context_names": CTX,
@@ -411,20 +460,26 @@ def main():
         "context_encoding": ("zerobox" if args.zerobox
                              else "st0zero" if args.st0_zero
                              else "triple" if args.triple else "emc2"),
-        "zerobox_c": ZEROBOX_C if args.zerobox else None,
+        "zerobox_c": ({k: v for k, v in ZEROBOX_C.items() if k in CTX} if args.zerobox else None),
+        "scaling": ("ddm_unit: flow over u = (rt - t0)(s/a)^2 given kappa = v a/s^2, "
+                    "eta = sv a/s^2, Z, SZ; st0 by exact convolution (port/R/ddm_scaled.R)"
+                    if args.scaled else None),
         "classifier_scaler": {"mean": clf_scaler_mean.tolist(),
                               "scale": clf_scaler_scale.tolist()},
         # dev-nle's card contract: a zero-box input is transform "zerobox" with
         # its constant in zerobox_c (not a descriptive string), and the natural
         # box must agree with the sampled one -- lower = 0 for the three.
-        "context_transforms": ({**TRANSFORMS, **{k: "zerobox" for k in ZEROBOX_C}}
-                               if args.zerobox else TRANSFORMS),
+        "context_transforms": ({p: ("zerobox" if p in ZEROBOX_C else TRANSFORMS[p]) for p in CTX}
+                               if args.scaled else
+                               # the eight DDM parameters, exactly as before the scaled build
+                               {p: ("zerobox" if p in ("sv", "SZ", "st0") else TRANSFORMS[p]) for p in CONTEXT}
+                               if args.zerobox else {p: TRANSFORMS[p] for p in CONTEXT}),
         "parameter_scale": "sampled",
         "response_coding": "flow context gets raw R (1.0 or 2.0) appended after "
                            "standardized params; classifier logit is for P(R=2)",
         "bounds_sampled": bounds_s,
-        "bounds_natural": ({"lower": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[0] for p in CONTEXT],
-                            "upper": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[1] for p in CONTEXT]}
+        "bounds_natural": ({"lower": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[0] for p in CTX],
+                            "upper": [ZEROBOX_BOUNDS_NAT.get(p, BOUNDS_NAT[p])[1] for p in CTX]}
                            if args.zerobox else BOUNDS_NATURAL),
         "scaler": {"mean": scaler_mean.tolist(), "scale": scaler_scale.tolist()},
         "flow_mlp": {
@@ -451,7 +506,7 @@ def main():
     wpath.write_text(json.dumps(weights))
     print(f"Wrote {wpath}")
 
-    if args.zerobox:
+    if args.zerobox and "st0" in CTX:
         # The st0 = 0 support rule is part of the artefact's likelihood: the
         # true density is zero below t0, the spline cannot say so, every
         # evaluator does. Apply it to the golden values so ports are checked

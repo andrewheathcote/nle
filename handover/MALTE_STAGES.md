@@ -31,6 +31,11 @@ requested from Malte by email.
   background poll of `qstat` (write the ssh command out in the loop, do not hold it in a variable), reads logs,
   resubmits or `qdel`s its own jobs, and brings results down promptly (scratch expires). Statistics on the Mac or
   under `module load R/4.4.2`, never R/4.5.0's `pbinom`. Commit after each stage.
+- **Local runs allowed (AH, 2026-10-12; amends "Compute" above).** The laptop may now run long jobs (hours,
+  overnight): SBC cells, screens, posterior-shift and score-bias runs, at **at most 8 cores in total** at any moment,
+  started under `nohup ... &` with a background poll, results under the repo as usual. Gadi stays the place for work
+  that needs more than 8 cores or more than about a night on 8. **tux26: nothing is launched, relaunched or resumed
+  without AH's explicit permission for that specific run** (AH, 2026-10-12); read-only checks are fine.
 - **Every stage runs in auto mode (AH, 2026-10-06).** Each handed-over prompt says so in its first line and the
   stage refuses to start without it: Gadi work is long-running and must not stall on permission prompts.
 - **One stage at a time; never below Sonnet 4.6 (AH, 2026-10-07).** A stage hands over exactly ONE next stage: one model
