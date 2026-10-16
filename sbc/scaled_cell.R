@@ -35,7 +35,12 @@ cat(sprintf("=== scaled-DDM cell %s  card %s  N=%d reps=%d  cores %dx%d  EMC2 %s
 PM <- c(v = 1, a = log(.8), t0 = log(.3), Z = qnorm(.5), sv = log(.1), SZ = qnorm(.2), st0 = log(.05))
 PS <- c(v = .15, a = .15, t0 = .1, Z = .05, sv = .15, SZ = .15, st0 = .15)
 FREE <- setdiff(names(PM), names(PIN))
-mk <- register_nn_model(SCAFFOLD, twin = DDM)
+# M0=1 (EMC2 dev-nle-m0, NLEFLOW_PLAN.md section 11.1): the card registers directly as a flow_scaled
+# model, with no scaffold; its R path is nn_eval_scaled (the port's ddm_sc_density with SZ as the
+# proportion) and its compiled path the patched evaluator. The scaffold route below stays for the
+# AWS/laptop builds that predate it.
+M0 <- Sys.getenv("M0") == "1"
+mk <- if (M0) register_nn_model(CARD, twin = DDM) else register_nn_model(SCAFFOLD, twin = DDM)
 cell <- nn_cell(mk, mean = PM[FREE], sd = PS[FREE],
                 formula = lapply(FREE, function(p) as.formula(paste(p, "~ 1"))),
                 constants = if (length(PIN)) PIN else NULL,
@@ -59,8 +64,9 @@ sc_model <- function() {
 }
 # NATIVE=1: the same model on EMC2's compiled path (EMC2 branch dev-nle-scaled; ddm_sc_native_reg).
 # The registration is built once: EMC2 calls the model function on every likelihood batch.
-sc_native_reg <- if (Sys.getenv("NATIVE") == "1") ddm_sc_native_reg(orig_model()$nn, CARD)
-sc_native <- function() {
+# Under M0 the registered model's own compiled path is used, and no registration is rebuilt.
+sc_native_reg <- if (Sys.getenv("NATIVE") == "1" && !M0) ddm_sc_native_reg(orig_model()$nn, CARD)
+sc_native <- if (M0) orig_model else function() {
   m <- sc_model()
   m$c_name <- "NN"
   m$nn <- sc_native_reg

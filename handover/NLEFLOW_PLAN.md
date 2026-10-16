@@ -193,12 +193,13 @@ advantage (`EMC2_INTEGRATION.md:251-288`); nothing in this plan changes that, an
    `sv, SZ, st0` as `zerobox` with the zero-box constants and bounds; it is in this session's scratch space only and
    proves only that the plumbing works. The right fix is a card kind (say `flow_scaled`) that the R loader
    understands, so the scaffold disappears.
-4. **Tail mass.** With `range_max = 2` on log u and identity tails, the flow puts exactly 1 − Φ(2) = 2.275 % of its mass
-   above u = e² for every θ (the sum of the two defective CDFs at `range_max` is 0.97725 for five random θ; quadrature
-   over the range gives 0.9757). This is a property of the construction, θ-independent, so it is a constant in the
-   log-likelihood and cannot bias a posterior, and the SBC agrees. But `nn_total_mass()` on this card will read 0.977,
-   and the user documentation (and the card spec, §7.1) should state the tail mass of a card rather than let a user
-   discover it. AH may already know this; I did not find it written down.
+4. **Tail mass (corrected 2026-10-16, M0).** With `range_max = 2` on log u and identity tails, the spline hands over
+   to the identity tail at u = e², and exactly 1 − Φ(2) = 2.275 % of the mass lies beyond that point for every θ
+   (the sum of the two defective CDFs at `range_max` is 0.97725 for five random θ). That mass is **not lost**: the
+   flow is defined on the whole positive axis and integrates to 1 over it; a quadrature that stops at `range_max`
+   reads 0.9757 only because it stops there. So `nn_total_mass()` over its default grid (to 20 s) reads 1 up to the
+   grid's own truncation, and the card states `support = (0, Inf)`, `mass_tolerance`, and in words how the tails
+   carry the remainder (§13.3.4). The earlier wording of this item ("nn_total_mass will read 0.977") was wrong.
 5. **The two score-bias regimes not covered by the committed material**: the screen scripts under `sbc/scaled_screen/`
    reference cards under `port/export/` on the laptop; only the three selected cards are committed, so the
    selection cannot be re-run from the repository (by design: `RECIPE.md:17-18`, regenerate rather than deposit).
@@ -754,9 +755,11 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
 3. **`--affine` and `--decision-time`** are experiment options: optional training flags, the baseline (neither) as the
    default, documented as unproven, revisited when the seed-study reading arrives.
 4. **Tail mass.** `nn_total_mass()` integrates over the time support the card states and expects 1 within the
-   tolerance the card states; the card records how mass beyond the support is treated (for DDMnle: the identity tail
-   beyond `range_max = 2` on log u, 1 − Φ(2), θ-independent, §2.4.4). This replaces the `tail_mass` field proposed in
-   §7.1 with two: `support` (the time range the card is valid on) and `mass_tolerance`, plus a `beyond_support` note.
+   tolerance the card states; the card records how mass beyond the support is treated (for DDMnle: the identity
+   tails beyond the spline range [−12, 2] on log u carry the remainder, so the density integrates to 1 over
+   u ∈ (0, ∞) and nothing is lost, §2.4.4). This replaces the `tail_mass` field proposed in §7.1 with three:
+   `support` (the time range the card is valid on; `(0, Inf)` for DDMnle), `mass_tolerance`, and a `beyond_support`
+   note. Implemented in M0 (`nn_total_mass()` reads them; `vignette("neural-likelihood-cards")`).
 5. **The t0 correction** is not carried by the package. The fixed delta 0.00276 was reopened on 2026-10-13 (exact test:
    mean rank .534, KS p .007; an out-of-sample test of about 0.0019 pending; `OPEN_ITEMS.md:31-35`). `cap256w_c4`'s
    documentation says that no correction is applied, that an unresolved t0 shift of about 0.002 at N = 800 remains,
@@ -784,3 +787,65 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   115 rows at exactly A = 0. `register_nn_model(card, twin = RDM)` in dev-nle 142bd497 registers it as `flow_race`,
   `c_name NN`; the R-path evaluator vs golden: |Δlog pdf| 1.9e-12, |Δlog sf| 6.1e-14. The "card not in the
   repository" case is withdrawn from §3.1, §11.1, §12 and §13.
+- 2026-10-16 **M0 done** (cloud instance, R 4.3.3; EMC2 branch `dev-nle-m0` on ampl-psych/EMC2, pushed: the scaled
+  patch as its first commit f7aa07ea, then the 142bd497 tree, then the M0 commit; this repo: `golden.py`,
+  `ddm_sc_s1106_e245_golden.csv`, `scaled_cell.R` M0 mode). Acceptance lines, as run:
+  (a) `register_nn_model("port/export/ddm_sc_s1106_e245_weights.json", twin = DDM)` returns a `flow_scaled`
+  registration, no scaffold (`sbc/scaled_cell.R` with `M0=1`; `test-nn-scaled.R`);
+  (b) compiled vs `ddm_sc_density` over 200 prior draws, six regimes: full 7.0e-13, sv0 1.4e-12, SZ0 9.1e-13,
+  st00 2.3e-12, st0only 1.4e-12, SZonly 1.5e-12 (≤ 1e-11); compiled DDMnle 0.35–0.54 ms per likelihood here against
+  WienR, 1.6–5.5x;
+  (c) `nn_golden_check()` PASS on rdm_small 9.2e-12, cap256w_c4 (flow part) 3.1e-12, st0zero 1.4e-11,
+  ddm_sc_s1106_e245 8.5e-11 (its golden file regenerated from the JSON by `golden.py`; the script reproduces the
+  committed goldens of rdm_small, rdm_ss_base_s801_e271 and z0_s503_e282 to 1e-12 and cap256w's flow part to
+  2.5e-13), rdm_ss_base_s801_e271 2.1e-12; a perturbed row (1e-6) fails by name;
+  (d) a card without `card_version` loads as 0, `card_version = 2` is refused as "Card version 2 is not supported";
+  (e) on R 4.3.3 the shipped artefacts load through the MANIFEST's md5 lines (before M0 all three failed there);
+  (f) the SZ conventions meet at the three boundaries (DDM()'s Ttransform ↔ `nn_sz_convert` exact to 1e-15; the
+  registered model's proportion vs the reference's width ≤ 1e-12);
+  (g) `inst/scripts/nle_verify.R` prints PASS on every line (three shipped artefacts, DDMnle golden, compiled vs R
+  path 2.1e-13, oracle 8.3e-14, the RDM card) and exits 0;
+  (h) `test-nn-*`: 919 expectations, 0 failures, 0 errors, 5 skips (python/onnxruntime and reg_s402 env vars), 0
+  warnings. Not done: the rebase onto `dev` (AH's decision); nothing on tux26, Gadi or AWS.
+
+## Next stage after M0: M1, the Python package skeleton with the RDM example
+
+Model: **Sonnet 5.5** (or above), auto mode. Laptop or cloud instance; needs Python 3.11/3.12, `uv`, and R with EMC2
+`dev-nle-m0` in a dedicated library for the acceptance lines that touch EMC2.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/NLEFLOW_PLAN.md sections 0, 3, 4, 5, 7.2, 8, 11.2 and 13 and the M0 entry of its progress log (nle repo,
+branch nleflow-plan); then handover/nle-methods/flow/scripts/train_race.py, export_flow.py, golden.py,
+handover/nle-methods/flow/src/flow/{config,data,training,checkpoints}.py, handover/nle-methods/simulation/sim_rdm_a0.R
+and sim_functions.R, and EMC2's vignette neural-likelihood-cards.Rmd (branch dev-nle-m0). Do milestone M1: the Python
+package `nleflow` under nleflow/ in this repository (pyproject + uv lock pinning jax 0.5.3, flax 0.10.6, distrax
+0.1.5, optax 0.2.8, orbax-checkpoint < 0.11.2, numpy 2.2.6, scipy 1.15.3, plus onnx and onnxruntime), with:
+  1. a model specification (section 7.2's YAML/JSON: model, response race|choice, context, transforms, zerobox_c,
+     box_natural, sampling strata, pre, scaling, spline, conditioner, classifier, training, simulator command);
+  2. one `nleflow train <spec>` command that replaces train_race.py for race specs (train_ddm.py's DDM path is M2),
+     reading the parquet contract of section 7.2 and writing checkpoints under a run directory named by the spec;
+  3. one `nleflow export <run> --step N` command that writes a card_version = 1 card (EMC2's vignette is the spec:
+     context, transforms, zerobox_c, bounds, scaler, mlp, spline, pre, support, mass_tolerance, beyond_support,
+     control_limits for race cards, an empty validation block) with the float64 gate against JAX float64 at 1e-8
+     (export_flow.py gates against float32 only: change that) and its golden file via golden.py's code, moved into
+     the package as `nleflow golden <card>`;
+  4. the RDM A = 0 worked example as a spec (context v, B, t0, s, A; A zerobox c = 0.05; the three-part A mixture;
+     [256, 128], 64 bins, range +-5; batch 1024; 300 epochs; 30 kept checkpoints) with a 1 % smoke configuration
+     (2 epochs) that runs end to end on a laptop in minutes;
+  5. a regression test that `nleflow golden` reproduces port/export/rdm_ss_base_s801_e271_golden.csv and
+     rdm_rdm_small_e195's golden to 1e-12 from their JSON cards (golden.py does today), and that a smoke-trained
+     card registers in EMC2 dev-nle-m0 with twin = RDM and passes nn_golden_check() on its own golden file;
+  6. a README with the install steps of section 9.2 for the Python side, each with its one-line check.
+Do not change the exporter's card fields beyond what the vignette names; do not regenerate anything from
+checkpoints; do not touch tux26, Gadi or AWS; no DDM training (M2). Keep --affine and --decision-time as optional
+flags, off by default, documented as unproven (section 13.3.3).
+Acceptance, one line each: (a) `uv sync` from the lock on a fresh machine, then `nleflow --help`; (b) the smoke
+spec trains 2 epochs on 1 % data and exports a card that registers in EMC2 and passes nn_golden_check(); (c)
+`nleflow golden` reproduces the two committed RDM goldens to 1e-12; (d) the exported card's float64 gate passes at
+1e-8 and the float32 gap is printed; (e) `Rscript inst/scripts/nle_verify.R <smoke card>` prints PASS lines and
+exits 0; (f) pytest passes.
+Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this repository), push only that branch,
+append one line to the plan's progress log, and end with ONE next stage: M2 (the DDMnle example and its ONNX graph
+with the CDF, preprocessing and st0 branch, section 2.4.1), model Opus 5.5 or Fable, auto mode, with its full prompt.
+```
