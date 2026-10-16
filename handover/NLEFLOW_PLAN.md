@@ -178,8 +178,14 @@ advantage (`EMC2_INTEGRATION.md:251-288`); nothing in this plan changes that, an
 2. **The committed DDMnle card has no golden vectors.** `port/export/` holds `ddm_sc_s1106_e245_weights.json` (and
    the two runners-up) but the only scaled golden file is `ddm_sc_pilot_e27_golden.csv`, whose weights are *not*
    committed; `port/tests/test_ddm_scaled_card.R` therefore cannot run on the committed material (it stops at
-   `normalizePath`). Regenerating `ddm_sc_s1106_e245_golden.csv` needs the checkpoint on tux26 and one
-   `export_flow_ddm.py --scaled --step 245` run. **This is the first thing the verification command needs.**
+   `normalizePath`). **No tux26 run is needed to fix this** (probe, 2026-10-16, §13): the exporter's float64 NumPy
+   port (`export_flow_ddm.py:172-204`, `ddm_eval_f64`) reads the weights JSON alone, so the golden grid (seed
+   20260708, 25 sets on the network-scale box with exact zeros forced, rt = geomspace(1e-4, 4, 23), both responses)
+   can be regenerated from the committed card; EMC2's compiled evaluator reproduces that regenerated golden set to
+   max |Δlog pdf| 1.24e-10 and |ΔCDF| 6.3e-15 over 1150 rows. The JAX float64 gate (which does need the
+   checkpoint) was already passed at export, worst 1.8e-10 (`SCALED_DDM_PLAN.md:181`), so a golden file made this
+   way is the port's values gated once against JAX, which is what the pilot's golden file is too. **This is the
+   first thing the verification command needs**, and it is a script, not a compute run.
 3. **The compiled path is not reachable from `register_nn_model()`.** It needs the patch (uncommitted on the EMC2
    side), `ddm_sc_native_reg()` (in the nle repo), and a zero-box 8-parameter scaffold card, which is not committed.
    For the probe in §1.3 I made a throw-away scaffold from the committed `ddm_cap256w_c4` card by relabelling
@@ -216,9 +222,14 @@ L(rt, R | θ) = f_R(rt) · Π_{j≠R} S_j(rt) (`METHODS.md:127-135`; `port/R/flo
 | SBC | N = 100 and 400, 500 reps, all parameters inside the gate, ranks uniform (`METHODS.md:224-233`) | Gadi, 2026-10-06, final sampler: A = 0 cell N 400 (250 reps) and standard cells N 100/400 (500 reps), network and control, |std bias| ≤ 0.13, coverage .92–.98 (`sbc/gadi/cells/*/results_aa66/summary.csv`; `MALTE_STAGES.md:1106-1124`) | RDM final flow: A = 0 cell clean (same place); CRDM hybrid network passes at N 400 and is indistinguishable from the Volterra control (`MALTE_STAGES.md:1126-1165`) |
 | weights in the repo | **yes**: `handover/nle-methods/artefacts/rdm_rdm_small_e195_weights.json` and `rdm_small.rds`; golden `rdm_rdm_small_e195_golden.csv` in the EMC2 test tree | **no** (the Gadi bundles hold `cell.rds`, `run_cell.R`, `session.txt`; the card lived in `port/export`, untracked) | **no** trained weights; three random-weight fixtures with golden vectors under `malte/fixtures/` |
 
-Which of these is "the RDM" for the package is a decision for AH (§11.3): `rdm_small` is the committed, documented
-artefact; the A = 0 flow is the one the comparison with Malte and the seed study are built on and the one a user
-fitting a Wald race (A = 0) needs.
+**Decided (AH, 2026-10-16, §13): the worked example is the A = 0 box flow, checkpoint `rdm_ss_base_s801_e271`**,
+selected from 120 checkpoints by W = max |g| (W = 0.0022; the flow of the report's Appendix C), not Malte's and not
+`rdm_small`. Its card is **not in the repository** (the Gadi bundles record it by name and hash only:
+`sbc/gadi/cells/rdm_o_std_N400/bundle/session.txt:2`, sha256
+`b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700`); it lives in the laptop's untracked
+`port/export/rdm_ss_base_s801_e271_weights.json`, with its golden CSV and intermediates beside it if the
+exporter wrote them. AH is to commit it (and the golden file) to this branch; the final release location is decided
+at packaging time.
 
 ### 3.2 Screening, the seed study, and the EMC2 side
 
@@ -288,7 +299,7 @@ LBA, CRDM (`nn_register.R:59`); zero-box names `sv, SZ, st0` and the `st0zero` r
 looks up `st0` and `t0` by name (`flow_ddm.cpp:281-298`); hybrid Wald map `c(v, b → B, s)` (`:674`); the `triple`
 encoding's column positions (`flow_ddm.cpp:68-80`); the scaled patch's exactly-four-inputs and eight DDM columns.
 
-### 4.4 Details the documentation needs that are not written down (ask AH)
+### 4.4 Details the documentation needs that are not written down (answered by AH 2026-10-16; see §13)
 
 1. Which RDM artefact is the worked example (§3.1), and whether the A = 0 flow's card should be committed.
 2. The SZ convention at every interface: the network's SZ is the *relative* width (SZ/m, `ddm_scaled.R:30-35`);
@@ -626,8 +637,10 @@ It is independent of the Python-package decision and it removes the three gaps f
    `DDMsc()`'s R path becomes the R-path twin of the compiled kind (like the other kinds). Acceptance: compiled vs
    `ddm_sc_density` ≤ 1e-11 on 200 draws × 6 models (the existing check in `scaled_cell.R`).
 3. **`nn_golden_check(card, golden)`** in EMC2, used by the tests and by `nle_verify`.
-4. **DDMnle golden vectors** for `ddm_sc_s1106_e245` (one tux26 export; AH to approve), committed beside the card,
-   plus the two runners-up if they are kept.
+4. **DDMnle golden vectors** for `ddm_sc_s1106_e245`, regenerated from the committed weights JSON by a script
+   (`nleflow golden <card>`, the NumPy port's grid; §2.4.2), committed beside the card, plus the two runners-up if
+   they are kept. The script is also the regeneration path for every other card whose export predates the golden
+   convention (`rdm_ss_base_s801_e271`, if its golden file was not kept). No checkpoint access, no tux26.
 5. **`nle_verify`** (§9.3) and the R < 4.5 fix.
 6. The scaled patch pushed as an EMC2 branch (`dev-nle-scaled`) rather than a file in this repository.
 
@@ -637,18 +650,15 @@ M1 Python package skeleton with the RDM example (cheap to train, exact control);
 ONNX graph; M3 converter move and presets; M4 docs, container, CI. Each milestone ends with `nle_verify` passing on a
 fresh machine.
 
-### 11.3 Decisions AH needs to make next
+### 11.3 Decisions AH needed to make next (all taken 2026-10-16; the answers are in §13)
 
-1. **Build the Python package, or freeze the scripts** (option B vs C). My recommendation is B; C is defensible if
-   nobody will own the Python side.
-2. **No separate R package**: agree that the R side lives in EMC2 `dev-nle`. If AH wants the NN layer kept out of
-   EMC2 proper for the release, the alternative is a small `EMC2nle` R package that *depends* on EMC2 and holds
-   `register_nn_model`, the kit and the loaders; that is a packaging choice, not new code, and it would keep CRAN
-   EMC2 free of the C++ evaluators. I would still not call it nleFlow or put training in it.
-3. **Which RDM is the worked example** (§3.1), and whether to commit the A = 0 flow's card.
-4. **Approve one tux26 export run** for the DDMnle golden vectors (§2.4.2), and say where the checkpoints are.
-5. **The rebase of `dev-nle` onto `dev`**: before or after M0.
-6. The open conventions in §4.4 (SZ, s = 1, ±4 sd, tail mass, affine/decision-time status).
+1. **Build the Python package, or freeze the scripts** (option B vs C). Recommended B. **Decided: B.**
+2. **No separate R package**: the R side lives in EMC2 `dev-nle`. **Decided: no separate R package.**
+3. **Which RDM is the worked example** (§3.1). **Decided: the A = 0 box flow, `rdm_ss_base_s801_e271`.**
+4. **Approve one tux26 export run** for the DDMnle golden vectors. **Approved, and then not needed** (§2.4.2): the
+   golden vectors regenerate from the committed JSON. The approval stands unused unless the export format changes.
+5. **The rebase of `dev-nle` onto `dev`**: before or after M0. **Recommended and decided: after** (§13.2).
+6. The open conventions in §4.4. **Answered** (§13.3).
 
 ### 11.4 Deviation from the prompt
 
@@ -659,32 +669,109 @@ carries the trailer for the model that wrote it, plus the session link, rather t
 
 ## 12. Next stage (one model, one prompt)
 
-Blocked on decisions 1–4 of §11.3 only for its last step; everything else can start. Model: **Opus 5.5** (or Fable),
-auto mode; this is EMC2-side, trap-dense work with exact acceptance tests, the kind this project assigns to
-Opus/Fable (`handover/ZERO_BOX_RETRAIN_PLAN.md`, "which model for which stage").
+Nothing blocks it (§13). Model: **Opus 5.5** (or Fable), auto mode; this is EMC2-side, trap-dense work with exact
+acceptance tests, the kind this project assigns to Opus/Fable (`handover/ZERO_BOX_RETRAIN_PLAN.md`, "which model
+for which stage"). It runs on the laptop, where the EMC2 checkouts and `~/R/nle-lib` are.
 
 ```
 AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
-Read handover/NLEFLOW_PLAN.md sections 1.1, 2.4, 7.1, 9.3 and 11.1 (nle repo, branch nleflow-plan), then
+Read handover/NLEFLOW_PLAN.md sections 1.1, 1.3, 2.4, 7.1, 9.3, 11.1 and 13 (nle repo, branch nleflow-plan), then
 handover/nle-methods/port/R/ddm_scaled.R, handover/emc2/emc2_dev-nle-scaled.patch, and in the EMC2 dev-nle tree
-R/nn_register.R (register_nn_model, nn_normalise_card, nn_native_spec), src/model_NN.h, tests/testthat/test-nn-port.R.
-Do milestone M0 of the plan, items 1, 2, 3 and 5, on a local EMC2 branch dev-nle-m0 off 142bd497 (the tarball in
-handover/emc2, or the local dev-nle if present), installed into a NEW dedicated library; never into ~/R/nle-lib.
-Item 4 (DDMnle golden vectors) needs one export on tux26: do not run it; write the exact command and stop at that
-point if AH has not approved it. Do not rebase onto dev in this stage.
-Acceptance, one line each: (a) register_nn_model("port/export/ddm_sc_s1106_e245_weights.json", twin = DDM) returns
-a flow_scaled registration with no scaffold; (b) its compiled likelihood equals ddm_sc_density to <= 1e-11 over 200
-prior draws in each of the six regimes of sbc/scaled_cell.R; (c) nn_golden_check() passes on rdm_small and
-cap256w_c4 against tests/testthat/golden and fails loudly on a perturbed golden row; (d) a card without
-card_version loads as version 0 and a card with card_version = 2 is refused by name; (e) on R < 4.5 the shipped
-artefacts either load (MANIFEST carries md5) or fail with a message that names the R version; (f) Rscript
-inst/scripts/nle_verify.R prints one PASS line per card and exits 0; (g) the full test-nn-* suite passes.
-Work with absolute paths, at most 8 cores, nothing on tux26, Gadi or AWS. Commit on the EMC2 branch and on
-nleflow-plan (the plan's progress log, one line), push only those two branches, and end with ONE next stage: M1 or
-the golden-vector export, depending on AH's answers to section 11.3.
+R/nn_register.R (register_nn_model, nn_normalise_card, nn_native_spec, nle_file_hash), R/nn_validate.R
+(nn_total_mass, nn_in_box), src/model_NN.h, tests/testthat/test-nn-port.R.
+Do milestone M0 of the plan (section 11.1, all six items, as amended by section 13) on a local EMC2 branch
+dev-nle-m0 off 142bd497 (the local dev-nle with the final sampler; the tarball in handover/emc2 is the same tree),
+installed into a NEW dedicated library; never into ~/R/nle-lib. Do not rebase onto dev in this stage (AH's
+decision, section 13.2); push the scaled patch as the first commit of the branch so it stops being a file in
+another repository.
+Item 4 (DDMnle golden vectors) is a script, not a compute run: port the exporter's float64 NumPy path to a
+standalone `golden.py <weights.json>` that reads the card alone (grid as in section 2.4.2), write
+port/export/ddm_sc_s1106_e245_golden.csv with it, and check the compiled evaluator against it. Do not touch
+tux26, Gadi or AWS, and do not regenerate anything from checkpoints.
+Section 13.3 is part of the specification: the SZ contract (three conventions, one conversion function, a golden
+row at each boundary); the s range and the v b / s^2 overflow limit recorded in race cards and checked at
+registration; nn_in_box warns and never enforces; nn_total_mass integrates over the support the card states and
+expects 1 within the card's tolerance; cap256w_c4's documentation says no t0 correction is applied; a warning
+when rt_resolution is coarser than 1/1000 and t0 is sampled.
+Acceptance, one line each: (a) register_nn_model("port/export/ddm_sc_s1106_e245_weights.json", twin = DDM)
+returns a flow_scaled registration with no scaffold; (b) its compiled likelihood equals ddm_sc_density to <= 1e-11
+over 200 prior draws in each of the six regimes of sbc/scaled_cell.R; (c) nn_golden_check() passes on rdm_small,
+cap256w_c4 and ddm_sc_s1106_e245 against their golden files and fails loudly on a perturbed golden row; (d) a card
+without card_version loads as version 0 and a card with card_version = 2 is refused by name; (e) on R < 4.5 the
+shipped artefacts either load (MANIFEST carries md5) or fail with a message that names the R version; (f) the SZ
+golden rows pass at all three boundaries; (g) Rscript inst/scripts/nle_verify.R prints one PASS line per card and
+exits 0; (h) the full test-nn-* suite passes. If AH has committed rdm_ss_base_s801_e271's card and golden file to
+nleflow-plan by then, add it to (c) and (g); if not, say so in the log and leave it out.
+Work with absolute paths, at most 8 cores. Commit on the EMC2 branch and on nleflow-plan (the plan's progress
+log, one line), push only those two branches, and end with ONE next stage: M1, the Python package skeleton with the
+RDM example (section 11.2), model Sonnet 5.5 or above, auto mode, with its full prompt.
 ```
+
+## 13. Decisions taken (AH, 2026-10-16) and what they change
+
+### 13.1 The five decisions
+
+1. **Build the Python package** (option B, §6).
+2. **No separate R package**; the R side lives in EMC2 `dev-nle`.
+3. **The RDM worked example is the A = 0 box flow, `rdm_ss_base_s801_e271`** (§3.1), not Malte's. Its card and
+   golden file are to be committed to this branch by AH from the laptop's `port/export/`; the sha256 of the weights
+   file recorded in the Gadi bundles is `b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700`
+   (`sbc/gadi/cells/rdm_o_std_N400/bundle/session.txt:2`). Final release location at packaging time.
+4. **A tux26 export run was approved** for the DDMnle golden vectors, and is **not needed**: the probe in §2.4.2
+   shows the golden grid regenerates from the committed JSON through the exporter's own float64 port, and EMC2's
+   compiled evaluator matches it to 1.2e-10. The existing exports under `handover/nle-methods/port/export/` are the
+   package's reference files; a regeneration script ships with the package; nothing is regenerated from checkpoints
+   unless the export format changes, and then only with AH's permission.
+5. **Rebase `dev-nle` onto `dev` after M0, not before** (AH's preference; my recommendation agrees, §13.2).
+
+### 13.2 Why the rebase can wait
+
+Measured on the GitHub branches (2026-10-16): `dev` and `dev-nle` forked at a311c03e (14 Sep); since then `dev` has
+5 commits and `dev-nle` 15 (plus the local sampler merge 142bd497 and the scaled patch). Files both branches changed:
+`NAMESPACE`, `NEWS.md`, `R/SBC.R`, `R/sampling.R`. The NN layer touches those two R files in one line each
+(`R/sampling.R:1010` on `dev-nle`, the `nn_native_args` hook; `R/SBC.R:34`, `nn_sbc_box_check`) plus the `qbinom`
+fix in `SBC.R` (154f21ad), while `dev` rewrote `sampling.R` (651 lines) and `SBC.R` (57) for the new sampler.
+`dev-sampler` is not an ancestor of `dev` (the sampler reached `dev` as 8b9bdbf, 6 Oct, by a different route), so
+the merge will have to reconcile the sampler twice, once for each side's copy, and that is work for whoever is still
+changing `dev`, when it is stable. M0 adds nothing to that merge: it changes `R/nn_register.R`, `R/nn_validate.R`,
+`src/model_NN.h`, `src/flow_ddm.cpp`, `src/nle_native.h`, `inst/scripts/`, `tests/testthat/test-nn-*` and a vignette,
+none of which `dev` touches. The risk of waiting is only that the hooks' line numbers move; the usability gate
+(`EMC2_IMPLEMENTATION_BRIEF.md:301-351`, 25 min at 8 cores) is the check after the rebase, whenever it happens.
+So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's EMC2 side needs it.
+
+### 13.3 The conventions, now contracts (AH's detailed answers)
+
+1. **SZ.** Three conventions exist and each is defined once in the card schema with a conversion function and a
+   golden row at its boundary: the network's SZ is *relative* (SZ/m, m = min(Z, 1 − Z); `ddm_scaled.R:30-35`);
+   EMC2's `DDM()` passes `sw = 2 SZ min(Z, 1 − Z)` after `Ttransform`; the scaffold passes a proportion
+   (`scaled_cell.R:53-57`). M0's `flow_scaled` kind carries the conversion and the golden rows (acceptance (f) in §12).
+2. **s = 1 and the ±4 sd rule** are cell conventions, not package defaults. Race cards record the s range and the
+   v b / s² limit (pWald overflows above 354, `build_rdm_cell.R:12-13`) and registration checks them; the
+   prior-inside-box rule becomes a validation helper (`nn_in_box`) that warns and never enforces.
+3. **`--affine` and `--decision-time`** are experiment options: optional training flags, the baseline (neither) as the
+   default, documented as unproven, revisited when the seed-study reading arrives.
+4. **Tail mass.** `nn_total_mass()` integrates over the time support the card states and expects 1 within the
+   tolerance the card states; the card records how mass beyond the support is treated (for DDMnle: the identity tail
+   beyond `range_max = 2` on log u, 1 − Φ(2), θ-independent, §2.4.4). This replaces the `tail_mass` field proposed in
+   §7.1 with two: `support` (the time range the card is valid on) and `mass_tolerance`, plus a `beyond_support` note.
+5. **The t0 correction** is not carried by the package. The fixed delta 0.00276 was reopened on 2026-10-13 (exact test:
+   mean rank .534, KS p .007; an out-of-sample test of about 0.0019 pending; `OPEN_ITEMS.md:31-35`). `cap256w_c4`'s
+   documentation says that no correction is applied, that an unresolved t0 shift of about 0.002 at N = 800 remains,
+   that DDMnle replaces it for the scaled cases, and links the exact-test record.
+6. **`rt_resolution ≤ 1/1000`**: a vignette note plus a warning when the data resolution is coarser and t0 is
+   sampled (EMC2's default 1/60 s flooring biases t0 by about −1.9 posterior sd at N = 100 even for the analytic
+   likelihood, `METHODS.md:714-715`).
+7. **Golden vectors** are a fixed set of inputs with the outputs the network must return, computed once from the
+   trained weights; every port (compiled EMC2, R reference, ONNX, any future PyTorch port) is tested against them.
+   The existing exports under `handover/nle-methods/port/export/` are the reference files; the package includes the
+   regeneration script (§2.4.2); no regeneration from the tux26 checkpoints without AH's explicit permission, and
+   only if the export format changes.
 
 ## Progress log
 
 - 2026-10-16 plan written (this file); probes run on the cloud instance as in §1.3; nothing on tux26, Gadi or AWS;
   no push to ampl-psych/EMC2.
+- 2026-10-16 AH's decisions recorded (§13); §2.4.2, §3.1, §11.1, §11.3 and the §12 prompt amended. Probe: DDMnle
+  golden vectors regenerated from the committed JSON match EMC2's compiled evaluator to 1.2e-10 (log pdf) and
+  6e-15 (CDF) over 1150 rows, so the approved tux26 export is not needed. The RDM A = 0 card is not in the
+  repository; AH to commit it from the laptop.
