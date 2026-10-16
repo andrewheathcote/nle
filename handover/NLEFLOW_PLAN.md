@@ -118,6 +118,7 @@ has its own `train_ddm.py`, `retrain_classifier.py`, `export_flow_ddm.py`, each 
 | EMC2's own nn tests (`test-nn-port/register/mlp/zerobox/malte/native`) | **503 expectations pass, 10 errors, 3 skips**; every error is one trap: `tools::sha256sum` does not exist before R 4.5, `nle_file_hash` (`R/nn_register.R:42-46`) falls back to md5, and `inst/extdata/flownn/MANIFEST` holds sha256 only, so every *shipped* artefact fails "does not match the sha256 pinned". JSON cards register fine. On R ≥ 4.5 (the laptop runs 4.6.0) this never shows |
 | the committed DDMnle card `port/export/ddm_sc_s1106_e245_weights.json` through `ddm_sc_card_evaluator()` | loads; 0.415 ms per 400-row evaluator call; total mass by quadrature up to log u = 2 is 0.9757 and the sum of the two defective CDFs at the spline's `range_max` is exactly Φ(2) = 0.97725 for every θ tried (§2.4) |
 | the compiled DDMnle path: patched build + `sbc/scaled_cell.R ... BENCH=1 NATIVE=1` with a throw-away scaffold card (§2.4) | compiled vs R path max |diff| **6.96e-13** (full) and 1.36e-12 (st0only); per likelihood (N = 400, one thread): analytic 1.43 ms, R path 1.01, compiled 0.375 (3.8x; laptop 9.8x, `SCALED_DDM_PLAN.md:255-262`); st0only 0.50 / 1.03 / 0.31 (1.6x; laptop 2.9x). The LL-vs-analytic line reads "mean diff −6.83, sd 7.00", the same numbers as the AWS test machine (`SCALED_DDM_PLAN.md:204`) |
+| the RDM A = 0 card `rdm_ss_base_s801_e271` (28020b7): sha256 check, R port vs golden, `register_nn_model(card, twin = RDM)` | sha256 matches the Gadi bundles; R port vs golden 575 rows: |Δlog pdf| 9.6e-13, |ΔCDF| 3.6e-15, |Δlog sf| 3.1e-14 (115 rows at A = 0); registers as `flow_race`, R-path evaluator vs golden |Δlog pdf| 1.9e-12 |
 | the LAN card registered with its twin (`sbc/lan_case5/lan_model.R`) | registers (type DDM, `c_name` NN). My hand comparison with the ORT golden rows returned the floor and I did not chase it; EMC2's own `test-nn-mlp.R` covers that comparison and passes |
 
 Not run here: anything on tux26, Gadi or AWS; training; the SBC cells; `nle_acceptance.R` (it loads the shipped
@@ -224,12 +225,13 @@ L(rt, R | θ) = f_R(rt) · Π_{j≠R} S_j(rt) (`METHODS.md:127-135`; `port/R/flo
 
 **Decided (AH, 2026-10-16, §13): the worked example is the A = 0 box flow, checkpoint `rdm_ss_base_s801_e271`**,
 selected from 120 checkpoints by W = max |g| (W = 0.0022; the flow of the report's Appendix C), not Malte's and not
-`rdm_small`. Its card is **not in the repository** (the Gadi bundles record it by name and hash only:
-`sbc/gadi/cells/rdm_o_std_N400/bundle/session.txt:2`, sha256
-`b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700`); it lives in the laptop's untracked
-`port/export/rdm_ss_base_s801_e271_weights.json`, with its golden CSV and intermediates beside it if the
-exporter wrote them. AH is to commit it (and the golden file) to this branch; the final release location is decided
-at packaging time.
+`rdm_small`. Its card, golden vectors and intermediates are on this branch since 28020b7:
+`handover/nle-methods/port/export/rdm_ss_base_s801_e271_{weights.json,golden.csv,intermediates.json}`. The weights
+file's sha256 is `b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700`, verified here against the hash
+the Gadi bundles record (`sbc/gadi/cells/rdm_o_std_N400/bundle/session.txt:2`). The golden CSV (575 rows, 25
+parameter sets × 23 rt, five sets at exactly A = 0) is the RDM reference for every port test, as the existing
+exports are for DDMnle; nothing is regenerated from checkpoints. The final release location is decided at packaging
+time.
 
 ### 3.2 Screening, the seed study, and the EMC2 side
 
@@ -639,8 +641,8 @@ It is independent of the Python-package decision and it removes the three gaps f
 3. **`nn_golden_check(card, golden)`** in EMC2, used by the tests and by `nle_verify`.
 4. **DDMnle golden vectors** for `ddm_sc_s1106_e245`, regenerated from the committed weights JSON by a script
    (`nleflow golden <card>`, the NumPy port's grid; §2.4.2), committed beside the card, plus the two runners-up if
-   they are kept. The script is also the regeneration path for every other card whose export predates the golden
-   convention (`rdm_ss_base_s801_e271`, if its golden file was not kept). No checkpoint access, no tux26.
+   they are kept. The RDM card `rdm_ss_base_s801_e271` already has its golden file (§3.1) and uses it as is. No
+   checkpoint access, no tux26.
 5. **`nle_verify`** (§9.3) and the R < 4.5 fix.
 6. The scaled patch pushed as an EMC2 branch (`dev-nle-scaled`) rather than a file in this repository.
 
@@ -700,8 +702,9 @@ cap256w_c4 and ddm_sc_s1106_e245 against their golden files and fails loudly on 
 without card_version loads as version 0 and a card with card_version = 2 is refused by name; (e) on R < 4.5 the
 shipped artefacts either load (MANIFEST carries md5) or fail with a message that names the R version; (f) the SZ
 golden rows pass at all three boundaries; (g) Rscript inst/scripts/nle_verify.R prints one PASS line per card and
-exits 0; (h) the full test-nn-* suite passes. If AH has committed rdm_ss_base_s801_e271's card and golden file to
-nleflow-plan by then, add it to (c) and (g); if not, say so in the log and leave it out.
+exits 0; (h) the full test-nn-* suite passes. The RDM card rdm_ss_base_s801_e271 (card, golden and intermediates
+under handover/nle-methods/port/export/, sha256 b6ce7db9...) is part of (c) and (g): its golden file is the
+reference; register it with twin = RDM, and do not regenerate it.
 Work with absolute paths, at most 8 cores. Commit on the EMC2 branch and on nleflow-plan (the plan's progress
 log, one line), push only those two branches, and end with ONE next stage: M1, the Python package skeleton with the
 RDM example (section 11.2), model Sonnet 5.5 or above, auto mode, with its full prompt.
@@ -713,10 +716,10 @@ RDM example (section 11.2), model Sonnet 5.5 or above, auto mode, with its full 
 
 1. **Build the Python package** (option B, §6).
 2. **No separate R package**; the R side lives in EMC2 `dev-nle`.
-3. **The RDM worked example is the A = 0 box flow, `rdm_ss_base_s801_e271`** (§3.1), not Malte's. Its card and
-   golden file are to be committed to this branch by AH from the laptop's `port/export/`; the sha256 of the weights
-   file recorded in the Gadi bundles is `b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700`
-   (`sbc/gadi/cells/rdm_o_std_N400/bundle/session.txt:2`). Final release location at packaging time.
+3. **The RDM worked example is the A = 0 box flow, `rdm_ss_base_s801_e271`** (§3.1), not Malte's. Its card,
+   golden file and intermediates are on this branch (28020b7, committed by AH from the laptop's `port/export/`);
+   the weights file's sha256 `b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700` matches the Gadi
+   bundles' record. The golden CSV is the RDM reference for the port tests. Final release location at packaging time.
 4. **A tux26 export run was approved** for the DDMnle golden vectors, and is **not needed**: the probe in §2.4.2
    shows the golden grid regenerates from the committed JSON through the exporter's own float64 port, and EMC2's
    compiled evaluator matches it to 1.2e-10. The existing exports under `handover/nle-methods/port/export/` are the
@@ -773,5 +776,11 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   no push to ampl-psych/EMC2.
 - 2026-10-16 AH's decisions recorded (§13); §2.4.2, §3.1, §11.1, §11.3 and the §12 prompt amended. Probe: DDMnle
   golden vectors regenerated from the committed JSON match EMC2's compiled evaluator to 1.2e-10 (log pdf) and
-  6e-15 (CDF) over 1150 rows, so the approved tux26 export is not needed. The RDM A = 0 card is not in the
-  repository; AH to commit it from the laptop.
+  6e-15 (CDF) over 1150 rows, so the approved tux26 export is not needed.
+- 2026-10-16 the RDM A = 0 card committed by AH (28020b7). Verified here: weights sha256
+  `b6ce7db9ca98ed17f1b04ecfc8860744fd5716ee20709f1baddcccdac0b44700` = the Gadi bundles' record; card fields
+  `context_names v,B,t0,s,A`, `A: zerobox` with c = 0.05, box A ∈ [0, 2], [256, 128], 64 bins, range ±5. R reference
+  port (`port/R/flow_race.R`) vs its golden CSV: 575 rows, max |Δlog pdf| 9.6e-13, |ΔCDF| 3.6e-15, |Δlog sf| 3.1e-14,
+  115 rows at exactly A = 0. `register_nn_model(card, twin = RDM)` in dev-nle 142bd497 registers it as `flow_race`,
+  `c_name NN`; the R-path evaluator vs golden: |Δlog pdf| 1.9e-12, |Δlog sf| 6.1e-14. The "card not in the
+  repository" case is withdrawn from §3.1, §11.1, §12 and §13.
