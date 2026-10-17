@@ -1,0 +1,46 @@
+# HSSM's DDM with uniform non-decision-time variability, the "ddm-st-lans"
+# likelihood approximation network (LAN). A preset says what an ONNX graph
+# cannot: what the inputs mean, on what scale, over what box, and how the
+# network's parameters map onto an EMC2 model. Every value here was checked;
+# the `checked` block says against what.
+name: ddm_uniform_st
+source_model: "huggingface.co/Eitanm/ddm-st-lans :: ddm_uniform_st.onnx"
+source_sha256: a9acbc4a238ff5df8ef53fda5bb0d89d20e4e23c3fc862ae25888739c99dc63f
+params: [v, a, z, t, st]            # the network's parameter inputs, in its order
+input_layout: [v, a, z, t, st, rt, R]
+transforms: {v: identity, a: identity, z: identity, t: identity, st: identity}   # raw inputs, no standardisation
+box:                                # the training box (natural scale); rows outside get ll_floor
+  v: [-3.0, 3.0]
+  a: [0.3, 2.5]
+  z: [0.3, 0.7]
+  t: [0.25, 2.25]
+  st: [0.001, 0.25]
+ll_floor: -16.11809565095832        # log(1e-7): the floor of the network's training labels
+response_values: [-1.0, 1.0]        # network input for EMC2's responses 1 (lower) and 2 (upper)
+encoding: "input = [v,a,z,t,st,rt,choice] with choice in {+1,-1}; no standardisation"
+twin: DDM                           # the EMC2 model the mapping lands on
+map_to_emc2_ddm: "a_EMC2 = 2*a_lan; Z = z; t0 = t - st; st0 = 2*st; sv = 0; SZ = 0; s = 1"
+mapping:                            # the same, structured: EMC2 DDM parameter <- expression in the LAN's
+  v: v
+  a: 2 * a
+  Z: z
+  t0: t - st
+  st0: 2 * st
+  sv: "0"
+  SZ: "0"
+  s: "1"
+emc2_p_types: {v: 0, a: 1, z: 0.5, t: 0.5, st: 0.05}   # register_nn_model(card, p_types = ...): no twin defaults
+checked:
+  mapping: >-
+    determined empirically against WienR and verified to 4.3e-7 (handover/EMC2_IMPLEMENTATION_BRIEF.md,
+    "What the files look like"); recovered as the best agreement by a profile scan over a, t0, st0, Z and v
+    in EMC2's tests/testthat/test-nn-mlp.R (dev-nle-m0), which also rejects the three wrong mappings
+    (a not doubled, t as the lower end, responses swapped)
+  box_v_a: >-
+    equal to HSSM's own DDM LAN box, v in (-3, 3) and a in (0.3, 2.5)
+    (github.com/lnccbrown/HSSM, src/hssm/modelconfig/ddm_config.py, approx_differentiable, main as of 2026-10-17)
+  box_z_t_st_floor: >-
+    from the network's source repository (huggingface.co/Eitanm/ddm-st-lans), as recorded in EMC2's
+    inst/scripts/onnx_to_card.py preset; not re-read at the M3 conversion because huggingface.co is outside
+    the cloud instance's network policy
+  sha256: the ONNX file EMC2's tests/testthat/golden/ddm_uniform_st.onnx, which the preset was checked on

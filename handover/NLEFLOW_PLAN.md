@@ -443,6 +443,11 @@ is a C++ change too), a preset per published LAN with its parameter mapping and 
 and a refusal message that names the first unsupported node. The converter must keep writing `calibration:
 "unknown; needs its own SBC cell before inference"` (as the LAN card does: `sbc/lan_case5/lan_ddm_uniform_st.rds`).
 
+**Done in M3 (2026-10-17):** the converter is `nleflow convert` (`nleflow/src/nleflow/convert.py`, presets as data
+under `nleflow/src/nleflow/presets/`), with batched and Gemm graphs, Gelu(tanh), refusals that name the first node,
+a float64 gate against onnxruntime and the golden file. EMC2's `inst/scripts/onnx_to_card.py` is retired in its
+favour: it stays in EMC2 until the M4 EMC2 pass removes it or points to nleflow, and is no longer maintained.
+
 ### 7.5 Validation built into export, so that a card cannot be exported without passing
 
 | gate | where it runs | exists |
@@ -877,6 +882,36 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   `uv sync --frozen --group dev` from the lock, `nleflow --help`, `pytest` (12 passed, 1 skipped) and the EMC2
   registration test with `NLEFLOW_EMC2_LIB` all exited 0; nothing changed or pushed. The lock resolves on macOS
   and the README's Python steps hold on a machine that is not the cloud instance. M2 (adc8579) not yet checked there.
+- 2026-10-17 **M3 done** (cloud instance, Opus 5.5; this repo only, `nleflow/` on nleflow-plan; nothing on tux26,
+  Gadi or AWS; no change to EMC2; no SBC). `nleflow convert <model.onnx> --preset <name> [--verify N | --rows csv]`
+  (`convert.py`): onnx_to_card.py's reader moved into the package and extended to rank-1 `[k]` and batched `[N, k]`
+  inputs, MatMul + Add or Gemm layers, Tanh and Gelu(tanh) hidden layers, Identity and edge reshapes; Relu, exact
+  Gelu, Sigmoid and any non-chain node are refused by position, op type and name (EMC2's load_mlp runs tanh and
+  gelu_tanh only); the card is card_version 1 mlp_joint with `validation: {calibration: unknown ..., golden: {file,
+  tolerance}}`; presets as YAML (`src/nleflow/presets/ddm_uniform_st.yaml`: the mapping as text and structured, the
+  box, floor, response coding, `emc2_p_types`, the checked file's sha256 and a `checked` block citing EMC2's
+  test-nn-mlp.R profile scan, the WienR check of EMC2_IMPLEMENTATION_BRIEF.md and HSSM's ddm_config.py for v and a;
+  z, t, st and the floor not re-read because huggingface.co is outside this instance's network policy); `nleflow
+  convert --list-presets`; README section; 18 new pytest cases. Acceptance, as run: (a) the converted
+  ddm_uniform_st card equals EMC2's committed card (tests/testthat/golden/lan_ddm_uniform_st.rds) in 13 of that
+  card's 15 fields (R's identical()); the other two are `converted_with` (provenance) and `calibration`, which moved
+  into `validation`; its weights,
+  box and floor equal this repo's lan_ddm_uniform_st.json; (b) --verify: card vs a float64 copy of the graph
+  1.1e-14 with one-trial calls and batched, vs the published float32 graph 1.1e-5 (5.0e-6 on the committed rows),
+  rank-1 vs batched onnxruntime identical; the 1e-6 asked for is below float32 round-off for any float64
+  evaluator, so the gate is 1e-10 on the float64 copy and 1e-4 on the float32 source (EMC2's own test uses 1e-4);
+  onnxruntime on the committed CSV's rows reproduces lan_ddm_uniform_st_ort.csv exactly; (c) the card registers in
+  EMC2 dev-nle-m0 as mlp_joint, card_version 1, c_name NN, and nn_golden_check(tol = 1e-4) passes against its own
+  golden file (1.1e-5) and the committed ort CSV (5.0e-6); a converted gelu_tanh network registers and passes too;
+  (d) Sigmoid, Relu and exact Gelu graphs are refused naming `node 2 (<Op>, name '<name>', ...)`, a Mul between
+  layers likewise; (e) pytest: 43 passed with `NLEFLOW_EMC2_LIB`, 38 passed and 5 skipped without; (f) README.
+  Found: (1) onnxruntime's double-precision Gelu kernel is accurate to 5.8e-9 only (Tanh 5.6e-16), so the float64
+  reference copy expands Gelu into Mul/Add/Tanh; (2) EMC2 reads cards with R's `$`, which partially matches names:
+  a card field `preset` was read as `pre` and the card refused, so the converter writes no field the vignette does
+  not name (the preset goes into `converted_with`); EMC2 should read card fields exactly (M4); (3) nle_verify.R
+  cannot check a LAN card (it registers without p_types, and nn_golden_check's default 1e-9 is below float32
+  round-off; the card now records its tolerance in validation.golden, which EMC2 does not yet read) (M4). The Mac
+  check of M2 has not reported back in this session.
 
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
@@ -1025,4 +1060,55 @@ nn_golden_check() against the ort CSV; (d) a graph with a Sigmoid node is refuse
 Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this repository), push only that branch,
 append one line to the plan's progress log, and end with ONE next stage: M4 (docs, container, CI, the rebase of
 dev-nle onto dev once AH's dev work settles; model Sonnet 5.5 or above, auto mode), with its full prompt.
+```
+
+## Next stage after M3: M4, docs, container, CI, and the EMC2 pass
+
+Model: **Sonnet 5.5** (or above), auto mode. **On AH's Mac**, in a Claude Code session there: the EMC2 part edits and
+pushes ampl-psych/EMC2, which the cloud instance cannot (HTTP 403), and the rebase needs AH's local `dev`. The nle
+part can run anywhere. Part C (the rebase) runs only if AH says in the session that `dev` has settled; otherwise
+it is skipped and recorded as pending.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/NLEFLOW_PLAN.md sections 9, 10.3, 11.2, 13.2 and the M0 to M3 entries of its progress log (nle repo,
+branch nleflow-plan); nleflow/README.md; on EMC2 branch dev-nle-m0: inst/scripts/nle_verify.R, R/nn_golden.R,
+R/nn_register.R (how the card is read: nn_normalise_card, nn_card, every `m$<field>` / `m1$<field>` access),
+vignettes/neural-likelihood-cards.Rmd, inst/scripts/onnx_to_card.py, tests/testthat/test-nn-mlp.R. Do milestone M4.
+A. nle repo (branch nleflow-plan; push only that branch, never main):
+  1. A Dockerfile under nleflow/docker/ reproducing section 9.2's cloud steps: Ubuntu 24.04, R >= 4.5 from CRAN's
+     Ubuntu repository (so the sha256 path, not the md5 fallback), the apt r-cran packages, WienR, jsonlite,
+     arrow if available, EMC2 dev-nle-m0 from ampl-psych/EMC2 into /opt/emc2/lib with EMC2_SHA.txt beside it,
+     uv and `uv sync --frozen --group dev` in nleflow/. Its check: `docker run <image> nle-verify` runs
+     inst/scripts/nle_verify.R and `docker run <image> pytest` runs nleflow's tests with NLEFLOW_EMC2_LIB set.
+     Build it on the Mac if Docker is there; if not, say so and leave it unbuilt but linted (hadolint if present).
+  2. CI: .github/workflows/nleflow.yml in the nle repo: on pushes to nleflow-plan, (i) pytest without R (the
+     Python tests; the R ones skip), (ii) the container job if the image builds within the free runner's limits,
+     else document why not. Push it and report the first run's result; a red run is fixed before the stage ends.
+  3. Docs: nleflow/docs/ with one page per user task (install and check; train a race flow; train a choice flow;
+     export and check a card; ONNX out; LAN in), each built from the README sections, with the commands and their
+     one-line checks; the README becomes the index. No new claims: every number comes from the progress log.
+B. EMC2 (branch dev-nle-m0 on ampl-psych/EMC2, pushed from the Mac; never dev or main without AH's word):
+  4. Read card fields exactly: replace every `$` access to card/member fields in R/nn_register.R and R/nn_golden.R
+     by `[["field", exact = TRUE]]` (or a helper), and add a test that a card with a field `preset` (or `scal`,
+     `pre_x`) registers unchanged. Context: M3 found `preset` read as `pre` and the card refused.
+  5. nn_golden_check() reads the card's `validation$golden$tolerance` when `tol` is not given, and nle_verify.R
+     checks mlp_joint cards: it registers them with the p_types a card may carry or that `--p-types` gives, and
+     uses the card's tolerance; test with the converted ddm_uniform_st card (nleflow convert ... --verify 300).
+  6. inst/scripts/onnx_to_card.py: replace its body with a message pointing to `nleflow convert` (plan section 7.4,
+     M3), keep test-nn-mlp.R's converter test working by skipping it with that message, and say so in NEWS.md.
+  7. Run the full test-nn-* suite and nle_verify.R on R >= 4.5 (the Mac); every line PASS, the counts recorded.
+C. Only if AH confirms dev has settled: rebase (or merge, AH's choice in the session) dev-nle-m0 onto ampl-psych/EMC2
+   dev, resolve conflicts preferring dev outside the NN layer and dev-nle-m0 inside it, rerun the test-nn-* suite
+   and nle_verify.R, and push to a new branch dev-nle-rebased (never force-push dev-nle-m0); record the conflicts.
+Do not touch tux26, Gadi or AWS; no SBC runs; no retraining; do not change card fields beyond the vignette.
+Acceptance, one line each: (a) the image builds (or the reason it was not built) and both container checks
+pass; (b) the CI workflow's first run on nleflow-plan is green; (c) docs pages exist and every command in them was
+run once; (d) a card with an extra field `preset` registers in EMC2 unchanged; (e) nle_verify.R prints PASS for
+the converted LAN card with its own tolerance; (f) test-nn-* passes on R >= 4.5 with the counts recorded; (g) C done
+or recorded as pending with AH's reason.
+Work with absolute paths, at most 8 cores. Commit on nleflow-plan (nle repo) and dev-nle-m0 (EMC2), push only
+those (and dev-nle-rebased if C ran), append one line to the plan's progress log, and end with ONE next stage: the
+first real use of the package, training a new model end to end (AH chooses the model), or, if AH prefers,
+packaging nleflow for PyPI; model Opus 5.5 or Fable, auto mode, with its full prompt.
 ```

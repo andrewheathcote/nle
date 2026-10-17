@@ -2,10 +2,11 @@
 
 Train a normalizing-flow neural likelihood for an evidence-accumulation model
 from a model specification, and export it as a card that EMC2 (branch
-`dev-nle-m0`) loads with `register_nn_model()`. Milestones M1 and M2 of
-`handover/NLEFLOW_PLAN.md`: the race-model path with the RDM A = 0 example,
-and the choice-model path (flow + choice classifier; the scaled DDM card,
-DDMnle) with its ONNX export.
+`dev-nle-m0`) loads with `register_nn_model()`. Milestones M1 to M3 of
+`handover/NLEFLOW_PLAN.md`: the race-model path with the RDM A = 0 example;
+the choice-model path (flow + choice classifier; the scaled DDM card,
+DDMnle) with its ONNX export; and the converter that brings a published
+likelihood approximation network (a LAN, in ONNX) into EMC2 as a card.
 
 ```
 nleflow spec       <spec>            validate a spec and print it resolved
@@ -16,6 +17,7 @@ nleflow export     <run> --step N    write a card_version 1 card + golden vector
 nleflow golden     <card>            rewrite a card's golden vectors from its JSON
 nleflow onnx       <card>            a DDM flow card as an ONNX graph (two signatures)
 nleflow onnx-check <model> <card>    the graph against the golden rows and EMC2 cases
+nleflow convert    <model.onnx>      a LAN in ONNX to an EMC2 mlp_joint card (--preset, --verify)
 ```
 
 What a flow is, how the cards are evaluated and validated, and the card
@@ -40,15 +42,16 @@ the exported card; their steps are in the plan's section 9.2.
    `.venv/`. 11 s with a warm cache on the cloud instance, a few minutes cold.
    Check: `uv run python -c "import jax, flax, distrax, onnx, onnxruntime; print(jax.__version__)"`
    prints `0.5.3`.
-4. **The command.** Check: `uv run nleflow --help` lists the eight commands
+4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
-5. **The tests.** Check: `uv run pytest` passes (25 tests; three of them run
-   only when `NLEFLOW_EMC2_LIB=<library holding EMC2 dev-nle-m0>` is set, to
-   register cards in R and compare the ONNX graph with EMC2, and one needs
-   the EMC2 checkout beside this repository for its golden file; the rest
-   skip). About 80 s on 4 cores.
-   The ONNX tests need `onnx` and `onnxruntime` from the lock; check:
-   `uv run python -c "import onnxruntime as ort; print(ort.__version__)"` prints 1.20 or later.
+5. **The tests.** Check: `uv run pytest` passes: 43 tests, of which five run
+   only when `NLEFLOW_EMC2_LIB=<library holding EMC2 dev-nle-m0>` is set (they
+   register cards in R and compare the ONNX graph with EMC2) and skip
+   otherwise; the converter tests use the LAN and the golden files in the EMC2
+   checkout beside this repository (`../EMC2`) and skip without it. About 90 s
+   on 4 cores. The ONNX tests need `onnx` and `onnxruntime` from the lock;
+   check: `uv run python -c "import onnxruntime as ort; print(ort.__version__)"`
+   prints 1.20 or later.
 6. **GPU (optional, untested):** `uv sync --frozen --group dev --extra gpu`
    installs `jax[cuda12]`. Every shipped flow was trained on CPU.
 
@@ -228,6 +231,103 @@ differs from EMC2 by the same 3e-9 on those rows, and the graph differs from
 the port by no more. The defaults of `onnx-check` are therefore 1e-10 for the
 density rows and 1e-8 for the window rows, and the README records both.
 
+## Converting a LAN (`nleflow convert`, `nleflow/convert.py`)
+
+A published likelihood approximation network (Fengler et al.; HSSM's LANs)
+is a plain multilayer perceptron whose ONNX file holds only weights and an
+input width. `nleflow convert` reads the graph and writes an EMC2 card of
+kind `mlp_joint` (card_version 1) that EMC2's compiled MLP evaluator runs;
+EMC2 never runs ONNX. What the graph does not record comes from a preset:
+
+```sh
+uv run nleflow convert --list-presets
+uv run nleflow convert ../../EMC2/tests/testthat/golden/ddm_uniform_st.onnx \
+    --preset ddm_uniform_st --out lan_ddm_uniform_st_weights.json --verify 300
+```
+
+Check: the command ends with `PASS` and writes `lan_ddm_uniform_st_golden.csv`
+beside the card. On the cloud instance:
+
+```
+--verify on 300 rows (drawn in the box); the graph's input is rank-1 [k], one trial per call
+  card (float64) vs a float64 copy of the graph: one-trial calls 1.07e-14, batched 1.07e-14  (gate 1e-10)
+  card (float64) vs the graph as published (float32): one-trial calls 1.08e-05, batched 1.08e-05  (gate 1e-04: float32 round-off)
+  the published graph, one-trial calls vs batched: 0.00e+00
+  PASS
+```
+
+and in R:
+
+```r
+m <- register_nn_model("lan_ddm_uniform_st_weights.json", p_types = c(v = 0, a = 1, z = .5, t = .5, st = .05))
+nn_golden_check(m, tol = 1e-4)   # PASS ... max |diff| 1.08e-05 (log_pdf) against 1e-04
+```
+
+What the converter takes: one input, rank 1 `[k]` (one trial per call, as the
+published LANs) or rank 2 `[N, k]` (batched); MatMul + Add or Gemm layers;
+Tanh or Gelu(approximate = tanh) hidden layers; one linear output, the log
+density; Identity, and Reshape / Flatten / Squeeze / Unsqueeze / Cast before
+the first layer or after the last. EMC2's evaluator (`load_mlp`,
+`src/nle_flow.h`) runs tanh and gelu_tanh only, so a Relu, an exact (erf)
+Gelu, a Sigmoid or any node that is not part of a plain chain is refused
+with a message naming the first such node by position, op type and name,
+for example
+
+```
+node 2 (Relu, name 'relu0', output 'act0'): activation 'relu' is not one EMC2's evaluator runs
+(load_mlp in src/nle_flow.h takes tanh, gelu_tanh); converting this network needs that support in EMC2 first
+```
+
+Each new activation is a C++ change in EMC2 first, then one line here.
+
+**Presets** (`src/nleflow/presets/*.yaml`) hold what a graph cannot: the
+parameters in input order, their transforms, the training box, the label
+floor, the response coding (HSSM: −1 lower, +1 upper), the input layout,
+the mapping onto an EMC2 model as text (written into the card as
+`map_to_emc2_ddm`) and structured, the defaults `register_nn_model()` needs
+(`emc2_p_types`; a LAN has no analytic twin of its own parameterisation),
+the sha256 of the file the preset was checked on (a different file draws a
+warning), and a `checked` block saying against what each value was
+verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
+(`a_EMC2 = 2 a`, `Z = z`, `t0 = t − st`, `st0 = 2 st`, `sv = SZ = 0`,
+`s = 1`). Without a preset, the same comes from `--params`, `--box`,
+`--ll-floor`, `--response-values=-1,1`, `--layout` and `--transforms`.
+
+**The card** carries the vignette's mlp_joint fields (`context_names`,
+`context_transforms`, `bounds_natural`, `input_layout`, `response_values`,
+`ll_floor_log`, `mlp`), the provenance (`source`, `source_sha256`,
+`source_model`, `encoding`, `map_to_emc2_ddm`, `converted_with`) and a
+`validation` block: `calibration: "unknown; needs its own SBC cell before
+inference"` always, and with `--verify` the golden file and the tolerance it
+holds at. No other fields: EMC2 reads cards with R's `$`, which matches
+partial names, so a field such as `preset` would be read as `pre` (a
+decision-time shift) and the card refused.
+
+**`--verify N`** (or `--rows <csv>` to verify on given rows) compares the
+card's float64 forward pass with onnxruntime, each with one-trial calls and
+one batched call (a rank-1 graph is given a batch dimension for that): first
+against a float64 copy of the graph, the gate at 1e-10, which is the test
+that the card holds the network; then against the graph as published, gated
+at 1e-4 when it is float32. The published LAN is float32, so the card (which
+EMC2 evaluates in float64) differs from it by float32 round-off, 5e-6 on the
+committed rows and 1.1e-5 on fresh ones; 1e-6 is out of reach for any float64
+evaluator of a float32 network, and EMC2's own test of this card uses 1e-4.
+In the float64 copy a Gelu node is expanded into Mul, Add and Tanh, because
+onnxruntime's double Gelu kernel is accurate to about 6e-9 only (its Tanh to
+6e-16). The onnxruntime outputs of the published graph are written as the
+card's golden file (`<tag>_golden.csv`: the parameters, `rt`, `choice`,
+`logp_ort`), the format of EMC2's `tests/testthat/golden/lan_ddm_uniform_st_ort.csv`;
+`nn_golden_check(m, tol = 1e-4)` reads it. Run on the committed CSV's rows
+(`--rows`), the converter reproduces that file exactly.
+
+**EMC2's `inst/scripts/onnx_to_card.py`** is the converter's first version
+and stays in EMC2 for now; `nleflow convert` is the maintained one (it adds
+batched and Gemm graphs, Gelu, presets as data, refusals by node, the float64
+gate and the golden file). Its output for `ddm_uniform_st` equals the card
+EMC2's tests hold (`tests/testthat/golden/lan_ddm_uniform_st.rds`) in every
+field that script wrote, apart from `converted_with` (provenance) and
+`calibration`, which moved into `validation`.
+
 ## Checking a card in EMC2
 
 ```r
@@ -250,10 +350,12 @@ src/nleflow/export.py         nleflow export: card v1 + float64 gate
 src/nleflow/golden.py         golden vectors (race and joint cards)
 src/nleflow/onnx_export.py    nleflow onnx / onnx-check
 src/nleflow/rmath.py          R's pnorm and qnorm in NumPy (the graph's algorithms)
+src/nleflow/convert.py        nleflow convert: ONNX LAN -> mlp_joint card, --verify, golden file
+src/nleflow/presets/          what a LAN's graph does not record, per published network (YAML)
 src/nleflow/simulate.py       nleflow simulate
 scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
-tests/                        pytest: golden regression, spec, rmath, pipeline, onnx (+ R checks)
+tests/                        pytest: golden regression, spec, rmath, pipeline, onnx, convert (+ R checks)
 ```

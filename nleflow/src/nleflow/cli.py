@@ -66,6 +66,29 @@ def cmd_onnx_check(a):
     sys.exit(0 if ok else 1)
 
 
+def cmd_convert(a):
+    from .convert import ConvertError, convert, list_presets, load_preset, parse_box
+    if a.list_presets:
+        for name in list_presets():
+            p = load_preset(name)
+            print(f"{name}: {p.get('source_model', '')}\n  params {p['params']}, box "
+                  f"{ {k: tuple(v) for k, v in p['box'].items()} }\n  maps to EMC2 {p.get('twin', '?')}: "
+                  f"{p.get('map_to_emc2_ddm', '')}")
+        return
+    if not a.onnx:
+        raise ValueError("give the ONNX file to convert (or --list-presets)")
+    try:
+        convert(a.onnx, out=a.out, preset=a.preset,
+                params=a.params.split(",") if a.params else None,
+                box=parse_box(a.box) if a.box else None, ll_floor=a.ll_floor,
+                response_values=[float(x) for x in a.response_values.split(",")] if a.response_values else None,
+                layout=a.layout.split(",") if a.layout else None,
+                transforms=dict(x.split("=") for x in a.transforms.split(",")) if a.transforms else None,
+                verify_n=a.verify, rows_csv=a.rows, seed=a.seed)
+    except ConvertError as e:
+        raise ValueError(str(e))
+
+
 def cmd_steps(a):
     from .export import checkpoint_steps, step_metrics
     mgr, steps, best, latest = checkpoint_steps(a.run)
@@ -118,6 +141,24 @@ def build_parser():
                    help="trialwise [N, k+2] (the LAN shape), shared theta[k] + rt[N] + choice[N], or both (default)")
     s.add_argument("--out", default=None, help="output path (one signature only; default <card>_<signature>.onnx)")
     s.set_defaults(fn=cmd_onnx)
+
+    s = sub.add_parser("convert", help="an MLP likelihood network in ONNX (a LAN) to an EMC2 mlp_joint card")
+    s.add_argument("onnx", nargs="?", default=None)
+    s.add_argument("--out", default=None, help="card to write (default ./<onnx stem>_weights.json)")
+    s.add_argument("--preset", default=None, help="what the graph does not record (see --list-presets)")
+    s.add_argument("--list-presets", action="store_true", help="list the presets and exit")
+    s.add_argument("--params", default=None, help="parameter inputs in the network's order, e.g. v,a,z,t,st")
+    s.add_argument("--box", default=None, help="training box, e.g. v=-3:3,a=0.3:2.5")
+    s.add_argument("--ll-floor", type=float, default=None, help="log-density floor of the training labels")
+    s.add_argument("--response-values", default=None,
+                   help="network inputs for responses 1 and 2; write --response-values=-1,1")
+    s.add_argument("--layout", default=None, help="input layout if not [params..., rt, R]")
+    s.add_argument("--transforms", default=None, help="per parameter identity|log|probit, e.g. a=log")
+    s.add_argument("--verify", type=int, default=0, metavar="N",
+                   help="check the card against onnxruntime on N rows and write its golden file")
+    s.add_argument("--rows", default=None, help="verify on the rows of this CSV (parameters, rt, choice)")
+    s.add_argument("--seed", type=int, default=1, help="seed of the verification rows")
+    s.set_defaults(fn=cmd_convert)
 
     s = sub.add_parser("onnx-check", help="check an ONNX graph against the card's golden rows and EMC2 cases")
     s.add_argument("model"); s.add_argument("card")
