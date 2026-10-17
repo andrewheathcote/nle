@@ -1,0 +1,31 @@
+# The smoke configuration of spec.yaml: 1 % of the data, 2 epochs, runs end to
+# end on a laptop in minutes. Everything else is the full recipe.
+name: rdm_a0_smoke
+model: RDM
+response: race
+context: [v, B, t0, s, A]
+transforms: {v: log, B: log, t0: log, s: log, A: zerobox}
+zerobox_c: {A: 0.05}
+stored: {A: log}
+box_natural:
+  v: [1.0e-3, 5]
+  B: [0.1, 3]
+  t0: [0.05, 1]
+  s: [0.1, 2]
+  A: [0, 2]
+sampling:
+  A: {uniform: 0.70, asinh_uniform: 0.15, zero: 0.15}
+spline: {bins: 64, range: [-5, 5]}
+conditioner: {widths: [256, 128], norm: false, affine: false}
+training:
+  rows: 240000
+  val_rows: 24000
+  batch: 1024
+  epochs: 2
+  keep: 2
+  peak_lr: 1.0e-4
+  seed: 801
+data: {train: data_smoke/train, val: data_smoke/val}
+simulator: Rscript simulate.R
+control_limits: {s: [0.1, 2], vb_over_s2_max: 354}
+mass_tolerance: 1.0e-3

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nleflow"
+version = "0.1.0"
+description = "Train normalizing-flow neural likelihoods for evidence-accumulation models and export them as EMC2 cards."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [
+    { name = "Andrew Heathcote" },
+    { name = "Julian Wuth" },
+]
+# The versions every shipped flow was trained and exported with
+# (handover/nle-methods/flow/uv.lock); onnx/onnxruntime were installed by hand
+# before this lock (NLEFLOW_PLAN.md section 9.1).
+dependencies = [
+    "jax==0.5.3",
+    "flax==0.10.6",
+    "distrax==0.1.5",
+    "optax==0.2.8",
+    "orbax-checkpoint<0.11.2",
+    "numpy==2.2.6",
+    "scipy==1.15.3",
+    "pyarrow>=19",
+    "pyyaml>=6",
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
+]
+
+[project.optional-dependencies]
+gpu = ["jax[cuda12]==0.5.3"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[project.scripts]
+nleflow = "nleflow.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nleflow"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:jax.interpreters.xla.pytype_aval_mappings is deprecated:DeprecationWarning",
+    "ignore:jax.core.Var is deprecated:DeprecationWarning",
+    "ignore::DeprecationWarning:distrax",
+    "ignore::DeprecationWarning:tensorflow_probability",
+]

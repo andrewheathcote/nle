@@ -787,8 +787,12 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   115 rows at exactly A = 0. `register_nn_model(card, twin = RDM)` in dev-nle 142bd497 registers it as `flow_race`,
   `c_name NN`; the R-path evaluator vs golden: |Δlog pdf| 1.9e-12, |Δlog sf| 6.1e-14. The "card not in the
   repository" case is withdrawn from §3.1, §11.1, §12 and §13.
-- 2026-10-16 **M0 done** (cloud instance, R 4.3.3; EMC2 branch `dev-nle-m0` on ampl-psych/EMC2, pushed: the scaled
-  patch as its first commit f7aa07ea, then the 142bd497 tree, then the M0 commit; this repo: `golden.py`,
+- 2026-10-16 **M0 done** (cloud instance, R 4.3.3; EMC2 branch `dev-nle-m0`: the scaled patch as its first commit
+  f7aa07ea, then the 142bd497 tree, then the M0 commit 39ae8d8a. **Correction 2026-10-17:** the push to
+  ampl-psych/EMC2 was refused (HTTP 403, Claude GitHub App not installed for the organisation), so the branch
+  travelled as `handover/emc2/dev-nle-m0/000*.patch`; AH applied the three patches on the laptop on 2026-10-17
+  (clean, built into `~/R/nle-m0-lib`, verification passed), pushed `dev-nle-m0` to ampl-psych/EMC2 from there and
+  removed the patch files (f165e6c). This repo: `golden.py`,
   `ddm_sc_s1106_e245_golden.csv`, `scaled_cell.R` M0 mode). Acceptance lines, as run:
   (a) `register_nn_model("port/export/ddm_sc_s1106_e245_weights.json", twin = DDM)` returns a `flow_scaled`
   registration, no scaffold (`sbc/scaled_cell.R` with `M0=1`; `test-nn-scaled.R`);
@@ -807,6 +811,32 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   path 2.1e-13, oracle 8.3e-14, the RDM card) and exits 0;
   (h) `test-nn-*`: 919 expectations, 0 failures, 0 errors, 5 skips (python/onnxruntime and reg_s402 env vars), 0
   warnings. Not done: the rebase onto `dev` (AH's decision); nothing on tux26, Gadi or AWS.
+- 2026-10-17 **M1 done** (cloud instance, 4 cores, R 4.3.3 with EMC2 dev-nle-m0 in a scratch library; this repo only,
+  `nleflow/` on nleflow-plan). The package: `pyproject.toml` + `uv.lock` (jax 0.5.3, flax 0.10.6, distrax 0.1.5,
+  optax 0.2.8, orbax-checkpoint 0.11.1, numpy 2.2.6, scipy 1.15.3, pyarrow, pyyaml, onnx 1.23.2, onnxruntime 1.31.0;
+  pytest in the dev group); `src/nleflow/spec.py` (section 7.2's schema, validated by name, defaults filled; `response:
+  choice` and `scaling` refused as M2), `data.py` (the parquet contract, a CSV fallback for R without arrow, the
+  zero-box encoding in float64, the standardiser as `scaler.json`), `train.py` (train_race.py's loss, AdamW
+  warmup-cosine, Orbax checkpoints), `export.py` (card_version 1 race cards with `support`, `mass_tolerance`,
+  `beyond_support`, `control_limits`; the float64 JAX gate at 1e-8 replaces export_flow.py's float32-only gate, the
+  float32 gap printed), `golden.py` (M0's script moved in, `nleflow golden`; the handover script is now a shim),
+  `simulate.py`, `cli.py` (spec, simulate, train, steps, export, golden); `flow/` vendors config.py and
+  checkpoints.py unchanged; `examples/rdm_a0/{spec.yaml, spec_smoke.yaml, simulate.R, README.md}` (the simulator is
+  sim_rdm_a0.R driven by the spec); `tests/` (13 pytest cases); `README.md` with section 9.2's Python steps, each
+  with its check. Acceptance, as run: (a) `uv sync --frozen --group dev` from the lock (fresh `.venv`, 11 s warm),
+  then `nleflow --help` lists the six commands; (b) the smoke spec: 240 000 + 24 000 rows simulated in 5 s (CSV:
+  no `r-cran-arrow` on this Ubuntu), 2 epochs in 13 s (val loss 0.664), export in 15 s; the card registers in EMC2
+  with `twin = RDM` as `flow_race`, card_version 1, `support (0, Inf)`, `control_limits` read back, and
+  `nn_golden_check()` passes at 2.7e-13; (c) `nleflow golden` reproduces `rdm_ss_base_s801_e271_golden.csv` to
+  3.0e-13 and `rdm_rdm_small_e195`'s golden to 5.2e-14 (that file copied from EMC2's test tree to
+  `port/export/` as the reference beside its card); (d) the float64 gate on the smoke card: max |dlog pdf| 2.0e-13,
+  |dz| 7.4e-15 against 1e-8; float32 gap 3.6e-5 printed; (e) `nle_verify.R <smoke card>`: every line PASS, exit 0;
+  (f) `pytest`: 13 passed (the 13th registers a synthetic card in R when `NLEFLOW_EMC2_LIB` is set). Two
+  deviations, both deliberate: the card carries a `validation` block only once it records something (an empty block
+  would silence EMC2's "records no validation" message); the spec separates `training.seed` (the network) from the
+  simulator's data seed (`NLEFLOW_SIM_SEED`, default 4876). Found and fixed: M0's `golden.py` read
+  `pre_bounds_natural` as a list where the exporters write `{lower, upper}` (decision-time cards only). Not done:
+  no full training, nothing on tux26, Gadi or AWS, no change to EMC2.
 
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
@@ -848,4 +878,63 @@ exits 0; (f) pytest passes.
 Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this repository), push only that branch,
 append one line to the plan's progress log, and end with ONE next stage: M2 (the DDMnle example and its ONNX graph
 with the CDF, preprocessing and st0 branch, section 2.4.1), model Opus 5.5 or Fable, auto mode, with its full prompt.
+```
+
+## Next stage after M1: M2, the DDMnle example and its ONNX graph
+
+Model: **Opus 5.5** (or Fable), auto mode. Laptop or cloud instance; needs the `nleflow` environment (`uv sync
+--frozen --group dev` in `nleflow/`) and R with EMC2 `dev-nle-m0` in a dedicated library. The scaled DDM is the
+trap-dense half of the package (three SZ conventions, the st0 branch, exact zeros, a float64 ONNX graph with a
+CDF), which is why this stage goes to Opus/Fable.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/NLEFLOW_PLAN.md sections 2, 4, 7.1-7.3, 7.5 and 13.3 and the M0 and M1 entries of its progress log
+(nle repo, branch nleflow-plan); nleflow/README.md and nleflow/src/nleflow/{spec,data,train,export,golden}.py;
+handover/nle-methods/flow/scripts/{train_ddm.py,export_flow_ddm.py,export_onnx_ddm.py,onnx_check.py},
+handover/nle-methods/simulation/{scaled.R,zerobox.R}, handover/nle-methods/port/R/ddm_scaled.R and
+port/tests/test_ddm_scaled.R, handover/SCALED_DDM_PLAN.md, handover/REPORT_RUSS_JULIAN.md (the ONNX section); and
+on EMC2 dev-nle-m0: vignettes/neural-likelihood-cards.Rmd, R/nn_register.R (nn_eval_scaled, nn_scaled_inputs,
+nn_sz_convert), src/flow_ddm.cpp (nn_trial_ll_scaled), tests/testthat/test-nn-scaled.R, inst/scripts/nle_verify.R.
+Do milestone M2: the scaled DDM (DDMnle) path of nleflow and its ONNX export.
+  1. The spec grows `response: choice` with `classifier: {widths: [...]}` and `scaling: {kind: ddm_unit}`:
+     context kappa, eta, Z, SZ (eta and SZ zerobox with c = 0.01 and 0.05, stored log and probit; kappa identity;
+     Z probit), spline range [-12, 2], the box of export_flow_ddm.py's scaled registry, and the SZ convention
+     recorded as `proportion` (section 13.3.1). Keep the race path untouched; a spec that mixes the two is refused.
+  2. `nleflow train` for choice specs = train_ddm.py --scaled: the flow conditioned on (context, R) and the choice
+     classifier on the context, trained together or the classifier reused from another run (train_ddm.py's
+     --classifier-from); the parquet contract of section 7.2 with R; read how train_ddm.py builds the classifier's
+     target before writing anything.
+  3. `nleflow export` for flow_scaled cards: card_version 1 with the structured `scaling` block, `context_encoding
+     zerobox`, `support {time: [0, "Inf"]}` of the unit-scale time, the classifier MLP, the float64 gate at 1e-8
+     (export_flow_ddm.py already gates against JAX float64; carry it) and the golden file from golden_joint().
+  4. The DDMnle example: nleflow/examples/ddmnle/{spec.yaml, spec_smoke.yaml, simulate.R, README.md}, the
+     simulator simulation/scaled.R driven by the spec (a = s = 1, st0 = 0, the zero-box strata of zerobox.R), the
+     recipe of ddm_sc_s1106_e245 (SCALED_DDM_PLAN.md), and a 1 % / 2-epoch smoke configuration. DDMnle itself is
+     NOT retrained: the committed card ddm_sc_s1106_e245 and its M0 golden file are the references.
+  5. `nleflow onnx <card> [--signature trialwise|shared]`: the ONNX graph of a flow_scaled card (section 2.4.1):
+     inputs the natural DDM parameters (probit and log stay with the caller), rt and the choice; inside the graph
+     kappa, eta, c = (s/a)^2, u = (rt - t0) c, the st0 = 0 branch c g(u) and the st0 > 0 branch [G(u1) - G(max(u0,
+     0))] / st0 with the spline CDF and the normal CDF through Erf, zero for rt <= t0; float64, opset 18, IR 10;
+     both signatures of section 7.3. Keep export_onnx_ddm.py's 8-parameter graph as the plain flow_joint case.
+  6. Tests: `nleflow golden` reproduces port/export/ddm_sc_s1106_e245_golden.csv to 1e-12; the smoke scaled card
+     registers in EMC2 with twin = DDM and passes nn_golden_check() and nle_verify.R's scaled checks (compiled vs R
+     path, the oracle); the ONNX graph of the committed card agrees with its golden rows and with EMC2's compiled
+     likelihood (nn_eval_scaled over 200 prior draws in the six regimes of sbc/scaled_cell.R) to 1e-11 in
+     onnxruntime, both signatures; the README gains the onnx steps and their checks.
+Do not change the card fields beyond what the vignette names (an ONNX provenance field is fine); do not
+regenerate anything from checkpoints; do not retrain DDMnle; do not touch tux26, Gadi or AWS; no push to
+ampl-psych/EMC2 and no push to main. Should EMC2 need a change (none is expected), it goes as a patch under
+handover/emc2/ with a note in the log, as M0's did.
+Acceptance, one line each: (a) a choice spec loads and the smoke DDMnle spec trains 2 epochs on 1 % data and
+exports a flow_scaled card_version 1 card that registers with twin = DDM and passes nn_golden_check(); (b)
+`nleflow golden` reproduces ddm_sc_s1106_e245_golden.csv to 1e-12; (c) the float64 gate passes at 1e-8 on the
+smoke export and the float32 gap is printed; (d) `nleflow onnx` on the committed card: onnxruntime vs the golden
+rows and vs the compiled EMC2 likelihood <= 1e-11, both signatures, with the st0 > 0 and st0 = 0 regimes and
+exact zeros of sv and SZ covered; (e) `Rscript inst/scripts/nle_verify.R <smoke scaled card>` prints PASS on every
+line and exits 0; (f) pytest passes.
+Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this repository), push only that branch,
+append one line to the plan's progress log, and end with ONE next stage: M3 (the ONNX -> card converter moved into
+the package with batched inputs, Relu/Gelu and presets, section 7.4; model Opus 5.5 or Fable, auto mode), with its
+full prompt.
 ```

@@ -1,0 +1,33 @@
+# The RDM A = 0 worked example (NLEFLOW_PLAN.md section 3): one accumulator's
+# first-passage density, the training box reaching A = 0 exactly. This is the
+# recipe of the committed card rdm_ss_base_s801_e271 (handover/RDM_A0_BOX_PLAN.md).
+name: rdm_a0
+model: RDM                        # the analytic twin: EMC2's RDM (a Wald race)
+response: race
+context: [v, B, t0, s, A]         # the network's input order; asserted everywhere
+transforms: {v: log, B: log, t0: log, s: log, A: zerobox}
+zerobox_c: {A: 0.05}              # the network sees asinh(A / 0.05): 0 exactly at A = 0
+stored: {A: log}                  # the data store log A, -Inf at A = 0
+box_natural:
+  v: [1.0e-3, 5]
+  B: [0.1, 3]
+  t0: [0.05, 1]
+  s: [0.1, 2]
+  A: [0, 2]
+sampling:                         # the three-part A mixture of sim_rdm_a0.R;
+  A: {uniform: 0.70, asinh_uniform: 0.15, zero: 0.15}   # the rest uniform on the natural scale
+pre: null                         # t0 would make it a decision-time flow (unproven option)
+spline: {bins: 64, range: [-5, 5]}
+conditioner: {widths: [256, 128], norm: false, affine: false}   # affine: unproven option
+training:
+  rows: 24000000                  # one trial per draw
+  val_rows: 1000000
+  batch: 1024
+  epochs: 300
+  keep: 30                        # the window screened for score bias; never averaged
+  peak_lr: 1.0e-4
+  seed: 801                       # the seed study's s801
+data: {train: data/train, val: data/val}
+simulator: Rscript simulate.R     # needs EMC2 (NLEFLOW_RLIB) and arrow, or writes CSV
+control_limits: {s: [0.1, 2], vb_over_s2_max: 354}   # the Wald control's limits (vignette)
+mass_tolerance: 1.0e-3
