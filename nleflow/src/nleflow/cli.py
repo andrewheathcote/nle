@@ -38,7 +38,7 @@ def cmd_train(a):
     from .train import train
     spec = load_spec(a.spec)
     runs = a.runs or str(Path(spec["spec_file"]).parent / "runs")
-    train(spec, runs=runs, epochs=a.epochs)
+    train(spec, runs=runs, epochs=a.epochs, classifier_from=a.classifier_from)
 
 
 def cmd_export(a):
@@ -51,6 +51,19 @@ def cmd_export(a):
 def cmd_golden(a):
     from .golden import main
     main(a.card, a.out)
+
+
+def cmd_onnx(a):
+    from .onnx_export import export_onnx
+    for sig in (["trialwise", "shared"] if a.signature == "both" else [a.signature]):
+        export_onnx(a.card, out=None if a.out is None or a.signature == "both" else a.out, signature=sig)
+
+
+def cmd_onnx_check(a):
+    import json
+    from .onnx_export import check_onnx
+    ok = check_onnx(a.model, a.card, golden=a.golden, cases=a.cases, tol_density=a.tol, tol_window=a.tol_window)
+    sys.exit(0 if ok else 1)
 
 
 def cmd_steps(a):
@@ -80,6 +93,8 @@ def build_parser():
     s.add_argument("--runs", default=None, help="runs directory (default: runs/ beside the spec)")
     s.add_argument("--epochs", type=int, default=None, help="override training.epochs")
     s.add_argument("--cores", type=int, default=None, help="CPU threads (default: min(8, cores))")
+    s.add_argument("--classifier-from", default=None,
+                   help="choice models: reuse this run's classifier instead of training one")
     s.set_defaults(fn=cmd_train)
 
     s = sub.add_parser("export", help="export one checkpoint of a run as a card_version 1 card")
@@ -96,6 +111,22 @@ def build_parser():
     s = sub.add_parser("golden", help="rewrite a card's golden vectors from its weights JSON")
     s.add_argument("card"); s.add_argument("out", nargs="?", default=None)
     s.set_defaults(fn=cmd_golden)
+
+    s = sub.add_parser("onnx", help="export a DDM flow card (flow_joint, flow_scaled) as an ONNX graph")
+    s.add_argument("card")
+    s.add_argument("--signature", default="both", choices=["trialwise", "shared", "both"],
+                   help="trialwise [N, k+2] (the LAN shape), shared theta[k] + rt[N] + choice[N], or both (default)")
+    s.add_argument("--out", default=None, help="output path (one signature only; default <card>_<signature>.onnx)")
+    s.set_defaults(fn=cmd_onnx)
+
+    s = sub.add_parser("onnx-check", help="check an ONNX graph against the card's golden rows and EMC2 cases")
+    s.add_argument("model"); s.add_argument("card")
+    s.add_argument("--golden", default=None, help="the card's golden CSV (default: beside the card)")
+    s.add_argument("--cases", default=None, help="EMC2 reference cases from scripts/onnx_cases_scaled.R")
+    s.add_argument("--tol", type=float, default=1e-10, help="max |dlog p| where the likelihood is a density")
+    s.add_argument("--tol-window", type=float, default=1e-8,
+                   help="max |dlog p| on the st0 > 0 branch (a CDF difference; see the README)")
+    s.set_defaults(fn=cmd_onnx_check)
     return p
 
 

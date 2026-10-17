@@ -6,6 +6,7 @@ reference) reproduce exactly this math, so these files change only together
 with the card format."""
 from .config import (  # noqa: F401
     spline_flow, MLP, MLP_no_norm, make_mlp_conditioner,
+    ChoiceClassifier, make_choice_classifier, joint_log_prob,
     AFFINE_MIN_SCALE, AFFINE_OFFSET,
 )
 from .checkpoints import (  # noqa: F401

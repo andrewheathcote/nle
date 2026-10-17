@@ -837,6 +837,42 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   simulator's data seed (`NLEFLOW_SIM_SEED`, default 4876). Found and fixed: M0's `golden.py` read
   `pre_bounds_natural` as a list where the exporters write `{lower, upper}` (decision-time cards only). Not done:
   no full training, nothing on tux26, Gadi or AWS, no change to EMC2.
+- 2026-10-17 **M2 done** (cloud instance, 4 cores, R 4.3.3 with EMC2 dev-nle-m0 in a scratch library; this repo only,
+  `nleflow/` on nleflow-plan; nothing on tux26, Gadi or AWS; DDMnle not retrained; no change to EMC2). The choice-model
+  path: `spec.py` grows `response: choice`, `classifier`, `scaling {kind: ddm_unit, sz: proportion}`, long-form
+  sampling strata (`uniform`, `log_uniform`, `asinh_uniform`, `zero`, each with a range) and `regimes` (joint exact
+  zeros); `train.py` conditions the flow on (context, R) and trains the classifier afterwards on the exact P(R = 2)
+  sets with retrain_classifier.py's tuned recipe (`classifier.json`; `--classifier-from` reuses one when the
+  standardisers agree to 1e-3); `export.py` writes flow_joint / flow_scaled cards (version 1: the structured
+  `scaling`, `context_encoding zerobox`, `classifier_mlp`, `classifier_scaler`, `support (0, Inf)` of u) and gates
+  the joint log density of both responses against JAX float64 at 1e-8; `golden.py` returns the joint arrays and
+  intermediates; `onnx_export.py` + `nleflow onnx` / `onnx-check`: the LAN-shaped graph of a flow_joint or
+  flow_scaled card in the trialwise `[N, k + 2]` and shared (theta, rt, choice) signatures, float64, opset 18, IR 10,
+  the scaled graph taking the natural DDM parameters and doing kappa, eta, the encodings, c, u, the st0 branch
+  (density at the window midpoint when st0 = 0 or st0 < 1e-7 d, else [G(u1) - G(max(u0, 0))] / st0) and the
+  rt <= t0 rule inside, exactly nn_eval_scaled(); onnxruntime has no double Erf or Asinh, so the graph carries R's
+  pnorm (Cody) and qnorm (AS 241) as graph operations (`rmath.py`, vs scipy 2e-14 / 2e-15) and asinh as
+  log(x + sqrt(x^2 + 1)); `scripts/onnx_cases_scaled.R` writes EMC2's reference cases; the DDMnle example
+  (`examples/ddmnle/`: spec, 1 % / 2-epoch smoke spec, the spec-driven scaled simulator with WienR targets, README);
+  nine new pytest cases; READMEs. Acceptance, as run: (a) the smoke DDMnle spec: 240 000 + 10 000 rows and 2000 +
+  200 choice targets simulated in 10 s, flow 2 epochs in 11 s (val loss -1.107; the project's 300-epoch flow
+  -1.436), classifier 194 epochs in 6 s (val mean |P_hat - P| 0.0046), export in 27 s; the card registers with
+  `twin = DDM` as flow_scaled, card_version 1, `scaling ddm_unit`, and `nn_golden_check()` passes at 3.6e-13;
+  (b) `nleflow golden` reproduces `ddm_sc_s1106_e245_golden.csv` exactly (max |diff| 0, 1150 rows); (c) float64 gate
+  on the smoke export 3.8e-13 (log pdf) and 1.1e-14 (z), float32 gap 7.5e-5 printed; (d) the ONNX graphs of the
+  committed card, both signatures: vs the golden rows max |dlog p| 5.3e-11 over 1010 rows above the floor (median
+  7e-15; the 12 rows above 1e-11 sit at z = 2.0, the spline's range boundary), vs EMC2's nn_eval_scaled over
+  200 prior draws x 100 trials in the six regimes (half the draws with s != 1): 4.4e-11 where the likelihood is a
+  density (st0 = 0; 38 400 rows) and 5.6e-9 on the st0 > 0 branch (78 400 rows, median 4e-15), the -Inf rows below
+  t0 and the floor rows agreeing; the NumPy float64 port itself differs from EMC2 by 3e-9 on the st0 > 0 rows, so
+  the 1e-11 target is met where the formula is a density and is limited by the conditioning of the CDF difference
+  G(u1) - G(u0), not by the graph, where it is not (`onnx-check` defaults: 1e-10 and 1e-8); the eight-parameter
+  graph of the st0zero card z0_s503_e282 vs its golden rows 1.3e-12; (e) `nle_verify.R <smoke scaled card>`: golden
+  PASS, compiled vs R path 5.7e-14 PASS, oracle 8.3e-14 PASS (with EMC2_NLE_PORT), exit 0; (f) pytest: 25 cases, all
+  pass with `NLEFLOW_EMC2_LIB` (3 of them need it, 1 the EMC2 checkout's golden file). Deviations: the ONNX
+  agreement on the st0 > 0 branch (above); the simulator draws pseudo-random uniforms where the project drew shifted
+  Sobol points; the classifier is trained with the run rather than copied from a checkpoint (the project's
+  `--classifier-from` becomes `nleflow train --classifier-from <run>`).
 
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
@@ -937,4 +973,52 @@ Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this rep
 append one line to the plan's progress log, and end with ONE next stage: M3 (the ONNX -> card converter moved into
 the package with batched inputs, Relu/Gelu and presets, section 7.4; model Opus 5.5 or Fable, auto mode), with its
 full prompt.
+```
+
+## Next stage after M2: M3, the ONNX → card converter moved into the package, with presets
+
+Model: **Opus 5.5** (or Fable), auto mode. Laptop or cloud instance; needs the `nleflow` environment and R with
+EMC2 `dev-nle-m0` in a dedicated library. This is the stage that makes the published LAN library usable from
+EMC2 designs (plan section 7.4), and the stage where the converter's refusals must name what they refuse.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Read handover/NLEFLOW_PLAN.md sections 7.1, 7.3, 7.4, 7.5 and 8 and the M0, M1 and M2 entries of its progress log
+(nle repo, branch nleflow-plan); nleflow/README.md and nleflow/src/nleflow/{onnx_export,golden,spec}.py; on EMC2
+dev-nle-m0: inst/scripts/onnx_to_card.py, R/nn_register.R (the mlp_joint kind: input_layout, response_values,
+output_scaler, ll_floor_log), src/mlp_lik.cpp, tests/testthat/test-nn-mlp.R (registers lan_ddm_uniform_st),
+tests/testthat/golden/{ddm_uniform_st.onnx, lan_ddm_uniform_st_ort.csv}, and
+handover/nle-methods/port/export/lan_ddm_uniform_st.json; handover/EMC2_IMPLEMENTATION_BRIEF.md (the HSSM batching
+note) and REPORT_RUSS_JULIAN.md Appendix A.1 (the LAN parameter mapping).
+Do milestone M3: the ONNX -> card converter in nleflow.
+  1. `nleflow convert <model.onnx> --preset <name> [--out card.json]`: onnx_to_card.py's graph reader moved into
+     the package (one non-initializer input, MatMul+Add or Gemm, Tanh; now also Relu and Gelu, and a batched
+     [N, k] input as HSSM's converted graphs have), writing a card_version 1 mlp_joint card with input_layout,
+     response_values, output_scaler, ll_floor_log, the preset's parameter mapping and box, and
+     `validation: {calibration: "unknown; needs its own SBC cell before inference"}`. Each new activation is also
+     a C++ change in EMC2's load_mlp (nle_flow.h) and that is out of scope here: convert with the activations EMC2
+     evaluates, and REFUSE the others with a message naming the first unsupported node, its op type and its name.
+  2. Presets: one per published LAN the project has used (ddm_uniform_st today: a_EMC2 = 2 a_LAN, Z = z,
+     t0 = t - st, st0 = 2 st, sv = SZ = 0, s = 1, box from the HSSM model config), as data (YAML/JSON under
+     nleflow/presets/), with the mapping and its source cited, and `nleflow convert --list-presets`.
+  3. `nleflow convert --verify`: the card's evaluation (nleflow's own NumPy MLP) against onnxruntime on the card's
+     box, rank-1 and batched inputs, to 1e-6 (float32 sources), writing the ort CSV the EMC2 test tree holds
+     (lan_ddm_uniform_st_ort.csv's format) as the card's golden file.
+  4. Regression tests: converting tests/testthat/golden/ddm_uniform_st.onnx reproduces the fields of
+     lan_ddm_uniform_st.json (the committed conversion) and its ort CSV to 1e-6; the converted card registers in
+     EMC2 dev-nle-m0 as mlp_joint and passes nn_golden_check() against that CSV at the float32 tolerance; a graph
+     with an unsupported op is refused by name; README section with the install step (onnx, onnxruntime are in
+     the lock) and the one-line check.
+  5. Retire inst/scripts/onnx_to_card.py's duplicate: not by deleting it from EMC2 (no EMC2 change in this stage)
+     but by a note in nleflow's README that nleflow convert is the maintained one, and a line in the plan.
+Do not change the card fields beyond what the vignette names; do not touch tux26, Gadi or AWS; no push to
+ampl-psych/EMC2 and no push to main; no SBC runs (the LAN's SBC is pending separately, REPORT_RUSS_JULIAN.md A.3).
+Acceptance, one line each: (a) `nleflow convert tests/.../ddm_uniform_st.onnx --preset ddm_uniform_st` writes a
+card whose fields equal the committed lan_ddm_uniform_st.json up to provenance; (b) --verify agrees with
+onnxruntime to 1e-6 on rank-1 and batched inputs; (c) the card registers in EMC2 as mlp_joint and passes
+nn_golden_check() against the ort CSV; (d) a graph with a Sigmoid node is refused with a message naming the node;
+(e) pytest passes; (f) README updated with the convert steps and checks.
+Work with absolute paths, at most 8 cores. Commit on nleflow-plan only (this repository), push only that branch,
+append one line to the plan's progress log, and end with ONE next stage: M4 (docs, container, CI, the rebase of
+dev-nle onto dev once AH's dev work settles; model Sonnet 5.5 or above, auto mode), with its full prompt.
 ```

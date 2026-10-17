@@ -1,0 +1,46 @@
+# DDMnle, the scaled DDM (NLEFLOW_PLAN.md section 2; handover/SCALED_DDM_PLAN.md):
+# a flow over the unit-scale decision time u = (rt - t0) (s/a)^2 of a diffusion
+# with a = s = 1, conditioned on kappa = v a/s^2, eta = sv a/s^2, Z and SZ, with a
+# choice classifier for P(R = 2). t0, st0, a and s are applied exactly by the
+# card's evaluator (EMC2's flow_scaled kind). This is the recipe of the committed
+# card ddm_sc_s1106_e245 (handover/nle-methods/port/export/).
+name: ddmnle
+model: DDM                        # the analytic twin; the card's model is DDMsc
+response: choice
+context: [kappa, eta, Z, SZ]
+transforms: {kappa: identity, eta: zerobox, Z: probit, SZ: zerobox}
+zerobox_c: {eta: 0.01, SZ: 0.05}
+stored: {eta: log, SZ: probit}    # the data store log eta and probit SZ, -Inf at 0
+box_natural:
+  kappa: [-10, 10]
+  eta: [0, 8]
+  Z: [0.1, 0.9]
+  SZ: [0, 0.99]
+sampling:                         # the free draws (simulation/scaled.R)
+  kappa: [{kind: uniform, share: 0.5}, {kind: uniform, share: 0.5, range: [-3, 3]}]
+  eta: [{kind: log_uniform, share: 0.75, range: [0.01, 8]}, {kind: asinh_uniform, share: 0.25}]
+  Z: [{kind: uniform, share: 1}]
+  SZ: [{kind: asinh_uniform, share: 1, range: [0.05, 0.99]}]
+regimes:                          # which inputs are exactly 0, jointly
+  - {share: 0.55}
+  - {share: 0.15, zero: [eta]}
+  - {share: 0.15, zero: [SZ]}
+  - {share: 0.15, zero: [eta, SZ]}
+scaling: {kind: ddm_unit, sz: proportion}
+spline: {bins: 64, range: [-12, 2]}   # log u; set from the pilot data (SCALED_DDM_PLAN.md section 4)
+conditioner: {widths: [256, 128], norm: false, affine: false}
+classifier: {widths: [256, 256, 256], lr: 1.491898934850391e-3, batch: 256, epochs: 194, loss: mse}
+training:
+  rows: 24000000                  # 600 000 draws x 40 trials
+  val_rows: 1000000               # 25 000 draws x 40
+  trials_per_draw: 40
+  choice_rows: 200000             # exact P(R = 2) targets for the classifier
+  choice_val_rows: 20000
+  batch: 1024
+  epochs: 300
+  keep: 30
+  peak_lr: 1.0e-4
+  seed: 1106                      # the selected seed, s1106
+data: {train: data/train, val: data/val, choice_train: data/choice/train.csv, choice_val: data/choice/val.csv}
+simulator: Rscript simulate.R     # needs EMC2 (NLEFLOW_RLIB), WienR, jsonlite; arrow for parquet
+mass_tolerance: 1.0e-3

@@ -237,7 +237,12 @@ def golden_race(card, n_sets=25, arrays=False):
 
 
 # --- joint cards (DDM flows, scaled or not) -----------------------------------
-def golden_joint(card, n_sets=25):
+def golden_joint(card, n_sets=25, arrays=False):
+    """Header and rows of a joint card's golden file (both responses); with
+    arrays=True also the grid and the float64 outputs: theta_net (network
+    scale), stored (the storage scale, -Inf at zeros), ctx_std, rt, and per
+    response z, log_pdf (joint), cdf (defective), log_p_R, plus the st0 = 0
+    support mask `hard` and the intermediates of the first three sets."""
     ctx = list(card["context_names"])
     if card.get("context_encoding") == "triple":
         raise SystemExit("the (SZ0, SZ, SZ1) encoding is not supported by golden.py")
@@ -272,11 +277,12 @@ def golden_joint(card, n_sets=25):
         hard = np.isneginf(stored[:, j_st0])[:, None] & (rt[None, :] <= t0_nat[:, None])
     header = ["param_id"] + ctx + ["R", "rt", "z", "log_pdf_joint", "cdf_defective", "log_p_R"]
     logit = mlp_forward(ctx_std, cl, None).squeeze(-1)
-    res = {}
+    res = {}; inter = {}
     for R in (1, 2):
         full_ctx = np.concatenate([ctx_std, np.full((n_sets, 1), float(R))], axis=1)
         raw = mlp_forward(full_ctx, fl, fn)
         x_pos, y_pos, slopes = build_knots(raw, K, rmin, rmax, mbs, mks)
+        inter[R] = {"raw": raw, "x_pos": x_pos, "y_pos": y_pos, "slopes": slopes}
         log_p_R = -softplus(-logit) if R == 2 else -softplus(logit)
         z = np.empty((n_sets, len(rt))); lp = np.empty_like(z); cdf = np.empty_like(z)
         for i in range(n_sets):
@@ -296,7 +302,17 @@ def golden_joint(card, n_sets=25):
             for j in range(len(rt)):
                 rows.append([str(i + 1)] + th + [str(R), fmt(rt[j]), fmt(z[i, j]), fmt(lp[i, j]), fmt(cdf[i, j]),
                                                  fmt(log_p_R[i])])
-    return header, rows
+    if not arrays:
+        return header, rows
+    inter1 = inter[1]
+    intermediates = {"theta": [[v if np.isfinite(v) else ("-Inf" if v < 0 else "Inf") for v in row]
+                               for row in stored[:3].tolist()],
+                     "ctx_std": ctx_std[:3].tolist(), "conditioner_raw_R1": inter1["raw"][:3].tolist(),
+                     "x_pos_R1": inter1["x_pos"][:3].tolist(), "y_pos_R1": inter1["y_pos"][:3].tolist(),
+                     "knot_slopes_R1": inter1["slopes"][:3].tolist(),
+                     "classifier_logit": logit[:3].tolist()}
+    return header, rows, {"theta_net": theta_net, "stored": stored, "ctx_std": ctx_std, "rt": rt,
+                          "hard": hard, "res": res, "intermediates": intermediates}
 
 
 def card_kind(card):
@@ -313,6 +329,16 @@ def golden_rows(card):
     kind = card_kind(card)
     header, rows = golden_joint(card) if kind != "flow_race" else golden_race(card)
     return kind, header, rows
+
+
+def golden_arrays(card):
+    """(kind, header, rows, arrays) for either kind of flow card."""
+    kind = card_kind(card)
+    if kind == "flow_race":
+        header, rows, arr = golden_race(card, arrays=True)
+    else:
+        header, rows, arr = golden_joint(card, arrays=True)
+    return kind, header, rows, arr
 
 
 def write_golden(header, rows, dst):

@@ -1,12 +1,16 @@
-"""`nleflow train <spec>`: the race-flow training of the NLE project's
-train_race.py, driven by a spec.
+"""`nleflow train <spec>`: the flow training of the NLE project's
+train_race.py (race specs) and train_ddm.py (choice specs), driven by a spec.
 
 The run directory `<runs>/<name>` holds spec.json (the resolved spec),
 scaler.json, training_log.json and checkpoints/ (Orbax; the `keep` latest
 epochs plus the best validation loss). The loss, optimiser, schedule and
-checkpointing are train_race.py's: mean negative log density of the spline
+checkpointing are the scripts': mean negative log density of the spline
 flow over rows with a finite positive time, AdamW under a warmup-cosine
-schedule, one checkpoint per epoch, no early stopping.
+schedule, one checkpoint per epoch, no early stopping. A choice model's flow
+is conditioned on (standardised context, R) with R appended raw (1.0 or 2.0);
+its choice classifier (classifier.json, classifier_log.json) is trained
+afterwards on the exact P(R = 2) targets of the choice sets, with the same
+standardiser, as retrain_classifier.py's tuned configuration does.
 """
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .data import Batches, Scaler, encode_context, load_table, open_dataset
+from .data import Batches, Scaler, encode_context, load_choice_set, load_response, load_table, open_dataset
 from .spec import dump_json, flow_context
 
 MIN_LOG_PROB = 1e-12
@@ -32,7 +36,7 @@ def build_conditioner(spec, seed):
     import jax
     from flax import nnx
     from .flow import make_mlp_conditioner
-    dims = [len(flow_context(spec))] + list(spec["conditioner"]["widths"])
+    dims = [len(flow_context(spec)) + (1 if spec["response"] == "choice" else 0)] + list(spec["conditioner"]["widths"])
     rngs = nnx.Rngs(default=jax.random.key(seed), sampling=jax.random.key(seed + 1))
     return make_mlp_conditioner(rngs, dims=dims, num_bins=spec["spline"]["bins"], num_splines=1,
                                 use_norm=spec["conditioner"]["norm"],
@@ -65,7 +69,18 @@ def _steps():
     return train_step, eval_step
 
 
-def train(spec, runs="runs", epochs=None, cores=None, quiet=False):
+def _flow_context_array(tbl, spec, scaler):
+    """The flow's context: the standardised encoded context, plus R (raw)
+    for a choice model."""
+    time, ctx = encode_context(tbl, spec)
+    std = scaler.transform(ctx)
+    if spec["response"] == "choice":
+        R = load_response(tbl).astype(np.float64)
+        std = np.concatenate([std, R[:, None]], axis=1)
+    return time, std
+
+
+def train(spec, runs="runs", epochs=None, cores=None, quiet=False, classifier_from=None):
     """Train the spec; returns the run directory."""
     import jax
     import optax
@@ -80,22 +95,25 @@ def train(spec, runs="runs", epochs=None, cores=None, quiet=False):
         shutil.rmtree(run)
     run.mkdir(parents=True)
     say = (lambda *a: None) if quiet else (lambda *a: print(*a, flush=True))
+    choice = spec["response"] == "choice"
 
     t_start = _time.time()
     train_tbl = load_table(open_dataset(spec["data"]["train"]), spec)
     val_tbl = load_table(open_dataset(spec["data"]["val"]), spec)
-    t_train, ctx_train = encode_context(train_tbl, spec)
-    t_val, ctx_val = encode_context(val_tbl, spec)
     names = flow_context(spec)
+    _, ctx_train = encode_context(train_tbl, spec)
     scaler = Scaler.fit(ctx_train, names)
     scaler.save(run / "scaler.json")
+    t_train, c_train = _flow_context_array(train_tbl, spec, scaler)
+    t_val, c_val = _flow_context_array(val_tbl, spec, scaler)
     rng = None if tr["shuffle_seed"] is None else np.random.default_rng(tr["shuffle_seed"])
-    train_batches = Batches(t_train, scaler.transform(ctx_train), tr["batch"], shuffle=True, rng=rng)
-    val_batches = Batches(t_val, scaler.transform(ctx_val), tr["val_batch"], shuffle=False)
+    train_batches = Batches(t_train, c_train, tr["batch"], shuffle=True, rng=rng)
+    val_batches = Batches(t_val, c_val, tr["val_batch"], shuffle=False)
     say(f"[{_time.strftime('%H:%M:%S')}] {spec['name']}: train {train_batches.n} rows, "
-        f"val {val_batches.n} rows, context {names}, widths {spec['conditioner']['widths']}, "
-        f"bins {spec['spline']['bins']}, range {spec['spline']['range']}, batch {tr['batch']}, "
-        f"epochs {tr['epochs']}" + ("  affine" if spec["conditioner"]["affine"] else "")
+        f"val {val_batches.n} rows, context {names}{' + R' if choice else ''}, "
+        f"widths {spec['conditioner']['widths']}, bins {spec['spline']['bins']}, "
+        f"range {spec['spline']['range']}, batch {tr['batch']}, epochs {tr['epochs']}"
+        + ("  affine" if spec["conditioner"]["affine"] else "")
         + (f"  decision time (pre = {spec['pre']})" if spec["pre"] else "")
         + f"  loaded in {_time.time() - t_start:.1f}s")
 
@@ -143,5 +161,107 @@ def train(spec, runs="runs", epochs=None, cores=None, quiet=False):
                 {**log, "total_time_s": sum(log["train_times_s"]) + sum(log["val_times_s"])}, indent=1))
     finally:
         mgr.wait_until_finished()
-    say(f"[{_time.strftime('%H:%M:%S')}] done in {(_time.time() - t_start) / 60:.1f} min -> {run}")
+    say(f"[{_time.strftime('%H:%M:%S')}] flow done in {(_time.time() - t_start) / 60:.1f} min -> {run}")
+
+    if choice:
+        if classifier_from:
+            copy_classifier(classifier_from, run, scaler, say)
+        else:
+            train_classifier(spec, run, scaler, say)
     return run
+
+
+# --- the choice classifier -----------------------------------------------------
+
+def classifier_layers(clf):
+    return [{"W": np.asarray(l.kernel.value, dtype=np.float64).tolist(),
+             "b": np.asarray(l.bias.value, dtype=np.float64).tolist()} for l in clf.layers]
+
+
+def copy_classifier(src_run, run, scaler, say=print):
+    """Reuse another run's classifier: valid only when the two runs standardise
+    alike (the classifier takes the flow's standardised context)."""
+    src_run = Path(src_run).resolve()
+    other = Scaler.load(src_run / "scaler.json")
+    dm = float(np.max(np.abs(other.mean - scaler.mean))); ds = float(np.max(np.abs(other.scale - scaler.scale)))
+    if other.names != scaler.names or dm > 1e-3 or ds > 1e-3:
+        raise ValueError(f"{src_run.name}'s standardiser differs from this run's (max |dmean| {dm:.2e}, "
+                         f"|dscale| {ds:.2e}): its classifier cannot be reused")
+    shutil.copy(src_run / "classifier.json", run / "classifier.json")
+    log = json.loads((src_run / "classifier_log.json").read_text())
+    log["copied_from"] = str(src_run)
+    (run / "classifier_log.json").write_text(json.dumps(log, indent=1))
+    say(f"classifier copied from {src_run}")
+
+
+def train_classifier(spec, run, scaler, say=print):
+    """P(R = 2 | context) on the exact probabilities of the choice sets:
+    retrain_classifier.py's recipe (sigmoid output, MSE on the probability or
+    the hybrid MSE + 0.1 BCE, AdamW under warmup-cosine)."""
+    import jax
+    import jax.numpy as jnp
+    import optax
+    from flax import nnx
+    from .flow import make_choice_classifier
+
+    cl = spec["classifier"]
+    t_start = _time.time()
+    Xtr, ytr = load_choice_set(spec["data"]["choice_train"], spec)
+    Xva, yva = load_choice_set(spec["data"]["choice_val"], spec)
+    Xtr = scaler.transform(Xtr).astype(np.float32); Xva = scaler.transform(Xva).astype(np.float32)
+    ytr = ytr.astype(np.float32); yva = yva.astype(np.float32)
+    dims = [Xtr.shape[1]] + list(cl["widths"])
+    clf = make_choice_classifier(rngs=nnx.Rngs(default=jax.random.key(cl["seed"])), dims=dims)
+    n, bs = len(Xtr), cl["batch"]
+    if n < bs:
+        raise ValueError(f"the choice set has {n} rows, fewer than one classifier batch of {bs}")
+    steps = cl["epochs"] * (n // bs)
+    sched = optax.warmup_cosine_decay_schedule(0.0, cl["lr"], warmup_steps=max(1, steps // 10), decay_steps=steps)
+    opt = nnx.Optimizer(clf, optax.adamw(sched), wrt=nnx.Param)
+    Xs = jnp.asarray(Xtr); ys = jnp.asarray(ytr)
+    loss_kind = cl["loss"]
+
+    def loss_fn(m, xb, yb):
+        logit = m(xb)
+        p = jax.nn.sigmoid(logit)
+        mse = jnp.mean((p - yb) ** 2)
+        bce = optax.sigmoid_binary_cross_entropy(logit, yb).mean()
+        if loss_kind == "mse":
+            return mse
+        if loss_kind == "hybrid":
+            return mse + 0.1 * bce
+        return bce
+
+    @nnx.jit
+    def step(m, o, xb, yb):
+        l, g = nnx.value_and_grad(loss_fn)(m, xb, yb)
+        o.update(g)
+        return l
+
+    rng = np.random.default_rng(cl["seed"])
+    say(f"classifier: {n} rows, dims {dims}, loss {loss_kind}, batch {bs}, epochs {cl['epochs']}")
+    hist = []
+    for ep in range(cl["epochs"]):
+        clf.train()
+        idx = rng.permutation(n)
+        for s0 in range(0, n - bs + 1, bs):
+            sl = jnp.asarray(idx[s0:s0 + bs])
+            step(clf, opt, Xs[sl], ys[sl])
+        if (ep + 1) % 40 == 0 or ep + 1 == cl["epochs"]:
+            clf.eval()
+            pv = np.asarray(jax.nn.sigmoid(clf(jnp.asarray(Xva))))
+            err = float(np.abs(pv - yva).mean())
+            hist.append({"epoch": ep + 1, "val_mean_abs_err": err})
+            say(f"  classifier epoch {ep + 1:4d}  val mean |P_hat - P| {err:.6f}")
+    clf.eval()
+    pv = np.asarray(jax.nn.sigmoid(clf(jnp.asarray(Xva))))
+    err = pv - yva
+    log = {"dims": dims, "loss": loss_kind, "epochs": cl["epochs"], "batch": bs, "lr": cl["lr"],
+           "seed": cl["seed"], "n_train": int(n), "n_val": int(len(yva)),
+           "val_mean_abs_err": float(np.abs(err).mean()), "val_signed_err": float(err.mean()),
+           "val_max_abs_err": float(np.abs(err).max()), "history": hist,
+           "time_s": _time.time() - t_start}
+    (run / "classifier.json").write_text(json.dumps({"activation": "gelu_tanh", "layers": classifier_layers(clf)}))
+    (run / "classifier_log.json").write_text(json.dumps(log, indent=1))
+    say(f"classifier done: val mean |err| {log['val_mean_abs_err']:.6f}, max {log['val_max_abs_err']:.4f} "
+        f"in {log['time_s']:.0f}s")

@@ -20,7 +20,7 @@ import numpy as np
 
 from . import __version__
 from .data import Scaler
-from .golden import golden_race, write_golden
+from .golden import golden_arrays, write_golden
 from .spec import bounds, flow_context
 
 GATE_TOL = 1e-8
@@ -91,7 +91,19 @@ def step_metrics(run, step):
         return {}
 
 
-def build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss=None, run_name=None):
+def read_classifier(run):
+    """The choice classifier a run trained (classifier.json): float64 layers."""
+    p = Path(run) / "classifier.json"
+    if not p.exists():
+        raise FileNotFoundError(f"{run} has no classifier.json: train the choice model first")
+    c = json.loads(p.read_text())
+    return [(np.asarray(l["W"], dtype=np.float64), np.asarray(l["b"], dtype=np.float64)) for l in c["layers"]]
+
+
+def build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss=None, run_name=None,
+               clf_layers=None):
+    if spec["response"] == "choice":
+        return build_card_joint(spec, scaler, step, layers, norms, num_bins, affine, clf_layers, val_loss, run_name)
     names = flow_context(spec)
     if layers[0][0].shape[0] != len(names):
         raise ValueError(f"checkpoint input width {layers[0][0].shape[0]} != {len(names)} flow inputs {names}")
@@ -163,6 +175,81 @@ def build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss=Non
     return card
 
 
+def build_card_joint(spec, scaler, step, layers, norms, num_bins, affine, clf_layers, val_loss=None, run_name=None):
+    """A flow_joint or flow_scaled card (vignette, v1): the flow conditioned on
+    (context, R), the classifier on the context, both standardised alike."""
+    names = flow_context(spec)
+    if layers[0][0].shape[0] != len(names) + 1:
+        raise ValueError(f"flow input width {layers[0][0].shape[0]} != {len(names)} context inputs + R")
+    if affine:
+        raise ValueError("a choice model's flow has no affine stage")
+    if clf_layers is None or clf_layers[0][0].shape[0] != len(names) or clf_layers[-1][0].shape[1] != 1:
+        raise ValueError("the classifier must map the context to one logit")
+    if scaler.names != names:
+        raise ValueError(f"scaler.json names {scaler.names} != flow context {names}")
+    if num_bins != spec["spline"]["bins"]:
+        raise ValueError(f"checkpoint has {num_bins} bins; the spec says {spec['spline']['bins']}")
+    nat, net = bounds(spec, names)
+    rmin, rmax = spec["spline"]["range"]
+    zb = {c: spec["zerobox_c"][c] for c in names if c in spec["zerobox_c"]}
+    scaled = spec["scaling"] is not None
+    card = {
+        "card_version": 1,
+        "kind": "flow_scaled" if scaled else "flow_joint",
+        "model": "DDMsc" if scaled else spec["model"],
+        "label": spec["name"],
+        "budget": run_name or spec["name"],
+        "checkpoint_step_flow": int(step),
+        "checkpoint_step_classifier": "trained with the run (classifier.json)",
+        "exported": str(date.today()),
+        "exporter_version": f"nleflow {__version__}",
+        "source": f"{run_name or spec['name']} step {step}",
+        "context_names": names,
+        "classifier_context_names": names,
+        "context_encoding": "zerobox" if zb else "emc2",
+        **({"zerobox_c": zb} if zb else {}),
+        **({"scaling": dict(spec["scaling"])} if scaled else {}),
+        "context_transforms": {c: spec["transforms"][c] for c in names},
+        "parameter_scale": "sampled",
+        "response_coding": ("flow context gets raw R (1.0 or 2.0) appended after standardized params; "
+                            "classifier logit is for P(R=2)"),
+        "bounds_sampled": net,
+        "bounds_natural": nat,
+        "scaler": {"mean": scaler.mean.tolist(), "scale": scaler.scale.tolist()},
+        "classifier_scaler": {"mean": scaler.mean.tolist(), "scale": scaler.scale.tolist()},
+        "flow_mlp": {
+            "activation": "gelu_tanh",
+            "use_norm": norms is not None,
+            "layers": [{"W": W.tolist(), "b": b.tolist()} for W, b in layers],
+            "norms": ([{"scale": s.tolist(), "bias": b.tolist(), "eps": 1e-6} for s, b in norms]
+                      if norms else None),
+        },
+        "classifier_mlp": {
+            "activation": "gelu_tanh",
+            "layers": [{"W": W.tolist(), "b": b.tolist()} for W, b in clf_layers],
+        },
+        "spline": {
+            "num_bins": int(num_bins), "num_splines": 1,
+            "range_min": float(rmin), "range_max": float(rmax),
+            "min_bin_size": MIN_BIN_SIZE, "min_knot_slope": MIN_KNOT_SLOPE,
+            "boundary_slopes": "identity", "output_transform": "exp",
+            "base_distribution": "standard_normal",
+        },
+        "ll_floor_log": float(np.log(1e-10)),
+        # the network's time: u for a scaled card, rt otherwise; all of it
+        "support": {"time": [0.0, "Inf"]},
+        "mass_tolerance": spec["mass_tolerance"],
+        "beyond_support": spec["beyond_support"],
+    }
+    if spec.get("validation"):
+        card["validation"] = dict(spec["validation"])
+    card["training"] = {k: spec["training"][k] for k in ("batch", "epochs", "peak_lr", "seed", "keep")}
+    if val_loss is not None:
+        card["training"]["val_loss"] = val_loss
+    card["training"]["classifier"] = {k: spec["classifier"][k] for k in ("widths", "lr", "batch", "epochs", "loss", "seed")}
+    return card
+
+
 def _jax_conditioner(layers, norms, num_bins, affine, rmin, rmax, dtype):
     import jax.numpy as jnp
     from flax import nnx
@@ -198,27 +285,76 @@ def _jax_eval(cond, ctx_std, t_flow, dtype):
     return lp, z
 
 
-def gate(card, layers, norms, num_bins, affine, tol=GATE_TOL, say=print):
+def _jax_classifier(clf_layers, dtype):
+    import jax.numpy as jnp
+    from flax import nnx
+    from .flow import make_choice_classifier
+    clf = make_choice_classifier(nnx.Rngs(0), dims=[clf_layers[0][0].shape[0]] + [W.shape[1] for W, _ in clf_layers[:-1]])
+    for i, (W, b) in enumerate(clf_layers):
+        clf.layers[i].kernel.value = jnp.asarray(W, dtype=dtype)
+        clf.layers[i].bias.value = jnp.asarray(b, dtype=dtype)
+    return clf
+
+
+def _jax_eval_joint(cond, clf, ctx_std, rt, dtype):
+    """log p(rt, R | theta) and z of the JAX joint flow per response: dicts
+    keyed by R of (n_sets, n_rt) arrays."""
+    import jax.numpy as jnp
+    from .flow import joint_log_prob, spline_flow
+    n, m = ctx_std.shape[0], rt.shape[0]
+    out = {}
+    for R in (1, 2):
+        lp = np.empty((n, m)); z = np.empty((n, m))
+        for i in range(n):
+            rt_j = jnp.asarray(rt, dtype=dtype)
+            ctx = jnp.tile(jnp.asarray(ctx_std[i], dtype=dtype), (m, 1))
+            lp[i] = np.asarray(joint_log_prob(cond, clf, rt_j, ctx, jnp.full((m,), R, dtype=jnp.int32)), dtype=np.float64)
+            full = jnp.concatenate([ctx, jnp.full((m, 1), float(R), dtype=dtype)], axis=1)
+            _, flow = spline_flow(rt_j, full, cond)
+            z[i] = np.asarray(flow.bijector.inverse(rt_j), dtype=np.float64)
+        out[R] = (lp, z)
+    return out
+
+
+def gate(card, layers, norms, num_bins, affine, tol=GATE_TOL, say=print, clf_layers=None):
     """The float64 port (the golden vectors) against the JAX flow in float64,
     and the float32 gap for information. Returns (header, rows, arrays,
     report); raises if the gate fails."""
     import jax
-    header, rows, arr = golden_race(card, arrays=True)
+    kind, header, rows, arr = golden_arrays(card)
     rmin, rmax = card["spline"]["range_min"], card["spline"]["range_max"]
-    ctx_std, t_flow = arr["ctx_std"], arr["t_flow"]
+    if kind == "flow_race":
+        ctx_std, t_flow = arr["ctx_std"], arr["t_flow"]
+        port_lp, port_z = arr["log_pdf"], arr["z"]
+
+        def run(dtype):
+            cond = _jax_conditioner(layers, norms, num_bins, affine, rmin, rmax, dtype)
+            return _jax_eval(cond, ctx_std, t_flow, dtype)
+    else:
+        ctx_std, rt = arr["ctx_std"], arr["rt"]
+        res = arr["res"]
+        port_lp = np.concatenate([res[1][1], res[2][1]]); port_z = np.concatenate([res[1][0], res[2][0]])
+        hard = arr["hard"]
+        if hard is not None:              # the support rule is applied after the network
+            port_lp = np.where(np.concatenate([hard, hard]), np.nan, port_lp)
+
+        def run(dtype):
+            cond = _jax_conditioner(layers, norms, num_bins, False, rmin, rmax, dtype)
+            clf = _jax_classifier(clf_layers, dtype)
+            o = _jax_eval_joint(cond, clf, ctx_std, rt, dtype)
+            return np.concatenate([o[1][0], o[2][0]]), np.concatenate([o[1][1], o[2][1]])
+    use = np.isfinite(port_lp)
     # float32 first: the flow as trained, with the default (float32) JAX config
-    cond32 = _jax_conditioner(layers, norms, num_bins, affine, rmin, rmax, "float32")
-    lp32, z32 = _jax_eval(cond32, ctx_std, t_flow, "float32")
-    gap32 = float(np.max(np.abs(lp32 - arr["log_pdf"])))
+    lp32, z32 = run("float32")
+    gap32 = float(np.max(np.abs(lp32 - port_lp)[use]))
     # then float64: the gate
     jax.config.update("jax_enable_x64", True)
-    cond64 = _jax_conditioner(layers, norms, num_bins, affine, rmin, rmax, "float64")
-    lp64, z64 = _jax_eval(cond64, ctx_std, t_flow, "float64")
-    d_lp = float(np.max(np.abs(lp64 - arr["log_pdf"])))
-    d_z = float(np.max(np.abs(z64 - arr["z"])))
+    lp64, z64 = run("float64")
+    d_lp = float(np.max(np.abs(lp64 - port_lp)[use]))
+    d_z = float(np.max(np.abs(z64 - port_z)[use]))
     report = {"gate_tol": tol, "max_abs_dlog_pdf_f64": d_lp, "max_abs_dz_f64": d_z,
-              "max_abs_dlog_pdf_f32": gap32, "n_points": int(lp64.size)}
-    say(f"float64 gate: port vs JAX float64 over {lp64.size} points: max |dlog_pdf| {d_lp:.2e}, "
+              "max_abs_dlog_pdf_f32": gap32, "n_points": int(use.sum())}
+    say(f"float64 gate: port vs JAX float64 over {int(use.sum())} points: max |dlog_pdf| {d_lp:.2e}, "
         f"max |dz| {d_z:.2e} (tolerance {tol:.0e})")
     say(f"float32 gap (information): port vs JAX float32 max |dlog_pdf| {gap32:.2e}")
     if not (d_lp <= tol and d_z <= tol):
@@ -231,12 +367,15 @@ def export(run, step=None, out=None, tag=None, say=print):
     """Export one checkpoint of a run; returns the paths written."""
     run, spec, scaler = read_run(run)
     step, layers, norms, num_bins, affine, val_loss = read_conditioner(run, step)
-    card = build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss, run.name)
+    choice = spec["response"] == "choice"
+    clf_layers = read_classifier(run) if choice else None
+    card = build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss, run.name, clf_layers)
     say(f"run {run.name}: step {step}" + (f" (val loss {val_loss:.5f})" if val_loss is not None else "")
         + f", widths {[layers[0][0].shape[0]] + [W.shape[1] for W, _ in layers]}, "
           f"{num_bins} bins, layernorm {norms is not None}, affine {affine}, "
-          f"context {card['context_names']}")
-    header, rows, arr, report = gate(card, layers, norms, num_bins, affine, say=say)
+          f"context {card['context_names']}, kind {card['kind']}"
+        + (f", classifier widths {[clf_layers[0][0].shape[0]] + [W.shape[1] for W, _ in clf_layers]}" if choice else ""))
+    header, rows, arr, report = gate(card, layers, norms, num_bins, affine, say=say, clf_layers=clf_layers)
     card["export_gate"] = report
     tag = tag or f"{spec['name']}_e{step}"
     out = Path(out).resolve() if out else run / "export"

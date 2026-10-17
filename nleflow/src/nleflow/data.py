@@ -1,9 +1,12 @@
 """The data contract (NLEFLOW_PLAN.md section 7.2) and the in-memory batches.
 
 One row per trial. Columns: `param_id`; each context name on the stored
-(EMC2 sampled) scale, `-Inf` at an exact zero of a zero-box input; `rt`; and
+(EMC2 sampled) scale, `-Inf` at an exact zero of a zero-box input; `rt` (for
+a scaled DDM card the unit-scale time u); `R` (1 or 2; choice models); and
 optionally `ll` (the analytic log density, kept for diagnostics; not used by
-the loss) and `R`. A dataset is a directory of parquet files (`.parquet`) or,
+the loss). A choice model also has two choice-probability files: the context
+on the stored scale plus `p_R2`, the exact P(R = 2), on which the classifier
+is trained (data.choice_train / choice_val). A dataset is a directory of parquet files (`.parquet`) or,
 when R has no `arrow`, of CSV files (`.csv`, as `write.csv` writes them, with
 `-Inf` spelled so); the two load identically.
 
@@ -48,9 +51,13 @@ def open_dataset(path):
     return ds.dataset([str(p) for p in files], format=fmt)
 
 
+RESPONSE = "R"
+P_R2 = "p_R2"
+
+
 def load_table(dset, spec):
-    """The columns a race spec needs, as a pyarrow table in file order."""
-    cols = [DATA, *spec["context"]]
+    """The columns a spec needs, as a pyarrow table in file order."""
+    cols = [DATA, *spec["context"]] + ([RESPONSE] if spec["response"] == "choice" else [])
     names = set(dset.schema.names)
     missing = [c for c in cols if c not in names]
     if missing:
@@ -85,6 +92,39 @@ def encode_context(tbl, spec):
         cols.append(x)
     ctx = np.stack(cols, axis=1)
     return time, ctx
+
+
+def load_response(tbl):
+    """R as an int array in {1, 2}."""
+    r = tbl[RESPONSE].to_numpy(zero_copy_only=False)
+    r = np.asarray(r).astype(np.int64)
+    if not np.all((r == 1) | (r == 2)):
+        raise ValueError("the response column R must hold 1 and 2 only")
+    return r
+
+
+def load_choice_set(path, spec):
+    """(encoded context, p_R2) of a choice-probability file (or directory)."""
+    dset = open_dataset(path)
+    names = flow_context(spec)
+    cols = [*names, P_R2]
+    missing = [c for c in cols if c not in dset.schema.names]
+    if missing:
+        raise ValueError(f"the choice set {path} lacks columns {missing}")
+    tbl = dset.to_table(columns=cols)
+    ctx = []
+    for c in names:
+        x = tbl[c].to_numpy(zero_copy_only=False).astype(np.float64)
+        if spec["transforms"][c] == "zerobox":
+            nat = ndtr(x) if spec["stored"][c] == "probit" else np.exp(x)
+            x = np.arcsinh(nat / spec["zerobox_c"][c])
+        if not np.all(np.isfinite(x)):
+            raise ValueError(f"non-finite values in choice-set column '{c}' after encoding")
+        ctx.append(x)
+    p = tbl[P_R2].to_numpy(zero_copy_only=False).astype(np.float64)
+    if not np.all((p >= 0) & (p <= 1)):
+        raise ValueError("p_R2 must lie in [0, 1]")
+    return np.stack(ctx, axis=1), p
 
 
 class Scaler:

@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from nleflow.data import write_parquet
+from nleflow.data import Scaler, write_parquet
 from nleflow.export import export, read_run
 from nleflow.golden import main as golden_main
 from nleflow.spec import validate_spec
@@ -121,3 +121,107 @@ def test_card_registers_in_emc2(tmp_path, emc2_lib):
                          env={**os.environ, "R_PROFILE_USER": "/dev/null"})
     assert out.returncode == 0, out.stdout + out.stderr
     assert "PASS" in out.stdout
+
+
+# --- choice models: the scaled DDM path (M2) -----------------------------------------
+
+def synthetic_choice(n, seed):
+    """Rows in the scaled DDM's columns: a shifted log-normal u with a
+    kappa-dependent choice, not a DDM; the pipeline and the card contract are
+    under test, not the fit."""
+    rng = np.random.default_rng(seed)
+    kappa = rng.uniform(-3.0, 3.0, n)
+    eta = rng.uniform(0.0, 2.0, n); eta[rng.random(n) < 0.3] = 0.0
+    Z = rng.uniform(0.2, 0.8, n)
+    SZ = rng.uniform(0.0, 0.8, n); SZ[rng.random(n) < 0.3] = 0.0
+    p2 = 1.0 / (1.0 + np.exp(-kappa))
+    R = np.where(rng.random(n) < p2, 2, 1)
+    u = np.exp(-1.0 + 0.3 * rng.standard_normal(n) - 0.1 * np.abs(kappa))
+    with np.errstate(divide="ignore"):
+        from scipy.special import ndtri
+        rows = {"param_id": np.arange(1, n + 1), "R": R, "rt": u, "kappa": kappa, "eta": np.log(eta),
+                "Z": ndtri(Z), "SZ": ndtri(SZ)}
+    return rows, p2
+
+
+def make_choice_spec(tmp_path):
+    spec = {
+        "name": "synthetic_sc", "model": "DDM", "response": "choice", "context": ["kappa", "eta", "Z", "SZ"],
+        "transforms": {"kappa": "identity", "eta": "zerobox", "Z": "probit", "SZ": "zerobox"},
+        "zerobox_c": {"eta": 0.01, "SZ": 0.05},
+        "box_natural": {"kappa": [-3, 3], "eta": [0, 2], "Z": [0.2, 0.8], "SZ": [0, 0.8]},
+        "regimes": [{"share": 0.5}, {"share": 0.25, "zero": ["eta"]}, {"share": 0.25, "zero": ["SZ"]}],
+        "scaling": {"kind": "ddm_unit"},
+        "spline": {"bins": 8, "range": [-6, 2]},
+        "conditioner": {"widths": [16, 8]},
+        "classifier": {"widths": [16, 8], "epochs": 5, "batch": 128},
+        "training": {"batch": 256, "epochs": 2, "keep": 2, "peak_lr": 1e-3, "seed": 3, "shuffle_seed": 1},
+        "data": {"train": "train", "val": "val", "choice_train": "choice/train.parquet",
+                 "choice_val": "choice/val.parquet"},
+    }
+    rows, _ = synthetic_choice(4096, 1); write_parquet(tmp_path / "train" / "t.parquet", rows)
+    rows, _ = synthetic_choice(512, 2); write_parquet(tmp_path / "val" / "v.parquet", rows)
+    for name, n, seed in (("train", 1024, 5), ("val", 128, 6)):
+        rows, p2 = synthetic_choice(n, seed)
+        write_parquet(tmp_path / "choice" / f"{name}.parquet",
+                      {k: rows[k] for k in ("kappa", "eta", "Z", "SZ")} | {"p_R2": p2})
+    return validate_spec(spec, base=tmp_path, source=str(tmp_path / "spec.yaml"))
+
+
+def test_choice_train_export_golden(tmp_path):
+    spec = make_choice_spec(tmp_path)
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    assert (run / "classifier.json").exists() and (run / "classifier_log.json").exists()
+    res = export(run, say=lambda *a: None)
+    card = json.loads(res["weights"].read_text())
+    assert card["kind"] == "flow_scaled" and card["model"] == "DDMsc" and card["card_version"] == 1
+    assert card["scaling"] == {"kind": "ddm_unit", "sz": "proportion",
+                               "pars": ["v", "a", "sv", "t0", "st0", "s", "Z", "SZ"]}
+    assert card["context_encoding"] == "zerobox" and card["zerobox_c"] == {"eta": 0.01, "SZ": 0.05}
+    assert card["context_transforms"] == {"kappa": "identity", "eta": "zerobox", "Z": "probit", "SZ": "zerobox"}
+    assert card["classifier_scaler"] == card["scaler"] and "control_limits" not in card
+    assert len(card["flow_mlp"]["layers"][0]["W"]) == 5 and len(card["classifier_mlp"]["layers"][0]["W"]) == 4
+    assert res["gate"]["max_abs_dlog_pdf_f64"] <= 1e-8
+    g = read_csv(res["golden"])
+    assert len(g) == 1150 and set(g.dtype.names) >= {"R", "rt", "log_pdf_joint", "cdf_defective", "log_p_R"}
+    assert np.isneginf(g["eta"]).sum() > 0 and np.isneginf(g["SZ"]).sum() > 0   # exact zeros recorded as -Inf
+    again = tmp_path / "again.csv"
+    golden_main(str(res["weights"]), str(again))
+    a = read_csv(again)
+    for c in a.dtype.names:
+        fa = np.isfinite(a[c]); assert np.array_equal(fa, np.isfinite(g[c]))
+        assert np.abs(a[c][fa] - g[c][fa]).max() < 1e-12
+
+
+def test_choice_classifier_reuse_needs_the_same_scaler(tmp_path):
+    spec = make_choice_spec(tmp_path)
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    run2 = train(spec, runs=tmp_path / "runs2", quiet=True, classifier_from=run)
+    assert json.loads((run2 / "classifier_log.json").read_text())["copied_from"] == str(run)
+    other = Scaler.load(run2 / "scaler.json"); other.mean[0] += 1.0; other.save(run2 / "scaler.json")
+    with pytest.raises(ValueError, match="cannot be reused"):
+        train(spec, runs=tmp_path / "runs3", quiet=True, classifier_from=run2)
+
+
+def test_choice_card_registers_in_emc2(tmp_path, emc2_lib):
+    """The scaled card registers with twin = DDM as flow_scaled and passes
+    nn_golden_check() and nle_verify's compiled-vs-R check."""
+    spec = make_choice_spec(tmp_path)
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    res = export(run, say=lambda *a: None)
+    r_code = f"""
+    .libPaths(c('{emc2_lib}', .libPaths())); suppressPackageStartupMessages(library(EMC2))
+    m <- register_nn_model('{res["weights"]}', twin = DDM)
+    reg <- m()$nn
+    stopifnot(reg$kind == 'flow_scaled', reg$card_version == 1, isTRUE(reg$scaled), reg$scaling$kind == 'ddm_unit')
+    g <- nn_golden_check(m, error = FALSE); cat(format(g), '\\n'); stopifnot(g$pass)
+    """
+    out = subprocess.run(["Rscript", "-e", r_code], capture_output=True, text=True,
+                         env={**os.environ, "R_PROFILE_USER": "/dev/null"})
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "PASS" in out.stdout
+    verify = subprocess.run(["Rscript", "-e", f".libPaths(c('{emc2_lib}', .libPaths())); "
+                             "source(system.file('scripts', 'nle_verify.R', package = 'EMC2'))", str(res["weights"])],
+                            capture_output=True, text=True, env={**os.environ, "R_PROFILE_USER": "/dev/null"})
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert "FAIL" not in verify.stdout and "compiled vs R path" in verify.stdout

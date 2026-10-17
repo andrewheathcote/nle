@@ -7,7 +7,7 @@ import pytest
 
 from nleflow.golden import main as golden_main
 
-CARDS = ["rdm_ss_base_s801_e271", "rdm_rdm_small_e195"]
+CARDS = ["rdm_ss_base_s801_e271", "rdm_rdm_small_e195", "ddm_sc_s1106_e245"]
 
 
 def read(path):
@@ -20,8 +20,12 @@ def test_golden_reproduces_committed_file(export_dir, tmp_path, tag):
     golden_main(str(export_dir / f"{tag}_weights.json"), str(out))
     new, ref = read(out), read(export_dir / f"{tag}_golden.csv")
     assert new.dtype.names == ref.dtype.names
-    assert len(new) == len(ref) == 575
-    worst = max(float(np.max(np.abs(new[c] - ref[c]))) for c in new.dtype.names)
+    assert len(new) == len(ref) == (1150 if tag.startswith("ddm") else 575)
+    worst = 0.0
+    for c in new.dtype.names:
+        fa, fb = np.isfinite(new[c]), np.isfinite(ref[c])
+        assert np.array_equal(fa, fb) and np.array_equal(new[c][~fa], ref[c][~fb])   # -Inf where -Inf
+        worst = max(worst, float(np.max(np.abs(new[c][fa] - ref[c][fb]))))
     assert worst < 1e-12, f"{tag}: max |diff| {worst:.2e}"
 
 

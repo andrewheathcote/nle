@@ -16,7 +16,9 @@ def test_examples_load(name):
     assert s["context"] == ["v", "B", "t0", "s", "A"]
     assert s["transforms"]["A"] == "zerobox" and s["zerobox_c"] == {"A": 0.05}
     assert s["stored"] == {"A": "log"}
-    assert s["sampling"]["A"] == {"uniform": 0.70, "asinh_uniform": 0.15, "zero": 0.15}
+    assert s["sampling"]["A"] == [{"kind": "uniform", "share": 0.70}, {"kind": "asinh_uniform", "share": 0.15},
+                                  {"kind": "zero", "share": 0.15}]
+    assert s["regimes"] is None and s["scaling"] is None and s["classifier"] is None
     assert s["conditioner"] == {"widths": [256, 128], "norm": False, "affine": False}
     assert s["spline"] == {"bins": 64, "range": [-5.0, 5.0]}
     assert Path(s["data"]["train"]).is_absolute()
@@ -46,8 +48,12 @@ def test_refusals():
     refused(lambda s: s["box_natural"].update(v=[0, 5]), "positive lower bound")
     refused(lambda s: s["box_natural"].update(A=[2, 0]), "lower must be below upper")
     refused(lambda s: s["sampling"]["A"].update(zero=0.5), "shares must sum to 1")
-    refused(lambda s: s.update(response="choice"), "milestone M2")
-    refused(lambda s: s.update(scaling={"kind": "ddm_unit"}), "milestone M2")
+    refused(lambda s: s.update(response="choice"), "needs a classifier")
+    refused(lambda s: s.update(scaling={"kind": "ddm_unit"}), "choice models only")
+    refused(lambda s: s.update(classifier={"widths": [8]}), "race flows have none")
+    refused(lambda s: s.update(sampling={"A": [{"kind": "log_uniform", "share": 1}]}), "needs a range")
+    refused(lambda s: s.update(sampling={"A": [{"kind": "uniform", "share": 1, "range": [0, 3]}]}), "inside box_natural")
+    refused(lambda s: s.update(regimes=[{"share": 1, "zero": ["v"]}]), "not a zero-box input")
     refused(lambda s: s.update(pre="Q"), "not a context name")
     refused(lambda s: s["training"].update(batch=0), "positive integer")
     refused(lambda s: s["training"].update(bogus=1), "unknown keys")

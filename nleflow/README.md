@@ -2,18 +2,20 @@
 
 Train a normalizing-flow neural likelihood for an evidence-accumulation model
 from a model specification, and export it as a card that EMC2 (branch
-`dev-nle-m0`) loads with `register_nn_model()`. This is milestone M1 of
-`handover/NLEFLOW_PLAN.md`: the package skeleton with the race-model path and
-the RDM A = 0 worked example. The DDM path (flow + classifier, the scaled DDM
-card, ONNX) is milestone M2.
+`dev-nle-m0`) loads with `register_nn_model()`. Milestones M1 and M2 of
+`handover/NLEFLOW_PLAN.md`: the race-model path with the RDM A = 0 example,
+and the choice-model path (flow + choice classifier; the scaled DDM card,
+DDMnle) with its ONNX export.
 
 ```
-nleflow spec     <spec>            validate a spec and print it resolved
-nleflow simulate <spec>            run the spec's simulator command
-nleflow train    <spec>            train; checkpoints under runs/<name>/
-nleflow steps    <run>             the kept checkpoints and their validation loss
-nleflow export   <run> --step N    write a card_version 1 card + golden vectors
-nleflow golden   <card>            rewrite a card's golden vectors from its JSON
+nleflow spec       <spec>            validate a spec and print it resolved
+nleflow simulate   <spec>            run the spec's simulator command
+nleflow train      <spec>            train; checkpoints under runs/<name>/ (+ the classifier)
+nleflow steps      <run>             the kept checkpoints and their validation loss
+nleflow export     <run> --step N    write a card_version 1 card + golden vectors
+nleflow golden     <card>            rewrite a card's golden vectors from its JSON
+nleflow onnx       <card>            a DDM flow card as an ONNX graph (two signatures)
+nleflow onnx-check <model> <card>    the graph against the golden rows and EMC2 cases
 ```
 
 What a flow is, how the cards are evaluated and validated, and the card
@@ -38,11 +40,15 @@ the exported card; their steps are in the plan's section 9.2.
    `.venv/`. 11 s with a warm cache on the cloud instance, a few minutes cold.
    Check: `uv run python -c "import jax, flax, distrax, onnx, onnxruntime; print(jax.__version__)"`
    prints `0.5.3`.
-4. **The command.** Check: `uv run nleflow --help` lists the six commands
+4. **The command.** Check: `uv run nleflow --help` lists the eight commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
-5. **The tests.** Check: `uv run pytest` passes (12 tests; a 13th runs when
-   `NLEFLOW_EMC2_LIB=<library holding EMC2 dev-nle-m0>` is set and registers a
-   card in R). About 30 s on 4 cores.
+5. **The tests.** Check: `uv run pytest` passes (25 tests; three of them run
+   only when `NLEFLOW_EMC2_LIB=<library holding EMC2 dev-nle-m0>` is set, to
+   register cards in R and compare the ONNX graph with EMC2, and one needs
+   the EMC2 checkout beside this repository for its golden file; the rest
+   skip). About 80 s on 4 cores.
+   The ONNX tests need `onnx` and `onnxruntime` from the lock; check:
+   `uv run python -c "import onnxruntime as ort; print(ort.__version__)"` prints 1.20 or later.
 6. **GPU (optional, untested):** `uv sync --frozen --group dev --extra gpu`
    installs `jax[cuda12]`. Every shipped flow was trained on CPU.
 
@@ -77,6 +83,40 @@ mass_tolerance: 1.0e-3
 
 YAML note: write exponents with a sign (`1.0e-4`, not `1e-4`) or as plain
 integers; PyYAML reads `24e6` as a string and the spec refuses it.
+
+**A choice model** (the scaled DDM, `examples/ddmnle/spec.yaml`) sets
+`response: choice`, a `classifier`, `scaling: {kind: ddm_unit}` and, for the
+simulator, per-input strata in the long form (`kind`, `share`, `range`) plus
+`regimes`, the shares of draws with each set of inputs exactly 0:
+
+```yaml
+response: choice
+context: [kappa, eta, Z, SZ]
+transforms: {kappa: identity, eta: zerobox, Z: probit, SZ: zerobox}
+zerobox_c: {eta: 0.01, SZ: 0.05}
+stored: {eta: log, SZ: probit}
+box_natural: {kappa: [-10, 10], eta: [0, 8], Z: [0.1, 0.9], SZ: [0, 0.99]}
+sampling:
+  kappa: [{kind: uniform, share: 0.5}, {kind: uniform, share: 0.5, range: [-3, 3]}]
+  eta: [{kind: log_uniform, share: 0.75, range: [0.01, 8]}, {kind: asinh_uniform, share: 0.25}]
+  SZ: [{kind: asinh_uniform, share: 1, range: [0.05, 0.99]}]
+regimes: [{share: 0.55}, {share: 0.15, zero: [eta]}, {share: 0.15, zero: [SZ]}, {share: 0.15, zero: [eta, SZ]}]
+scaling: {kind: ddm_unit, sz: proportion}
+spline: {bins: 64, range: [-12, 2]}
+classifier: {widths: [256, 256, 256], lr: 1.49e-3, batch: 256, epochs: 194, loss: mse}
+training: {rows: 24000000, val_rows: 1000000, trials_per_draw: 40, choice_rows: 200000, choice_val_rows: 20000, ...}
+data: {train: data/train, val: data/val, choice_train: data/choice/train.csv, choice_val: data/choice/val.csv}
+```
+
+The flow is conditioned on (standardised context, R) with R appended raw;
+the classifier maps the standardised context to the logit of P(R = 2) and is
+trained after the flow on the exact probabilities of the two choice sets
+(`retrain_classifier.py`'s tuned recipe: sigmoid output, MSE on the
+probability, AdamW under warmup-cosine), with the flow's standardiser. It is
+written to the run as `classifier.json`; `nleflow train --classifier-from
+<run>` reuses another run's classifier when the two standardisers agree to
+1e-3 (the exporters' rule). The DDM's own eight-parameter flows (`flow_joint`
+cards, no `scaling`) are the same path without the scaling block.
 
 **The two unproven options** (plan section 13.3.3): `conditioner.affine`
 (two more conditioner outputs, a per-context location and scale on log
@@ -136,6 +176,58 @@ project's `golden.py`, moved here; `handover/nle-methods/flow/scripts/golden.py`
 now calls this module). The golden grid, row order and storage scales are
 the exporters' and are documented in `nleflow/golden.py`.
 
+A choice model exports a `flow_joint` card, or a `flow_scaled` card when the
+spec has `scaling` (`model: DDMsc`, the structured `scaling` block,
+`context_encoding: zerobox`, `classifier_mlp`, `classifier_scaler`; EMC2
+registers it with `twin = DDM`). Its gate compares the joint log density of
+both responses over the 1150 golden points (JAX `joint_log_prob` in float64);
+on the smoke card 3.8e-13.
+
+## The ONNX export (`nleflow/onnx_export.py`)
+
+`nleflow onnx <card>` writes the LAN-shaped graph of a `flow_joint` or
+`flow_scaled` card in two signatures (plan section 7.3), float64, opset 18,
+IR version 10 (onnxruntime ≤ 1.30 loads it; 1.31 here):
+
+| signature | inputs | output |
+|---|---|---|
+| `trialwise` | one `[N, k + 2]` tensor: the k parameters, rt, choice (−1 lower, +1 upper) | `[N]` log p(rt, choice \| θ) |
+| `shared` | `theta [k]`, `rt [N]`, `choice [N]`; the conditioner runs twice (once per response) and the classifier once | `[N]` |
+
+For a `flow_joint` card the k inputs are the context on the stored scale
+(`export_onnx_ddm.py`'s contract: log, probit, −Inf at an exact zero; the
+graph applies the zero-box encoding and the st0 = 0 support rule). For a
+`flow_scaled` card they are the eight natural DDM parameters v, a, t0, s, Z,
+SZ (the start-point proportion), sv, st0: the graph computes κ, η, the
+encodings, the probit of Z, c = (s/a)², u = (rt − t0) c and the st0 branch,
+exactly as EMC2's `nn_eval_scaled()` does (c g(u) when st0 = 0 or the window
+is narrower than 1e-7 d, otherwise [G(u₁) − G(max(u₀, 0))] / st0 with G the
+network's defective CDF p_R Φ(z)), −Inf for rt ≤ t0 and the card's floor
+outside the box. onnxruntime has no double-precision `Erf` or `Asinh`, so the
+graph carries R's own pnorm (Cody) and qnorm (AS 241) as graph operations
+(`nleflow/rmath.py` is the NumPy twin, tested against scipy to 1e-14) and
+asinh(x) = log(x + √(x² + 1)).
+
+`nleflow onnx-check <model> <card> [--cases cases.csv]` compares the graph
+with the card's golden rows and with EMC2's evaluation over prior draws
+(`scripts/onnx_cases_scaled.R`: 200 draws × 100 trials in each of the six
+regimes of `sbc/scaled_cell.R`, half the draws with s ≠ 1). Measured on the
+committed DDMnle card, both signatures:
+
+| comparison | rows above the floor | max \|Δ log p\| | median |
+|---|---|---|---|
+| golden rows | 1010 | 5.3e-11 | 7e-15 |
+| EMC2, st0 = 0 (a density) | 38 400 | 4.4e-11 | 1e-14 |
+| EMC2, st0 > 0 (a CDF difference) | 78 400 | 5.6e-9 | 4e-15 |
+
+The 1e-11 target of the plan holds where the likelihood is a density up to
+the spline's conditioning at its range boundary (the 5e-11 rows sit at
+z = 2.0, the identity-tail handover). On the st0 > 0 branch the difference
+G(u₁) − G(u₀) of two CDFs amplifies round-off: the NumPy float64 port itself
+differs from EMC2 by the same 3e-9 on those rows, and the graph differs from
+the port by no more. The defaults of `onnx-check` are therefore 1e-10 for the
+density rows and 1e-8 for the window rows, and the README records both.
+
 ## Checking a card in EMC2
 
 ```r
@@ -156,8 +248,12 @@ src/nleflow/data.py           the data contract, encodings, scaler, batches
 src/nleflow/train.py          nleflow train
 src/nleflow/export.py         nleflow export: card v1 + float64 gate
 src/nleflow/golden.py         golden vectors (race and joint cards)
+src/nleflow/onnx_export.py    nleflow onnx / onnx-check
+src/nleflow/rmath.py          R's pnorm and qnorm in NumPy (the graph's algorithms)
 src/nleflow/simulate.py       nleflow simulate
+scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
-tests/                        pytest: golden regression, spec, pipeline (+ R registration)
+examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
+tests/                        pytest: golden regression, spec, rmath, pipeline, onnx (+ R checks)
 ```
