@@ -873,6 +873,10 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   agreement on the st0 > 0 branch (above); the simulator draws pseudo-random uniforms where the project drew shifted
   Sobol points; the classifier is trained with the run rather than copied from a checkpoint (the project's
   `--classifier-from` becomes `nleflow train --classifier-from <run>`).
+- 2026-10-17 **M1 verified on the Mac** (AH's laptop, R 4.6 with EMC2 dev-nle-m0 in `~/R/nle-m0-lib`, at 3e2e8a2):
+  `uv sync --frozen --group dev` from the lock, `nleflow --help`, `pytest` (12 passed, 1 skipped) and the EMC2
+  registration test with `NLEFLOW_EMC2_LIB` all exited 0; nothing changed or pushed. The lock resolves on macOS
+  and the README's Python steps hold on a machine that is not the cloud instance. M2 (adc8579) not yet checked there.
 
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
