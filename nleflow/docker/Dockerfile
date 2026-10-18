@@ -6,8 +6,7 @@
 #
 # Build arguments: EMC2_SHA is the commit of ampl-psych/EMC2 (branch dev-nle-m0) to build.
 # Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped artefacts by sha256, so R comes from
-# CRAN's own Ubuntu repository (R >= 4.5); the R packages are the r-cran-* of the Ubuntu archive
-# where they exist and CRAN otherwise, WienR (not packaged) from CRAN.
+# CRAN's own Ubuntu repository (R >= 4.5); the R packages, WienR included, come from CRAN.
 FROM ubuntu:24.04
 
 ARG EMC2_SHA=252e155f
@@ -25,20 +24,18 @@ RUN apt-get update \
  && Rscript -e 'stopifnot(getRversion() >= "4.5.0")' \
  && rm -rf /var/lib/apt/lists/*
 
-# --- EMC2's Imports: apt r-cran-* where they exist, CRAN for what is missing ---------------------
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      r-cran-abind r-cran-coda r-cran-magic r-cran-mass r-cran-matrixcalc r-cran-msm r-cran-mvtnorm \
-      r-cran-matrix r-cran-rcpp r-cran-rcpparmadillo r-cran-brobdingnag r-cran-corrplot \
-      r-cran-colorspace r-cran-psych r-cran-loo r-cran-lpsolve r-cran-jsonlite r-cran-testthat \
- && rm -rf /var/lib/apt/lists/* \
- && Rscript -e 'options(Ncpus = max(1L, parallel::detectCores())); \
+# --- EMC2's Imports from CRAN (Posit's Ubuntu binaries where they exist, source otherwise) ---------
+# The Ubuntu archive's r-cran-* are built for R 4.3 and did not load under R 4.5 (testthat/pkgload failed
+# in the first CI run), so none are used. testthat is not needed: the image runs nle_verify.R and pytest.
+RUN Rscript -e 'options(Ncpus = max(1L, parallel::detectCores()), \
+        repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/noble/latest"), \
+        HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os))); \
       need <- c("abind","coda","magic","MASS","matrixcalc","msm","mvtnorm","Matrix","Rcpp","RcppArmadillo", \
-                "Brobdingnag","corrplot","colorspace","psych","loo","lpSolve","jsonlite","testthat","WienR"); \
-      miss <- need[!vapply(need, requireNamespace, TRUE, quietly = TRUE)]; \
-      if (length(miss)) install.packages(miss, repos = "https://cloud.r-project.org"); \
+                "Brobdingnag","corrplot","colorspace","psych","loo","lpSolve","jsonlite","WienR"); \
+      install.packages(need); \
       stopifnot(all(vapply(need, requireNamespace, TRUE, quietly = TRUE)), packageVersion("WienR") >= "0.3.17")' \
- && (Rscript -e 'install.packages("arrow", repos = "https://cloud.r-project.org")' || echo "arrow not installed: the R simulator writes CSV")
+ && (Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/noble/latest"), HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os))); install.packages("arrow"); stopifnot(requireNamespace("arrow", quietly = TRUE))' \
+     || echo "arrow not installed: the R simulator writes CSV")
 
 # --- EMC2 dev-nle-m0 into /opt/emc2/lib, its source beside it (the tests read its golden files) ---
 RUN git clone --quiet https://github.com/ampl-psych/EMC2 /opt/emc2/src \
