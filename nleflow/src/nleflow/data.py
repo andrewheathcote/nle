@@ -36,6 +36,8 @@ DECISION_TIME = "d"
 def open_dataset(path):
     """A pyarrow dataset over the parquet or CSV files under `path`."""
     path = Path(path)
+    if not path.exists():       # a single file named in a spec may be written as either format
+        path = next((q for q in (path.with_suffix(".parquet"), path.with_suffix(".csv")) if q.exists()), path)
     if not path.exists():
         raise FileNotFoundError(f"no data at {path}")
     if path.is_file():

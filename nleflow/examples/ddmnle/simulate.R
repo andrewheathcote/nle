@@ -120,6 +120,7 @@ simulate_set <- function(rows, OUT, seed) {
 
 # --- the choice sets: exact P(R = 2) ----------------------------------------------------
 choice_set <- function(n, path, seed) {
+  path <- sub("\\.(parquet|csv)$", paste0(".", FORMAT), path, ignore.case = TRUE)  # the name states the format written
   set.seed(seed)
   U <- draw_params(n)
   .t <- proc.time()[3]
