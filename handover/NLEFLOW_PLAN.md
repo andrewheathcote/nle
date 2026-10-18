@@ -922,6 +922,11 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   so tests/test_golden.py and test_onnx.py now bound each row by 1e-12 + k eps max(1,|z|)/bin width (k = 16 golden,
   512 graph vs numpy, 32 graph vs graph). Also the choice-set format fix (DDMnle wrote Parquet to `train.csv`).
 
+- 2026-10-18 **x86 check of the Mac's test changes** (cloud instance, OpenBLAS, R 4.3.3, at 63ed435): the full suite
+  with `NLEFLOW_EMC2_LIB` and `NLEFLOW_RLIB` set, 49 passed, 1 skipped (test_choice_format's parquet case: R
+  `arrow` is not installed here); the conditioning-scaled bounds of a59ae67 hold on both BLAS libraries, and the
+  ONNX-vs-EMC2 test passes on its flat 1e-10 / 1e-8 bounds on both. The plan PDF is rebuilt here (pandoc and
+  headless Chromium; no build script in the repo). Next: M4 on the Mac.
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
 Model: **Sonnet 5.5** (or above), auto mode. Laptop or cloud instance; needs Python 3.11/3.12, `uv`, and R with EMC2
