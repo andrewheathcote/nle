@@ -1,0 +1,3 @@
+#!/bin/sh
+# nleflow's tests with NLEFLOW_EMC2_LIB, NLEFLOW_RLIB and NLEFLOW_EMC2_SRC set (the image's ENV)
+cd /opt/nle/nleflow && exec /opt/nle/nleflow/.venv/bin/python -m pytest -rs "$@"
