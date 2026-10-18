@@ -35,8 +35,9 @@ spec <- fromJSON(Sys.getenv("NLEFLOW_SPEC"))
 stopifnot(identical(spec$context, c("v", "B", "t0", "s", "A")), spec$transforms$A == "zerobox")
 box   <- spec$box_natural
 C_A   <- spec$zerobox_c$A
-SH    <- spec$sampling$A
-SHARES <- c(natural = SH$uniform %||% 0, asinh = SH$asinh_uniform %||% 0, zero = SH$zero %||% 0)
+SH    <- spec$sampling$A      # the resolved spec lists strata as (kind, share) rows
+share <- function(kind) sum(SH$share[SH$kind == kind])
+SHARES <- c(natural = share("uniform"), asinh = share("asinh_uniform"), zero = share("zero"))
 stopifnot(abs(sum(SHARES) - 1) < 1e-9)
 LOWER <- c(v = box$v[1], B = box$B[1], t0 = box$t0[1], s = box$s[1])
 UPPER <- c(v = box$v[2], B = box$B[2], t0 = box$t0[2], s = box$s[2])
