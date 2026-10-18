@@ -20,6 +20,23 @@ nleflow onnx-check <model> <card>    the graph against the golden rows and EMC2 
 nleflow convert    <model.onnx>      a LAN in ONNX to an EMC2 mlp_joint card (--preset, --verify)
 ```
 
+## Documentation: one page per task
+
+| to do this | read |
+|---|---|
+| install the tools and check them (R + EMC2, Python, the tests, the container) | [docs/install-and-check.md](docs/install-and-check.md) |
+| train a race flow (the RDM example) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
+| train a choice flow (the scaled DDM, DDMnle) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
+| export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) |
+| write the ONNX graph of a card and check it | [docs/onnx-out.md](docs/onnx-out.md) |
+| bring a published LAN (ONNX) into EMC2 | [docs/lan-in.md](docs/lan-in.md) |
+
+Each page gives its commands with a one-line check each. The sections below are the
+reference they are built from: the spec, the data contract, the card and its gate, the
+ONNX export, the converter. `docker/Dockerfile` builds an image with R >= 4.5, EMC2
+`dev-nle-m0` and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
+are its checks.
+
 What a flow is, how the cards are evaluated and validated, and the card
 format are EMC2's: `vignette("neural-likelihood-cards")` on `dev-nle-m0` is
 the contract this package writes to.
@@ -44,14 +61,16 @@ the exported card; their steps are in the plan's section 9.2.
    prints `0.5.3`.
 4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
-5. **The tests.** Check: `uv run pytest` passes: 43 tests, of which five run
-   only when `NLEFLOW_EMC2_LIB=<library holding EMC2 dev-nle-m0>` is set (they
-   register cards in R and compare the ONNX graph with EMC2) and skip
-   otherwise; the converter tests use the LAN and the golden files in the EMC2
-   checkout beside this repository (`../EMC2`) and skip without it. About 90 s
-   on 4 cores. The ONNX tests need `onnx` and `onnxruntime` from the lock;
+5. **The tests.** Check: `uv run pytest -rs` passes. With `NLEFLOW_EMC2_LIB=<library holding
+   EMC2 dev-nle-m0>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
+   `NLEFLOW_EMC2_SRC=<EMC2 source tree>` (its `tests/testthat/golden/`: the LAN and z0
+   files; default `../EMC2` beside this repository) all 51 run;
+   without them the R-dependent cases skip and `-rs` says
+   why. About 90 s on 4 cores. The ONNX tests need `onnx` and `onnxruntime` from the lock;
    check: `uv run python -c "import onnxruntime as ort; print(ort.__version__)"`
-   prints 1.20 or later.
+   prints 1.20 or later. Golden and ONNX comparisons are bounded per row by 1e-12 plus a
+   multiple of the knots' rounding error over the width of the bin holding the point,
+   because the narrowest bins (1e-4) make the file depend on the BLAS that wrote it.
 6. **GPU (optional, untested):** `uv sync --frozen --group dev --extra gpu`
    installs `jax[cuda12]`. Every shipped flow was trained on CPU.
 
@@ -260,7 +279,7 @@ and in R:
 
 ```r
 m <- register_nn_model("lan_ddm_uniform_st_weights.json", p_types = c(v = 0, a = 1, z = .5, t = .5, st = .05))
-nn_golden_check(m, tol = 1e-4)   # PASS ... max |diff| 1.08e-05 (log_pdf) against 1e-04
+nn_golden_check(m)   # PASS ... max |diff| 1.08e-05 (log_pdf) against 1e-04 (the card's own tolerance)
 ```
 
 What the converter takes: one input, rank 1 `[k]` (one trial per call, as the
@@ -299,9 +318,10 @@ verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
 `source_model`, `encoding`, `map_to_emc2_ddm`, `converted_with`) and a
 `validation` block: `calibration: "unknown; needs its own SBC cell before
 inference"` always, and with `--verify` the golden file and the tolerance it
-holds at. No other fields: EMC2 reads cards with R's `$`, which matches
-partial names, so a field such as `preset` would be read as `pre` (a
-decision-time shift) and the card refused.
+holds at. No other fields. EMC2 used to read cards with R's `$`, which matches
+partial names, so a field such as `preset` was read as `pre` (a decision-time
+shift) and the card refused; `dev-nle-m0` now reads every card field by exact
+name, and the converter still writes only fields the vignette names.
 
 **`--verify N`** (or `--rows <csv>` to verify on given rows) compares the
 card's float64 forward pass with onnxruntime, each with one-trial calls and
@@ -317,16 +337,14 @@ onnxruntime's double Gelu kernel is accurate to about 6e-9 only (its Tanh to
 6e-16). The onnxruntime outputs of the published graph are written as the
 card's golden file (`<tag>_golden.csv`: the parameters, `rt`, `choice`,
 `logp_ort`), the format of EMC2's `tests/testthat/golden/lan_ddm_uniform_st_ort.csv`;
-`nn_golden_check(m, tol = 1e-4)` reads it. Run on the committed CSV's rows
+`nn_golden_check(m)` reads it, with the tolerance the card records. Run on the committed CSV's rows
 (`--rows`), the converter reproduces that file exactly.
 
-**EMC2's `inst/scripts/onnx_to_card.py`** is the converter's first version
-and stays in EMC2 for now; `nleflow convert` is the maintained one (it adds
-batched and Gemm graphs, Gelu, presets as data, refusals by node, the float64
-gate and the golden file). Its output for `ddm_uniform_st` equals the card
-EMC2's tests hold (`tests/testthat/golden/lan_ddm_uniform_st.rds`) in every
-field that script wrote, apart from `converted_with` (provenance) and
-`calibration`, which moved into `validation`.
+**EMC2's `inst/scripts/onnx_to_card.py`** was this converter's first version; it is now a
+pointer to `nleflow convert` and its test in EMC2 is skipped with that message. The output
+for `ddm_uniform_st` equals the card EMC2's tests hold
+(`tests/testthat/golden/lan_ddm_uniform_st.rds`) in every field that script wrote, apart
+from `converted_with` (provenance) and `calibration`, which moved into `validation`.
 
 ## Checking a card in EMC2
 
@@ -357,5 +375,7 @@ scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
+docs/                         one page per task
+docker/                       Dockerfile + nle-verify / pytest commands of the image
 tests/                        pytest: golden regression, spec, rmath, pipeline, onnx, convert (+ R checks)
 ```

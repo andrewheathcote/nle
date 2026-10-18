@@ -1,0 +1,39 @@
+# Train a race flow
+
+A race flow (`response: race`) models rt for one accumulator of an evidence-accumulation
+race given the parameters; the example is the RDM with `A = 0` allowed (`examples/rdm_a0/`).
+Needs the Python environment and, for the simulator, R with EMC2 `dev-nle-m0`
+([install and check](install-and-check.md)). Run from `nleflow/`; the smoke spec is 1 % of
+the data and 2 epochs, a pipeline check and not a fit.
+
+```sh
+export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
+cd examples/rdm_a0
+uv run --project ../.. nleflow spec     spec_smoke.yaml   # the spec, resolved
+uv run --project ../.. nleflow simulate spec_smoke.yaml   # data_smoke/{train,val}
+uv run --project ../.. nleflow train    spec_smoke.yaml   # runs/rdm_a0_smoke/
+uv run --project ../.. nleflow steps    runs/rdm_a0_smoke # the kept checkpoints
+```
+
+Checks, in order:
+
+| command | check |
+|---|---|
+| `spec` | prints the resolved JSON, exit 0; a bad key is refused by name |
+| `simulate` | `=== simulated 240,000 rows ... A = 0 exactly in 0.15 ===` and a `val` line |
+| `train` | one `epoch n/2  train ...  val ...` line per epoch, then `flow done` |
+| `steps` | `step 1: val_loss ... (best)` |
+
+The recipe of the full run is `spec.yaml` (24 000 000 rows, 300 epochs); the spec's keys
+are documented in `src/nleflow/spec.py` and in the README ("The spec"). Training is the NLE
+project's `train_race.py`: the zero-box encoding computed in float64 from the stored value,
+the context standardised by the training moments (`scaler.json` in the run), the spline
+flow's mean negative log density as the loss, AdamW under a warmup-cosine schedule, one
+Orbax checkpoint per epoch with the `keep` latest kept and the best validation loss
+marked, no early stopping.
+
+Your own model: write a `simulator` that follows the data contract (README, "The data
+contract") and a spec; any program that writes one row per trial with the columns
+`param_id`, each context name on the stored scale, `rt` will do.
+
+Next: [export and check a card](export-and-check-a-card.md).
