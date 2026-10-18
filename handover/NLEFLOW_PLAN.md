@@ -927,6 +927,29 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   `arrow` is not installed here); the conditioning-scaled bounds of a59ae67 hold on both BLAS libraries, and the
   ONNX-vs-EMC2 test passes on its flat 1e-10 / 1e-8 bounds on both. The plan PDF is rebuilt here (pandoc and
   headless Chromium; no build script in the repo). Next: M4 on the Mac.
+- 2026-10-18 **M4 done** (AH's Mac, Apple M2 Max, R 4.6, one to six cores; nothing on tux26, Gadi or AWS; no SBC, no
+  retraining). nle repo (`nleflow-plan`): `NLEFLOW_EMC2_SRC` (default `../EMC2`) locates EMC2's golden files; the suite
+  with `NLEFLOW_EMC2_LIB`, `NLEFLOW_RLIB` and `NLEFLOW_EMC2_SRC` set: 50 passed, then 51 with the new
+  `tests/test_rdm_example.py` (38 passed and 13 skipped without the variables). `nleflow/docs/`: install and check; train
+  a race flow; train a choice flow; export and check a card; ONNX out; LAN in; the README is the index; every command was
+  run once except the three docker ones. Found running them: `examples/rdm_a0/simulate.R` had read the short `sampling`
+  form since M2 and stopped at `abs(sum(SHARES) - 1)`; fixed, with a test that fails on the old script.
+  `nleflow/docker/Dockerfile` (Ubuntu 24.04, R from CRAN's Ubuntu repository, packages from CRAN, EMC2 `dev-nle-m0` at
+  252e155f in `/opt/emc2/lib` with `EMC2_SHA.txt`, uv and the lock) with `nle-verify` and `pytest` commands; not built on
+  the Mac (no Docker, no hadolint). `.github/workflows/nleflow.yml` on pushes to `nleflow-plan`: the first run was red
+  (the apt `r-cran-*` packages, built for R 4.3, did not load under R 4.5: testthat/pkgload), the second (`a84ad0c`)
+  green: python-tests 1 min, container 3.6 min, in it `nle-verify` on R 4.6.1 `all checks passed` (DDMnle golden
+  8.5e-11, compiled vs R 2.1e-13) and 51 pytest passed. EMC2 `dev-nle-m0` 252e155f (pushed from the Mac): card, member
+  and golden fields read by `[[name, exact = TRUE]]` (mechanical, assignment targets left), and a test that a card with
+  extra fields `preset`, `pre_x`, `scaling_note`, `mlp_note`, ... registers and evaluates identically (it errors on the
+  previous build: `scaling_note` was read as `scaling`); `nn_golden_check(tol = NULL)` reads
+  `validation$golden$tolerance`; `nle_verify.R` checks `mlp_joint` cards (the card's optional `p_types` or
+  `--p-types=`), the converted `ddm_uniform_st` card gives `PASS ... 1.08e-05 against 1e-04`; `onnx_to_card.py` is a
+  pointer to `nleflow convert`, its test skipped with that message, NEWS.md and the vignette say so. `test-nn-*` on R
+  4.6 with `NOT_CRAN=true`, `EMC2_NLE_SCALED_CARD` and the reg_s402 card: 938 expectations, 0 failures, 0 errors, 1 skip
+  (the converter test); `nle_verify.R` PASS on every line. Part C (rebase of `dev-nle-m0` onto `dev`) is pending: AH has
+  not said `dev` has settled. The EMC2 checkout holding `dev-nle-m0` on the Mac is
+  `~/Documents/Projects/EMCpackage/EMCrelease/EMC2` (a worktree was used); `../EMC2` does not exist there.
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
 Model: **Sonnet 5.5** (or above), auto mode. Laptop or cloud instance; needs Python 3.11/3.12, `uv`, and R with EMC2

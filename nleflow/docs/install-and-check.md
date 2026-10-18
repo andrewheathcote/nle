@@ -94,6 +94,7 @@ docker run --rm nleflow nle-verify     # EMC2's verification command; one PASS p
 docker run --rm nleflow pytest         # nleflow's tests with the R checks on
 ```
 
-Check: both commands exit 0. These three commands were not run on the Mac this was
-written on (no Docker there); the first run of `.github/workflows/nleflow.yml` is their
-check.
+Check: both commands exit 0. The three commands were not run on the Mac this was written
+on (no Docker there); they run in `.github/workflows/nleflow.yml` on every push to
+`nleflow-plan`, where the image built and `nle-verify` printed `all checks passed` on R 4.6.1
+and `pytest` gave 51 passed.
