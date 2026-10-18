@@ -38,15 +38,88 @@ def test_scaled_graph_reproduces_golden_rows(sc_models, export_dir, sig):
     assert worst < 1e-10
 
 
-def test_shared_and_trialwise_agree(sc_models, export_dir):
+def numpy_reference(card, theta_net, rt, choice):
+    """log joint density of the scaled card at a = s = 1, t0 = st0 = 0 from golden.py's
+    numpy functions, with z and the width of the spline bin holding it."""
+    import scipy.stats as ss
+    from nleflow import golden as G
+    fl, fn = G.read_layers(card["flow_mlp"]); cl, _ = G.read_layers(card["classifier_mlp"])
+    K, rmin, rmax, mbs, mks = G.spline_settings(card["spline"])
+    cs = G.standardise(card, theta_net[None, :])
+    logit = G.mlp_forward(cs, cl, None).squeeze(-1)[0]
+    lp = np.empty(len(rt)); z = np.empty(len(rt)); w = np.empty(len(rt))
+    for R, cv in ((1, -1.0), (2, 1.0)):
+        m = choice == cv
+        if not m.any():
+            continue
+        raw = G.mlp_forward(np.concatenate([cs, [[float(R)]]], axis=1), fl, fn)
+        xp, yp, sl = G.build_knots(raw, K, rmin, rmax, mbs, mks)
+        u = np.log(rt[m]); zz, ld = G.rqs_inverse(u, xp[0], yp[0], sl[0])
+        lpR = -G.softplus(-logit) if R == 2 else -G.softplus(logit)
+        lp[m] = ss.norm.logpdf(zz) + ld - u + lpR; z[m] = zz
+        w[m] = np.diff(xp[0])[np.clip(np.searchsorted(xp[0], zz) - 1, 0, len(xp[0]) - 2)]
+    return lp, z, w
+
+
+def natural_theta(card, theta_net):
+    """The graph's eight natural inputs (a = s = 1, t0 = st0 = 0) for a network-scale row."""
+    import scipy.stats as ss
+    from scipy.special import ndtr
+    from nleflow import golden as G
+    ctx = list(card["context_names"]); st = theta_net.copy()
+    for name, c in G.zerobox_inputs(card):
+        j = ctx.index(name); nat = np.sinh(theta_net[j]) * c
+        with np.errstate(divide="ignore"):
+            st[j] = ss.norm.ppf(nat) if name == "SZ" else np.log(nat)
+    d = dict(zip(ctx, st))
+    return np.array([d["kappa"], 1.0, 0.0, 1.0, ndtr(d["Z"]), ndtr(d["SZ"]), np.exp(d["eta"]), 0.0])
+
+
+def test_graphs_agree_with_the_numpy_reference_within_conditioning(sc_models, export_dir):
+    """Both signatures against golden.py's numpy density over random parameter sets and times
+    (to 4 s, so rows reach the top spline bin). An error is bounded by 1e-12 plus k rounding
+    errors of the knots over the width of the bin holding z: k = 512 for either graph against
+    numpy (both can miss numpy together on rare rows by up to ~200), k = 32 between the two."""
     card = json.load(open(export_dir / f"{SC}_weights.json"))
+    lo = np.asarray(card["bounds_sampled"]["lower"]); hi = np.asarray(card["bounds_sampled"]["upper"])
     rng = np.random.default_rng(3)
-    theta = np.array([1.2, 0.9, 0.3, 1.1, 0.45, 0.2, 0.3, 0.08])
-    rt = theta[2] + rng.uniform(0.0, 2.0, 500); choice = rng.choice([-1.0, 1.0], 500)
-    a = run(session(sc_models["trialwise"]), theta, rt, choice)
-    b = run(session(sc_models["shared"]), theta, rt, choice)
-    fin = np.isfinite(a)
-    assert np.array_equal(np.isfinite(a), np.isfinite(b)) and np.abs(a[fin] - b[fin]).max() < 1e-12
+    eps = np.finfo(float).eps
+    n_checked = 0
+    for theta_net in rng.uniform(lo, hi, size=(12, len(lo))):
+        theta = natural_theta(card, theta_net)
+        rt = np.concatenate([rng.uniform(0.01, 4.0, 450), np.geomspace(0.5, 4.0, 50)])
+        choice = rng.choice([-1.0, 1.0], 500)
+        ref, z, w = numpy_reference(card, theta_net, rt, choice)
+        a = run(session(sc_models["trialwise"]), theta, rt, choice)
+        b = run(session(sc_models["shared"]), theta, rt, choice)
+        fin = np.isfinite(ref) & (ref > card["ll_floor_log"] + 1e-9)
+        cond = eps * np.maximum(1.0, np.abs(z)) / w
+        for name, got in (("trialwise", a), ("shared", b)):
+            bad = fin & (np.abs(got - ref) >= 1e-12 + 512 * cond)
+            assert not bad.any(), (name, np.abs(got - ref)[bad].max())
+        assert not (fin & (np.abs(a - b) >= 1e-12 + 32 * cond)).any(), np.abs(a - b)[fin].max()
+        n_checked += int(fin.sum())
+    assert n_checked > 4000
+
+    # the st0 > 0 branch with a != 1, s != 1, t0 != 0 has no numpy reference here; the two
+    # graphs must still agree. The density is a CDF difference, so the graphs differ by an
+    # absolute error of up to ~100 eps in p (measured, 3 seeds): bounded by 256 eps / p in
+    # log p, plus the knot term for the narrowest bin and the largest |z| at K = 32
+    worst_cond = eps * 2.0 / card["spline"]["min_bin_size"]
+    n_st0 = 0
+    for theta_net in rng.uniform(lo, hi, size=(12, len(lo))):
+        theta = natural_theta(card, theta_net)
+        theta[1], theta[3], theta[2], theta[7] = rng.uniform(0.6, 1.5), rng.uniform(0.7, 1.4), rng.uniform(0.05, 0.4), 0.08
+        rt = theta[2] + np.concatenate([rng.uniform(0.01, 4.0, 450), np.geomspace(0.5, 4.0, 50)])
+        choice = rng.choice([-1.0, 1.0], 500)
+        a = run(session(sc_models["trialwise"]), theta, rt, choice)
+        b = run(session(sc_models["shared"]), theta, rt, choice)
+        fin = np.isfinite(a) & np.isfinite(b) & (a > card["ll_floor_log"] + 1e-9)
+        assert np.array_equal(np.isfinite(a), np.isfinite(b))
+        bound = 1e-12 + 32 * worst_cond + 256 * eps / np.exp(np.where(fin, a, 0.0))
+        assert not (fin & (np.abs(a - b) >= bound)).any(), np.abs(a - b)[fin].max()
+        n_st0 += int(fin.sum())
+    assert n_st0 > 1000
 
 
 def test_scaled_graph_branches(sc_models):
