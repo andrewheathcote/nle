@@ -912,6 +912,15 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   cannot check a LAN card (it registers without p_types, and nn_golden_check's default 1e-9 is below float32
   round-off; the card now records its tolerance in validation.golden, which EMC2 does not yet read) (M4). The Mac
   check of M2 has not reported back in this session.
+- 2026-10-18 **M2 verified on the Mac** (AH's laptop, Apple M2 Max, R 4.6, numpy Accelerate, EMC2 dev-nle-m0 in
+  `~/R/nle-m0-lib`, at e7ac9e2 plus dab50b0 and a59ae67; one thread; nothing on tux26, Gadi or AWS): full suite with
+  `NLEFLOW_EMC2_LIB`: 42 passed, 8 skipped (R simulator needs `NLEFLOW_RLIB`; the LAN and z0 files live in EMC2's test
+  tree), 0 failed; `test_scaled_graph_against_emc2` passed on its flat 1e-10 / 1e-8 bounds. Before the fix two M2
+  tests failed here (golden e245 1.78e-11, shared vs trialwise 6.9e-10). Finding: golden and graph comparisons need
+  conditioning-scaled bounds across BLAS libraries; the diffs sit only where z is in the top spline bin (width 1e-4),
+  x86_64 OpenBLAS 0.3.29 gives 3.56e-11, the committed file came from the cloud container's OpenBLAS (CPU unrecorded),
+  so tests/test_golden.py and test_onnx.py now bound each row by 1e-12 + k eps max(1,|z|)/bin width (k = 16 golden,
+  512 graph vs numpy, 32 graph vs graph). Also the choice-set format fix (DDMnle wrote Parquet to `train.csv`).
 
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
