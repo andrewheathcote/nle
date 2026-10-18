@@ -14,10 +14,10 @@ import onnx
 import pytest
 from onnx import TensorProto, helper, numpy_helper
 
+from conftest import EMC2_GOLDEN
 from nleflow.convert import ConvertError, convert, list_presets, load_preset, read_graph
 
 REPO = Path(__file__).resolve().parents[2]
-EMC2_GOLDEN = REPO.parent / "EMC2" / "tests" / "testthat" / "golden"
 LAN_ONNX = EMC2_GOLDEN / "ddm_uniform_st.onnx"
 LAN_ORT = EMC2_GOLDEN / "lan_ddm_uniform_st_ort.csv"
 LAN_JSON = REPO / "handover" / "nle-methods" / "port" / "export" / "lan_ddm_uniform_st.json"

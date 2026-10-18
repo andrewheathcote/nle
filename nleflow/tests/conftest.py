@@ -6,6 +6,9 @@ import pytest
 NLEFLOW = Path(__file__).resolve().parents[1]
 REPO = NLEFLOW.parent
 EXPORT = REPO / "handover" / "nle-methods" / "port" / "export"
+# EMC2's source tree, for tests/testthat/golden: NLEFLOW_EMC2_SRC, else EMC2 beside the nle repo
+EMC2_SRC = Path(os.environ.get("NLEFLOW_EMC2_SRC") or REPO.parent / "EMC2")
+EMC2_GOLDEN = EMC2_SRC / "tests" / "testthat" / "golden"
 
 
 @pytest.fixture(scope="session")

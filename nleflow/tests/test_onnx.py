@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import EMC2_GOLDEN
 
 from nleflow.onnx_export import SCALED_INPUTS, check_against, export_onnx, golden_cases, run, session
 
@@ -134,7 +135,7 @@ def test_scaled_graph_branches(sc_models):
 
 
 def test_eight_parameter_graph_reproduces_z0_golden(export_dir, tmp_path):
-    golden = REPO.parent / "EMC2" / "tests" / "testthat" / "golden" / "ddm_z0_s503_e282_golden.csv"
+    golden = EMC2_GOLDEN / "ddm_z0_s503_e282_golden.csv"
     if not golden.exists():
         pytest.skip("the z0 golden file lives in EMC2's test tree")
     card_path = export_dir / "ddm_z0_s503_e282_weights.json"
