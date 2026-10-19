@@ -20,16 +20,22 @@ nleflow onnx-check <model> <card>    the graph against the golden rows and EMC2 
 nleflow convert    <model.onnx>      a LAN in ONNX to an EMC2 mlp_joint card (--preset, --verify)
 ```
 
+**New here? [START_HERE.md](START_HERE.md)** (what it is, install, where the cards are, a
+map), then **[TUTORIAL.md](TUTORIAL.md)** (install to a card in EMC2 and ONNX in about 30
+minutes).
+
 ## Documentation: one page per task
 
 | to do this | read |
 |---|---|
+| the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) |
 | install the tools and check them (R + EMC2, Python, the tests, the container) | [docs/install-and-check.md](docs/install-and-check.md) |
 | train a race flow (the RDM example; the LBA in `examples/lba/`) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
 | train a choice flow (the scaled DDM, DDMnle) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) |
 | write the ONNX graph of a card and check it | [docs/onnx-out.md](docs/onnx-out.md) |
-| bring a published LAN (ONNX) into EMC2 | [docs/lan-in.md](docs/lan-in.md) |
+| bring a published LAN (ONNX) into EMC2 | [docs/lan-in.md](docs/lan-in.md); run [examples/lan_in](examples/lan_in/README.md) |
+| use a card's ONNX graph from Python (onnxruntime only) | [examples/onnx_use](examples/onnx_use/README.md) |
 
 Each page gives its commands with a one-line check each. The sections below are the
 reference they are built from: the spec, the data contract, the card and its gate, the
@@ -394,6 +400,9 @@ examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml,
 examples/lba/                 the LBA example (twin = LBA, v identity, A zero-box) and its two check scripts
 examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
 examples/ddm_svst0/           the DDM with sv and st0 as an eight-parameter flow_joint card (s, SZ fixed) and its checks
+examples/lan_in/              HSSM's ddm_uniform_st LAN into EMC2: download, convert, verify, vs the analytic DDM
+examples/onnx_use/            a card's ONNX graphs from Python with onnxruntime alone
+START_HERE.md, TUTORIAL.md    for new users: the map, and the whole path once on small data
 docs/                         one page per task
 docker/                       Dockerfile + nle-verify / pytest commands of the image
 tests/                        pytest: golden regression, spec, rmath, pipeline, onnx, convert (+ R checks)

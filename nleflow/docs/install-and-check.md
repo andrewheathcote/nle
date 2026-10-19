@@ -7,6 +7,11 @@ both. Every step below has one check. Commands run from `nleflow/` unless said.
 
 Order: R and EMC2 first, then the verification command, then Python.
 
+**Which EMC2.** The steps name `dev-nle-m0`, the branch on GitHub. The nle work now sits
+on `dev` as `dev-nle-ondev` (it also reads a card's `fixed` field), to be integrated with
+the sampler branch `joint_move`; until that is on GitHub, `dev-nle-m0` serves except for
+cards with fixed parameters ([START_HERE.md](../START_HERE.md), "Known limits").
+
 ## 1. R >= 4.5 and EMC2
 
 R older than 4.5 has no `tools::sha256sum`; EMC2 then pins its shipped artefacts by md5
