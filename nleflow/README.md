@@ -151,7 +151,8 @@ probability, AdamW under warmup-cosine), with the flow's standardiser. It is
 written to the run as `classifier.json`; `nleflow train --classifier-from
 <run>` reuses another run's classifier when the two standardisers agree to
 1e-3 (the exporters' rule). The DDM's own eight-parameter flows (`flow_joint`
-cards, no `scaling`) are the same path without the scaling block.
+cards, no `scaling`) are the same path without the scaling block:
+`examples/ddm_svst0/` (sv and st0 free, s and SZ `fixed`).
 
 **The two unproven options** (plan section 13.3.3): `conditioner.affine`
 (two more conditioner outputs, a per-context location and scale on log
@@ -392,6 +393,7 @@ src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/lba/                 the LBA example (twin = LBA, v identity, A zero-box) and its two check scripts
 examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
+examples/ddm_svst0/           the DDM with sv and st0 as an eight-parameter flow_joint card (s, SZ fixed) and its checks
 docs/                         one page per task
 docker/                       Dockerfile + nle-verify / pytest commands of the image
 tests/                        pytest: golden regression, spec, rmath, pipeline, onnx, convert (+ R checks)

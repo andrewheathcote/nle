@@ -35,6 +35,8 @@ Measured on the cloud instance (4 cores): data in 10 s, flow 2 epochs in 11 s, c
 project's -1.436 after 300 epochs on all of it: a smoke run, not a fit. DDMnle itself is
 not retrained here: the committed card `ddm_sc_s1106_e245` is the reference the tests use.
 The DDM's own eight-parameter flows (`flow_joint` cards, no `scaling`) are the same path
-without the scaling block.
+without the scaling block: `examples/ddm_svst0/` trains one with sv and st0 free and s = 1,
+SZ = 0 held fixed (the spec's `fixed`, recorded in the card for `register_nn_model(...,
+exceptions = ...)`); its `run_smoke.sh` runs the whole chain with one check per step.
 
 Next: [export and check a card](export-and-check-a-card.md).

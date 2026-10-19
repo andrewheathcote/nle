@@ -1,0 +1,48 @@
+# The smoke configuration of spec.yaml: 1 % of the data, 2 epochs; a pipeline
+# check, not a fit. Everything else is the full recipe.
+# The DDM with drift and non-decision-time variability as a choice flow: an
+# eight-parameter flow_joint card (no scaling), s = 1 and SZ = 0 fixed. The flow
+# models rt given (v, a, t0, Z, sv, st0) and the response; the classifier gives
+# P(R = 2). sv and st0 reach exactly 0 (zero-box inputs, four regimes of exact
+# zeros). The card records `fixed`; register with exceptions = c(s = 1, SZ = 0).
+name: ddm_svst0_smoke
+model: DDM                        # the analytic twin: EMC2's DDM
+response: choice
+context: [v, a, t0, Z, sv, st0]   # EMC2's DDM parameters (its sampled scales), s and SZ fixed
+transforms: {v: identity, a: log, t0: log, Z: probit, sv: zerobox, st0: zerobox, s: log, SZ: probit}
+zerobox_c: {sv: 0.1, st0: 0.01}   # asinh(sv / 0.1), asinh(st0 / 0.01): exact at 0
+stored: {sv: log, st0: log}       # the data store log sv, log st0, -Inf at 0 (EMC2's sampled scale)
+box_natural:
+  v: [-5, 5]
+  a: [0.5, 3]
+  t0: [0.05, 0.6]
+  Z: [0.2, 0.8]
+  sv: [0, 3]
+  st0: [0, 0.4]
+fixed: {s: 1, SZ: 0}              # not inputs: the data are simulated at these values
+sampling:                         # the free draws; the rest uniform on the natural scale
+  v: [{kind: uniform, share: 0.5}, {kind: uniform, share: 0.5, range: [-2, 2]}]
+  sv: [{kind: uniform, share: 0.5}, {kind: asinh_uniform, share: 0.5}]
+  st0: [{kind: uniform, share: 0.5}, {kind: asinh_uniform, share: 0.5}]
+regimes:                          # which inputs are exactly 0, jointly
+  - {share: 0.55}
+  - {share: 0.15, zero: [sv]}
+  - {share: 0.15, zero: [st0]}
+  - {share: 0.15, zero: [sv, st0]}
+spline: {bins: 64, range: [-3.5, 3.5]}   # log rt: 0.03 s to 33 s; the simulated log rt lies in [-2.9, 2.5]
+conditioner: {widths: [256, 128], norm: false, affine: false}
+classifier: {widths: [256, 256, 256], lr: 1.491898934850391e-3, batch: 256, epochs: 194, loss: mse}
+training:
+  rows: 240000                    # 1 % of the data
+  val_rows: 24000
+  trials_per_draw: 10
+  choice_rows: 2000
+  choice_val_rows: 500
+  batch: 1024
+  epochs: 2
+  keep: 2
+  peak_lr: 1.0e-4
+  seed: 1201
+data: {train: data_smoke/train, val: data_smoke/val, choice_train: data_smoke/choice/train.parquet, choice_val: data_smoke/choice/val.parquet}
+simulator: Rscript simulate.R     # needs EMC2 (NLEFLOW_RLIB), WienR, jsonlite; arrow for parquet
+mass_tolerance: 1.0e-3

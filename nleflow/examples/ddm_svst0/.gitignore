@@ -1,0 +1,5 @@
+*.log
+.*.resolved.json
+data/
+data_smoke/
+runs/
