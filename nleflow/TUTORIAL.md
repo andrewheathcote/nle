@@ -1,7 +1,7 @@
 # Tutorial: your own card, in EMC2 and in ONNX
 
-About 30 minutes, of which the machine needs about @@MACHINE@@ (Apple M2 Max, 8 cores;
-timed by following this page in a fresh clone). You train a small choice flow for
+About 30 minutes, of which the machine needs about 4 minutes (3 min 35 s on an Apple M2 Max, 8
+cores, following this page in a fresh clone of the repository); the rest is reading. You train a small choice flow for
 EMC2's DDM with drift and non-decision-time variability, check it, use it in EMC2,
 export it to ONNX and use it from Python; then bring a published LAN into EMC2. The
 network is trained on 10 % of the full recipe's data for 10 epochs: enough to see
@@ -54,14 +54,16 @@ sed -e 's/^name: .*/name: my_ddm/' \
     -e 's/^  choice_rows: .*/  choice_rows: 20000/' -e 's/^  choice_val_rows: .*/  choice_val_rows: 2000/' \
     -e 's/^  epochs: 2/  epochs: 10/' -e 's/^  keep: .*/  keep: 3/' \
     -e 's/data_smoke/data/g' spec_smoke.yaml > my_ddm.yaml
-$NF spec my_ddm.yaml | grep -E '^name|rows|epochs|  v:'
+$NF spec my_ddm.yaml > resolved.json && echo "my_ddm.yaml validates"
+grep -E '"name"|rows"|"epochs"' resolved.json; grep -A3 '"box_natural"' resolved.json
 ```
 
-Check: `name: my_ddm`, `v: [-4, 4]`, the new rows and `epochs: 10`. `nleflow spec`
-validates the spec and prints it resolved; a mistake stops here with a message
+Check: `my_ddm.yaml validates`; then, from the spec resolved as JSON, `"name":
+"my_ddm"`, the four row counts, `"epochs": 10` (the flow; the classifier keeps its
+194) and the `v` box `-4.0, 4.0`. A mistake stops `nleflow spec` with a message
 naming the field.
 
-## 2. Data (@@SIM@@)
+## 2. Data (1 minute)
 
 ```sh
 $NF simulate --cores 8 my_ddm.yaml
@@ -75,7 +77,7 @@ per regime and response, and the `ll` column against `dWDM` to about 1e-5. This
 tests your simulator, not the network: if the PIT is not uniform, the data are not
 the model.
 
-## 3. Train (@@TRAIN@@)
+## 3. Train (2 minutes)
 
 ```sh
 $NF train --cores 8 my_ddm.yaml
@@ -86,7 +88,7 @@ Check: ten `epoch` lines with the validation loss falling, `flow done`, then the
 classifier's lines ending `classifier done: val mean |err| ...`; `steps` lists the
 three kept checkpoints and marks the best.
 
-## 4. Export the card (@@EXPORT@@)
+## 4. Export the card (10 seconds)
 
 ```sh
 $NF export runs/my_ddm
@@ -99,7 +101,7 @@ by the reference port of EMC2's code, reproduces the trained network — and thr
 network's own log densities at fixed points, which every consumer must reproduce)
 and intermediates. The card is the one file EMC2 needs.
 
-## 5. In EMC2 (@@EMC2@@)
+## 5. In EMC2 (under a minute)
 
 The one verification command, on your card alone:
 
@@ -131,8 +133,9 @@ Rscript check_in_emc2.R $CARD data/val cases.csv
 
 Check: in R, `PASS golden check` and a design; from the script, `compiled vs R path ... max |diff|` below 1e-11 (EMC2's
 compiled likelihood and its R path agree); the network against the analytic DDM
-through the design and per trial on 1e5 held-out rows (`mean log p - log q` is the
-KL estimate; after 10 epochs on 10 % of the data it is @@KL@@, against 0.0002 for the
+through the design (a draw whose t0 lies above the fastest rt gives the largest
+difference: there the DDM's density is 0, floored, and the card's is not) and per
+trial on 1e5 held-out rows (`mean log p - log q` is the KL estimate; after 10 epochs on 10 % of the data it is 0.011, against 0.0002 for the
 full card); `wrote cases.csv` (EMC2's evaluation of the card, the ONNX reference).
 
 When you sample with this design, set `rt_resolution = 1/1000` in `make_emc()`
@@ -140,7 +143,7 @@ When you sample with this design, set `rt_resolution = 1/1000` in `make_emc()`
 check calibration before trusting a posterior: `nn_cell()`, `nn_score_bias()`,
 `run_sbc()` in EMC2's vignette "Neural likelihoods".
 
-## 6. In ONNX (@@ONNX@@)
+## 6. In ONNX (10 seconds)
 
 ```sh
 $NF onnx $CARD
@@ -152,12 +155,12 @@ Check: two `wrote` lines (`_trialwise.onnx`, a parameter vector per trial;
 `_shared.onnx`, one vector for a block of trials); four `PASS against 1e-10` lines
 (each graph on the golden rows and on EMC2's cases, including which rows are −Inf
 and which at the floor); then `use_onnx.py`, which uses the graphs with numpy and
-onnxruntime only: the input layout, the density's mass (@@MASS@@ here; 1 for a
+onnxruntime only: the input layout, the density's mass (0.9993 to 0.9998 here; 1 for a
 trained card), the golden rows `PASS` with both graphs, and the time per trial.
 [examples/onnx_use](examples/onnx_use/README.md) explains the stored scale the graph
 takes and shows the full card's numbers.
 
-## 7. A published LAN into EMC2 (@@LAN@@)
+## 7. A published LAN into EMC2 (5 seconds and a 1 MB download)
 
 ```sh
 $NLE/examples/lan_in/run.sh
