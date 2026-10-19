@@ -33,9 +33,10 @@ models the smear itself.
 
 ```sh
 cd nleflow/examples/ddm_svst0
-export NLEFLOW_RLIB=<library holding EMC2 dev-nle-m0 and WienR> R_PROFILE_USER=/dev/null
+export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   # e.g. ~/R/nle-ondev-lib:~/R/nle-m4-lib
 ./run_smoke.sh          # 1 min: the whole chain below on 1 % of the data, 2 epochs
-./run_full.sh           # the full recipe: simulate + 300 epochs, about 6.5 h at 8 cores
+./run_full.sh           # the full recipe: simulate + 300 epochs, about 7.2 h at 8 cores
+./gate_full.sh          # the full card's gates, 2 min (EMC2_FIXED_LIB=<EMC2 >= 1d9fb41d> adds nle_verify.R on the card alone)
 ```
 
 `run_smoke.sh` runs, in order:
@@ -50,7 +51,7 @@ export NLEFLOW_RLIB=<library holding EMC2 dev-nle-m0 and WienR> R_PROFILE_USER=/
 | `nleflow golden` + `cmp` | the golden file rewritten from the card alone is identical |
 | `nn_golden_check()` | `PASS golden check ... (flow_joint, 1150 rows)` |
 | `check_in_emc2.R` | compiled vs R path below 1e-11; the network vs the analytic DDM through a design and per trial; writes `cases.csv` |
-| `nle_verify.R` | fails for this card (below) |
+| `nle_verify.R` | passes with EMC2 >= 1d9fb41d (`dev-nle-ondev`); fails with older EMC2 (below) |
 | `nleflow onnx` + `onnx-check --cases` | both signatures `PASS` on the golden rows and on the EMC2 cases |
 
 `check_simulator.R` tests the simulator, not the network: given the response,
@@ -68,13 +69,13 @@ onnxruntime's batched Exp may differ from R's `exp` by an ulp, which decides
 the tie at the discontinuous onset of an `st0 = 0` density either way (42 of
 1600 such rows did so in the trialwise graph).
 
-**`nle_verify.R` cannot check this card yet.** It registers a card with the
-card alone, and EMC2 `dev-nle-m0` does not read the card's `fixed` values, so
-registration stops with "the network was trained without 's' ... declare the
-value it was fixed at with exceptions = c(s = <value>)". For a `flow_joint`
-card `nle_verify.R` runs only the golden check, which `run_smoke.sh` runs
-after registering with the exceptions. The fix is EMC2's: take the card's
-`fixed` as the default `exceptions`.
+**`nle_verify.R` needs EMC2 >= 1d9fb41d for this card.** It registers a card with
+the card alone. EMC2 1d9fb41d (`dev-nle-ondev`) takes the card's `fixed` values as
+the default `exceptions` (and refuses an exception that contradicts them); older
+EMC2 (`dev-nle-m0`, 252e155f) ignores them, so registration stops with "the network
+was trained without 's' ... declare the value it was fixed at with exceptions =
+c(s = <value>)". With older EMC2, register with the exceptions as above;
+`run_smoke.sh` and `gate_full.sh` do.
 
 On the laptop (Apple M2 Max, 8 cores), the smoke chain: data in 5 s, flow 2
 epochs in 3 s, classifier in 2 s; float64 gate 5.1e-13 (log pdf), 8.0e-15 (z),
@@ -87,6 +88,36 @@ check, not a fit.
 The full recipe is `spec.yaml`: 24 000 000 rows (2 400 000 draws × 10
 trials), 1 000 000 validation rows, 300 epochs, 30 checkpoints kept, the
 [256, 128] conditioner with 64 bins, the [256, 256, 256] classifier on 200 000
-exact P(R = 2) targets (WienR's `pWDM`). At 10× the smoke data an epoch took
-7.1 s + 0.6 s, so 24 M rows take about 74 s an epoch and 6.2 h for 300; the
-simulation takes about 3 minutes.
+exact P(R = 2) targets (WienR's `pWDM`). On the laptop (8 cores) it took 7.2 h:
+the simulation 4.1 min, the flow 424.8 min (about 81 s an epoch), the classifier
+3.7 min.
+
+## The full card: `ddm_svst0_e299`
+
+In `handover/nle-methods/port/export/`: `ddm_svst0_e299_weights.json` (sha256
+`67739e2dca9da692e0b241ea16389eadc5933d68e6873f535f47bef314a04374`), its golden file
+and intermediates. The best checkpoint is the last (validation loss −0.21778; flat
+to five digits from epoch 290). `gate_full.sh` (2 min), with EMC2 252e155f for the
+EMC2 checks and 1d9fb41d for the second `nle_verify.R`:
+
+| gate | result |
+|---|---|
+| float64 gate (port vs JAX float64, 1116 points) | log pdf 9.08e-12, z 1.07e-14 (tolerance 1e-08); float32 gap 4.3e-3 (information) |
+| golden from the card alone | identical (`cmp`) |
+| `nn_golden_check()` | PASS, 1150 rows, 7.58e-12 against 1e-09 |
+| compiled vs R path (50 draws, N = 200) | 9.95e-14, all finite |
+| network vs analytic DDM through the design (50 draws × 200 trials) | mean \|Δ\| 2.79 (0.0139 a trial); max 118.5 is the one draw with t0 (0.403 s) above the fastest rt (0.380 s), where the DDM's density is 0 (floored) and the card's is not; the other 49 draws: mean 0.43, max 3.43 |
+| per trial vs WienR, 1e5 held-out rows | mean log p − log q 0.0002 (KL); \|Δ\| median 0.0124, 90 % 0.0390, 99 % 0.0998 |
+| — by regime | sv = 0: 0.0118 / 0.0915 (median / 99 %); st0 = 0: 0.0120 / 0.0976; both 0: 0.0110 / 0.0869; \|v\| > 3: 0.0150 / 0.1165 |
+| — onset and tail | rt − t0 < 0.05 s: 0.0168 / 0.1755; rt > 3 s: 0.0363 / 0.3498 |
+| `nle_verify.R`, EMC2 252e155f | FAIL: "the network was trained without 's'" (expected, above) |
+| `nle_verify.R`, EMC2 1d9fb41d | `all checks passed` (the card: 7.58e-12) |
+| ONNX, both signatures, golden rows | 1106 rows above the floor: 3.31e-12; −Inf and floor rows agree; PASS against 1e-10 |
+| ONNX, both signatures, EMC2 cases | 79 200 rows: 8.19e-11; −Inf and floor rows agree; PASS against 1e-10 |
+| simulator PIT (1e5 rows of data/val) | KS p 0.096 to 0.934 overall, per regime and response; `ll` vs `dWDM` 6.4e-06 |
+
+The card is close to the DDM per trial (99 % of held-out rows within 0.1 log
+units, the KL estimate 2e-4) and worst in the far tail (rt > 3 s, 1.7 % of rows).
+These gates check the network and its transport into EMC2 and ONNX, not inference:
+the card records no validation, and a posterior check (`nn_cell()`,
+`nn_score_bias()`, `run_sbc()`) is the next step before it is used to fit data.
