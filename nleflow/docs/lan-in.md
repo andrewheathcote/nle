@@ -15,8 +15,10 @@ uv run nleflow convert path/to/ddm_uniform_st.onnx --preset ddm_uniform_st \
     --out lan_ddm_uniform_st_weights.json --verify 300
 ```
 
-(`path/to/` is where the published `ddm_uniform_st.onnx` is: EMC2's
-`tests/testthat/golden/` holds a copy.) Checks:
+(`path/to/` is where the published `ddm_uniform_st.onnx` is. The current file is
+`https://huggingface.co/Eitanm/ddm-st-lans/resolve/40e0327c22a4/ddm_uniform_st.onnx`; EMC2's
+`tests/testthat/golden/` holds the superseded 3 × 100 file. Both convert; see Presets below.
+[examples/lan_in](../examples/lan_in/README.md) runs the whole path.) Checks:
 
 | command | check |
 |---|---|
@@ -60,8 +62,7 @@ a C++ change in EMC2 first, then one line in the converter.
 A preset holds the parameters in input order, their transforms, the training box, the label
 floor, the response coding (HSSM: -1 lower, +1 upper), the input layout, the mapping onto an
 EMC2 model as text and structured, the defaults `register_nn_model()` needs
-(`emc2_p_types`), the sha256 of the file it was checked on (a different file draws a
-warning) and a `checked` block saying against what each value was verified. Today:
+(`emc2_p_types`), the sha256 of each published file the preset was checked on, with its revision and box (`versions`: a source can replace its network under the same name, as HSSM's `ddm_uniform_st` did on 2026-10-05, 3 × 100 with st ≤ 0.25 → 5 × 100 with st ≤ 0.35; the converter takes the box of the file it is given and records `source_revision`; any other file draws a warning) and a `checked` block saying against what each value was verified. Today:
 `ddm_uniform_st` (`a_EMC2 = 2 a`, `Z = z`, `t0 = t - st`, `st0 = 2 st`, `sv = SZ = 0`,
 `s = 1`). Without a preset the same comes from `--params`, `--box`, `--ll-floor`,
 `--response-values=-1,1`, `--layout` and `--transforms`. The card is marked

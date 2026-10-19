@@ -74,6 +74,9 @@ def cmd_convert(a):
             print(f"{name}: {p.get('source_model', '')}\n  params {p['params']}, box "
                   f"{ {k: tuple(v) for k, v in p['box'].items()} }\n  maps to EMC2 {p.get('twin', '?')}: "
                   f"{p.get('map_to_emc2_ddm', '')}")
+            for v in p.get("versions") or []:
+                print(f"  version {v['revision']} ({v.get('date', '')}, {v.get('network', '')}): sha256 "
+                      f"{v['sha256'][:16]}..., box {dict(p['box'], **v['box'])}{'  ' + v['note'] if v.get('note') else ''}")
         return
     if not a.onnx:
         raise ValueError("give the ONNX file to convert (or --list-presets)")

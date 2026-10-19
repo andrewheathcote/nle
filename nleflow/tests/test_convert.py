@@ -202,6 +202,43 @@ def test_preset_on_another_file_warns(tmp_path):
     assert any("was checked on a file with sha256" in s for s in said)
 
 
+# The published ddm_uniform_st was replaced on 2026-10-05 (huggingface.co/Eitanm/ddm-st-lans
+# 40e0327c22a4: 5x100, st box to 0.35); the preset knows both files by sha256 and takes the
+# box of the one it is given.
+LAN_SHA_3X100 = "a9acbc4a238ff5df8ef53fda5bb0d89d20e4e23c3fc862ae25888739c99dc63f"
+LAN_SHA_5X100 = "4330d72313b322ba9799bad1017180e62a82a7dfc58944826ac54efccab1d173"
+
+
+def test_lan_preset_knows_both_published_files():
+    from nleflow.convert import preset_version
+    p = load_preset("ddm_uniform_st")
+    new, old = preset_version(p, LAN_SHA_5X100), preset_version(p, LAN_SHA_3X100)
+    assert new["revision"] == "40e0327c22a4" and new["box"]["st"] == [0.001, 0.35]
+    assert old["revision"] == "8b1be7830fa5" and old["box"]["st"] == [0.001, 0.25]
+    assert preset_version(p, "0" * 64) is None
+
+
+def test_convert_takes_the_box_of_the_matching_file(tmp_path, monkeypatch):
+    import hashlib
+    import nleflow.convert as cv
+    p = small_mlp(tmp_path / "m.onnx", dims=(7, 8, 1))
+    sha = hashlib.sha256(p.read_bytes()).hexdigest()
+    base = load_preset("ddm_uniform_st")
+    fake = {**base, "versions": [{"revision": "abc123", "sha256": sha, "box": {"st": [0.001, 0.35]}}]}
+    monkeypatch.setattr(cv, "load_preset", lambda name: fake)
+    said = []
+    res = convert(p, out=tmp_path / "w.json", preset="ddm_uniform_st", say=said.append)
+    card = json.loads(res["card"].read_text())
+    assert card["bounds_natural"]["upper"][card["context_names"].index("st")] == 0.35
+    assert card["source_revision"] == "abc123" and card["source_model"] == base["source_model"]
+    assert not any("WARNING" in s for s in said)
+    # a --box given by hand still wins over the preset's
+    res = convert(p, out=tmp_path / "w2.json", preset="ddm_uniform_st", say=said.append,
+                  box={**{k: tuple(v) for k, v in base["box"].items()}, "st": (0.01, 0.2)})
+    card = json.loads(res["card"].read_text())
+    assert card["bounds_natural"]["upper"][card["context_names"].index("st")] == 0.2
+
+
 def test_float64_copy_of_a_tanh_graph_has_no_gelu_constants(tmp_path):
     from nleflow.convert import _variant
     m = onnx.load(str(small_mlp(tmp_path / "m.onnx")))

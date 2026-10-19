@@ -322,11 +322,10 @@ floor, the response coding (HSSM: −1 lower, +1 upper), the input layout,
 the mapping onto an EMC2 model as text (written into the card as
 `map_to_emc2_ddm`) and structured, the defaults `register_nn_model()` needs
 (`emc2_p_types`; a LAN has no analytic twin of its own parameterisation),
-the sha256 of the file the preset was checked on (a different file draws a
-warning), and a `checked` block saying against what each value was
+the sha256 of each published file the preset was checked on, with its revision and box (`versions`: a source can replace its network under the same name, as HSSM's `ddm_uniform_st` did on 2026-10-05, 3 × 100 with st ≤ 0.25 → 5 × 100 with st ≤ 0.35; the converter takes the box of the file it is given and records `source_revision`; any other file draws a warning), and a `checked` block saying against what each value was
 verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
 (`a_EMC2 = 2 a`, `Z = z`, `t0 = t − st`, `st0 = 2 st`, `sv = SZ = 0`,
-`s = 1`). Without a preset, the same comes from `--params`, `--box`,
+`s = 1`). [examples/lan_in](examples/lan_in/README.md) converts the current file, end to end into EMC2. Without a preset, the same comes from `--params`, `--box`,
 `--ll-floor`, `--response-values=-1,1`, `--layout` and `--transforms`.
 
 **The card** carries the vignette's mlp_joint fields (`context_names`,

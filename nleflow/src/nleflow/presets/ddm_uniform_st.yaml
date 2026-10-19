@@ -5,11 +5,29 @@
 # the `checked` block says against what.
 name: ddm_uniform_st
 source_model: "huggingface.co/Eitanm/ddm-st-lans :: ddm_uniform_st.onnx"
-source_sha256: a9acbc4a238ff5df8ef53fda5bb0d89d20e4e23c3fc862ae25888739c99dc63f
+# The source replaced its network under the same name; the converter knows each
+# published file by sha256 and takes that version's box (overriding `box` below).
+# Download one by revision: https://huggingface.co/Eitanm/ddm-st-lans/resolve/<revision>/ddm_uniform_st.onnx
+versions:
+  - revision: 40e0327c22a4          # current (main as of 2026-10-19)
+    date: 2026-10-05
+    network: "5 x 100 tanh, 1.47 M parameter sets"
+    sha256: 4330d72313b322ba9799bad1017180e62a82a7dfc58944826ac54efccab1d173
+    box: {st: [0.001, 0.35]}
+    checked: >-
+      box from the model card (README.md at 8c4f5a081c0b, "Training box": v, a, z, t as below, st
+      0.001 to 0.35); same parameters, order, kernel (Uniform(t - st, t + st)) and label floor (-16.118);
+      the mapping onto EMC2's DDM re-checked on this file by nleflow/examples/lan_in/check_in_emc2.R
+  - revision: 8b1be7830fa5          # the first published file, superseded
+    date: 2026-09-20
+    network: "3 x 100 tanh"
+    sha256: a9acbc4a238ff5df8ef53fda5bb0d89d20e4e23c3fc862ae25888739c99dc63f
+    box: {st: [0.001, 0.25]}
+    note: "superseded; the copy in EMC2's tests/testthat/golden/"
 params: [v, a, z, t, st]            # the network's parameter inputs, in its order
 input_layout: [v, a, z, t, st, rt, R]
 transforms: {v: identity, a: identity, z: identity, t: identity, st: identity}   # raw inputs, no standardisation
-box:                                # the training box (natural scale); rows outside get ll_floor
+box:                                # the training box (natural scale; st per version); rows outside get ll_floor
   v: [-3.0, 3.0]
   a: [0.3, 2.5]
   z: [0.3, 0.7]
@@ -43,4 +61,4 @@ checked:
     from the network's source repository (huggingface.co/Eitanm/ddm-st-lans), as recorded in EMC2's
     inst/scripts/onnx_to_card.py preset; not re-read at the M3 conversion because huggingface.co is outside
     the cloud instance's network policy
-  sha256: the ONNX file EMC2's tests/testthat/golden/ddm_uniform_st.onnx, which the preset was checked on
+  sha256: per version above (the 3 x 100 file is EMC2's tests/testthat/golden/ddm_uniform_st.onnx)

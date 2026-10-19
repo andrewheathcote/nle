@@ -72,7 +72,22 @@ def load_preset(name):
     d["box"] = {k: [float(v[0]), float(v[1])] for k, v in d["box"].items()}
     d["response_values"] = [float(x) for x in d["response_values"]]
     d["ll_floor"] = float(d["ll_floor"])
+    for v in d.get("versions") or []:
+        v["box"] = {k: [float(x[0]), float(x[1])] for k, x in (v.get("box") or {}).items()}
+        bad = set(v["box"]) - set(d["params"])
+        if bad:
+            raise ConvertError(f"preset '{name}', version {v.get('revision')}: box names non-parameters {sorted(bad)}")
     return d
+
+
+def preset_version(p, sha):
+    """The published file a preset knows by this sha256 (its `versions`), or None.
+    A source can replace its network under the same name (HSSM's ddm_uniform_st
+    did on 2026-10-05); each version records its own revision and box."""
+    for v in p.get("versions") or []:
+        if v["sha256"] == sha:
+            return v
+    return None
 
 
 # --- reading the graph ---------------------------------------------------------------------
@@ -213,11 +228,13 @@ def forward(layers, activation, X):
 # --- the card -------------------------------------------------------------------------------
 
 def resolve_settings(preset=None, params=None, box=None, ll_floor=None, response_values=None, layout=None,
-                     transforms=None):
+                     transforms=None, sha=None):
     p = load_preset(preset) if preset else {}
+    ver = preset_version(p, sha) if p else None
     s = {
         "params": list(params) if params else p.get("params"),
-        "box": dict(box) if box else p.get("box"),
+        "box": dict(box) if box else ({**p["box"], **ver["box"]} if ver else p.get("box")),
+        "preset_version": ver,
         "ll_floor": ll_floor if ll_floor is not None else p.get("ll_floor"),
         "response_values": list(response_values) if response_values else p.get("response_values"),
         "preset": p,
@@ -273,6 +290,9 @@ def build_card(graph, settings, source_path):
     for k in ("source_model", "encoding", "map_to_emc2_ddm"):
         if p.get(k):
             card[k] = p[k]
+    ver = settings.get("preset_version")
+    if ver:     # which published file (EMC2 reads card fields by exact name, so an extra field is inert)
+        card["source_revision"] = ver["revision"]
     # no field of its own for the preset: EMC2 reads the card with R's `$`,
     # which partially matches names, so a field "preset" would be read as `pre`
     # (a decision-time shift). The card carries the vignette's fields and the
@@ -281,8 +301,10 @@ def build_card(graph, settings, source_path):
         card["converted_with"] += f" --preset {p['name']}"
     card["validation"] = {"calibration": CALIBRATION}
     warn = None
-    if p.get("source_sha256") and p["source_sha256"] != sha:
-        warn = (f"the preset '{p['name']}' was checked on a file with sha256 {p['source_sha256'][:16]}..., "
+    known = [v["sha256"] for v in p.get("versions") or []] or ([p["source_sha256"]] if p.get("source_sha256") else [])
+    if known and sha not in known:
+        warn = (f"the preset '{p['name']}' was checked on a file with sha256 "
+                f"{' or '.join(k[:16] + '...' for k in known)}, "
                 f"this one is {sha[:16]}...: check that it is the same network before trusting the mapping")
     return card, warn
 
@@ -477,7 +499,8 @@ def convert(onnx_path, out=None, preset=None, params=None, box=None, ll_floor=No
             layout=None, transforms=None, verify_n=0, rows_csv=None, seed=1, say=print):
     """Convert; returns dict(card path, golden path or None, verify report)."""
     from .golden import golden_path_for
-    settings = resolve_settings(preset, params, box, ll_floor, response_values, layout, transforms)
+    sha = hashlib.sha256(Path(onnx_path).read_bytes()).hexdigest()
+    settings = resolve_settings(preset, params, box, ll_floor, response_values, layout, transforms, sha=sha)
     graph = read_graph(onnx_path)
     card, warn = build_card(graph, settings, onnx_path)
     if warn:
