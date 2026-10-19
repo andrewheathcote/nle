@@ -32,6 +32,11 @@ flow's mean negative log density as the loss, AdamW under a warmup-cosine schedu
 Orbax checkpoint per epoch with the `keep` latest kept and the best validation loss
 marked, no early stopping.
 
+A second race example is the LBA (`examples/lba/`, `twin = LBA`): an identity input (`v`,
+whose box reaches below 0), the twin's own parameter names, a wider spline range for the
+LBA's 1/t survivor tail, and two scripts that check the simulator against `pLBA` and the
+card inside EMC2's race likelihood against the analytic LBA; its README has the commands.
+
 Your own model: write a `simulator` that follows the data contract (README, "The data
 contract") and a spec; any program that writes one row per trial with the columns
 `param_id`, each context name on the stored scale, `rt` will do.

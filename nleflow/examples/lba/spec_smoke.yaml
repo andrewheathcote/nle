@@ -1,0 +1,30 @@
+# The smoke configuration of spec.yaml: 1 % of the data, 2 epochs; a pipeline
+# check, not a fit. Everything else is the full recipe.
+name: lba_smoke
+model: LBA                        # the analytic twin: EMC2's LBA (b = B + A)
+response: race
+context: [v, sv, B, A, t0]        # EMC2's LBA parameters, in its order
+transforms: {v: identity, sv: log, B: log, A: zerobox, t0: log}
+zerobox_c: {A: 0.05}              # the network sees asinh(A / 0.05): 0 exactly at A = 0
+stored: {A: log}                  # the data store log A, -Inf at A = 0
+box_natural:
+  v: [-1, 5]                      # v / sv >= -2 at the corner: P(rate > 0) >= 0.023
+  sv: [0.5, 2]
+  B: [0.1, 3]
+  A: [0, 2]
+  t0: [0.05, 1]
+sampling:                         # the RDM example's three-part A mixture;
+  A: {uniform: 0.70, asinh_uniform: 0.15, zero: 0.15}   # the rest uniform on the natural scale
+spline: {bins: 64, range: [-4, 10]}
+conditioner: {widths: [256, 128], norm: false, affine: false}
+training:
+  rows: 240000
+  val_rows: 24000
+  batch: 1024
+  epochs: 2
+  keep: 2
+  peak_lr: 1.0e-4
+  seed: 901
+data: {train: data_smoke/train, val: data_smoke/val}
+simulator: Rscript simulate.R     # needs EMC2 (NLEFLOW_RLIB) and arrow, or writes CSV
+mass_tolerance: 1.0e-3

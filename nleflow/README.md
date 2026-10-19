@@ -25,7 +25,7 @@ nleflow convert    <model.onnx>      a LAN in ONNX to an EMC2 mlp_joint card (--
 | to do this | read |
 |---|---|
 | install the tools and check them (R + EMC2, Python, the tests, the container) | [docs/install-and-check.md](docs/install-and-check.md) |
-| train a race flow (the RDM example) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
+| train a race flow (the RDM example; the LBA in `examples/lba/`) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
 | train a choice flow (the scaled DDM, DDMnle) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) |
 | write the ONNX graph of a card and check it | [docs/onnx-out.md](docs/onnx-out.md) |
@@ -374,6 +374,7 @@ src/nleflow/simulate.py       nleflow simulate
 scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
+examples/lba/                 the LBA example (twin = LBA, v identity, A zero-box) and its two check scripts
 examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
 docs/                         one page per task
 docker/                       Dockerfile + nle-verify / pytest commands of the image
