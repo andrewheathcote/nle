@@ -202,6 +202,15 @@ def test_preset_on_another_file_warns(tmp_path):
     assert any("was checked on a file with sha256" in s for s in said)
 
 
+def test_float64_copy_of_a_tanh_graph_has_no_gelu_constants(tmp_path):
+    from nleflow.convert import _variant
+    m = onnx.load(str(small_mlp(tmp_path / "m.onnx")))
+    assert not [t.name for t in _variant(m, dtype="double").graph.initializer if t.name.startswith("_gelu")]
+    g = onnx.load(str(small_mlp(tmp_path / "g.onnx", act="Gelu", act_attrs={"approximate": "tanh"}, opset=20)))
+    names = {t.name for t in _variant(g, dtype="double").graph.initializer}
+    assert {"_gelu_half", "_gelu_one", "_gelu_cubic", "_gelu_s2pi"} <= names
+
+
 # --- EMC2 -------------------------------------------------------------------------------------------
 
 def test_lan_card_registers_in_emc2_and_passes_its_golden_check(lan_onnx, tmp_path, emc2_lib):

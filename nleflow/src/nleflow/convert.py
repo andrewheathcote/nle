@@ -335,6 +335,10 @@ def _expand_gelu(g):
     graph's mathematics with the exact kernels."""
     from onnx import helper, numpy_helper
     k = 0
+    # constants only for a graph that uses them: onnxruntime warns about unused
+    # initializers at every session (noise in a tanh network's --verify)
+    if not any(n.op_type == "Gelu" for n in g.node):
+        return
     for c, v in (("_gelu_half", 0.5), ("_gelu_one", 1.0), ("_gelu_cubic", 0.044715), ("_gelu_s2pi", np.sqrt(2.0 / np.pi))):
         g.initializer.append(numpy_helper.from_array(np.asarray(v, dtype=np.float64), c))
     new_nodes = []
