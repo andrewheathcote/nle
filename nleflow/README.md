@@ -331,7 +331,8 @@ verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
 **The card** carries the vignette's mlp_joint fields (`context_names`,
 `context_transforms`, `bounds_natural`, `input_layout`, `response_values`,
 `ll_floor_log`, `mlp`), the provenance (`source`, `source_sha256`,
-`source_model`, `encoding`, `map_to_emc2_ddm`, `converted_with`) and a
+`source_model`, `source_revision`, `encoding`, `map_to_emc2_ddm`, `converted_with`), the
+defaults EMC2's `nle_verify.R` registers it with (`p_types`, from the preset) and a
 `validation` block: `calibration: "unknown; needs its own SBC cell before
 inference"` always, and with `--verify` the golden file and the tolerance it
 holds at. No other fields. EMC2 used to read cards with R's `$`, which matches

@@ -239,6 +239,25 @@ def test_convert_takes_the_box_of_the_matching_file(tmp_path, monkeypatch):
     assert card["bounds_natural"]["upper"][card["context_names"].index("st")] == 0.2
 
 
+def test_card_carries_the_presets_p_types(tmp_path):
+    # EMC2's nle_verify.R registers a card with no analytic twin with the card's own
+    # `p_types`; the preset holds them (emc2_p_types)
+    p = small_mlp(tmp_path / "m.onnx", dims=(7, 8, 1))
+    card = json.loads(convert(p, out=tmp_path / "w.json", preset="ddm_uniform_st", **quiet)["card"].read_text())
+    assert card["p_types"] == load_preset("ddm_uniform_st")["emc2_p_types"]
+    q = small_mlp(tmp_path / "s.onnx")
+    card = json.loads(convert(q, out=tmp_path / "x.json", **SMALL, **quiet)["card"].read_text())
+    assert "p_types" not in card                                      # no preset, nothing to say
+
+
+def test_lan_card_passes_nle_verify_from_the_card_alone(lan_onnx, tmp_path, emc2_lib):
+    res = convert(lan_onnx, out=tmp_path / "lan_weights.json", preset="ddm_uniform_st", verify_n=300, **quiet)
+    out = subprocess.run(["Rscript", "-e", f".libPaths(c('{emc2_lib}', .libPaths())); "
+                          "source(system.file('scripts', 'nle_verify.R', package = 'EMC2'))", str(res["card"])],
+                         capture_output=True, text=True, env={**os.environ, "R_PROFILE_USER": "/dev/null"})
+    assert "all checks passed" in out.stdout, out.stdout + out.stderr
+
+
 def test_float64_copy_of_a_tanh_graph_has_no_gelu_constants(tmp_path):
     from nleflow.convert import _variant
     m = onnx.load(str(small_mlp(tmp_path / "m.onnx")))

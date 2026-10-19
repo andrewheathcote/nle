@@ -290,6 +290,10 @@ def build_card(graph, settings, source_path):
     for k in ("source_model", "encoding", "map_to_emc2_ddm"):
         if p.get(k):
             card[k] = p[k]
+    # the defaults a card with no analytic twin registers with (sampled scale), as
+    # EMC2's nle_verify.R reads them from the card
+    if p.get("emc2_p_types"):
+        card["p_types"] = {k: float(p["emc2_p_types"][k]) for k in params}
     ver = settings.get("preset_version")
     if ver:     # which published file (EMC2 reads card fields by exact name, so an extra field is inert)
         card["source_revision"] = ver["revision"]

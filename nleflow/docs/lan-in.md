@@ -32,15 +32,19 @@ for any float64 evaluator of a float32 network, and EMC2's own test of this card
 
 ## In EMC2
 
-A LAN has no analytic twin in its own parameterisation, so give the defaults:
+A LAN has no analytic twin in its own parameterisation, so it registers with defaults
+for its parameters (`p_types`). The converter writes the preset's into the card, where
+`nle_verify.R` reads them; `register_nn_model()` takes them as an argument:
 
 ```sh
 export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
-Rscript -e 'library(EMC2); m <- register_nn_model("lan_ddm_uniform_st_weights.json",
-    p_types = c(v = 0, a = 1, z = .5, t = .5, st = .05)); nn_golden_check(m)'
-Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' \
-    --p-types=v=0,a=1,z=0.5,t=0.5,st=0.05 lan_ddm_uniform_st_weights.json
+Rscript -e 'library(EMC2); f <- "lan_ddm_uniform_st_weights.json"
+    m <- register_nn_model(f, p_types = unlist(jsonlite::fromJSON(f)$p_types)); nn_golden_check(m)'
+Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' lan_ddm_uniform_st_weights.json
 ```
+
+(A card converted without a preset has no `p_types`: give them with
+`--p-types=v=0,a=1,...` to `nle_verify.R`.)
 
 Checks: `PASS golden check of 'lan_ddm_uniform_st_weights.json' (mlp_joint, 300 rows): max
 |diff| 1.08e-05 (log_pdf) against 1e-04`, and `all checks passed`. The tolerance is not
