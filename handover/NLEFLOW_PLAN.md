@@ -950,6 +950,7 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   (the converter test); `nle_verify.R` PASS on every line. Part C (rebase of `dev-nle-m0` onto `dev`) is pending: AH has
   not said `dev` has settled. The EMC2 checkout holding `dev-nle-m0` on the Mac is
   `~/Documents/Projects/EMCpackage/EMCrelease/EMC2` (a worktree was used); `../EMC2` does not exist there.
+- 2026-10-19 **First real use: the LBA race flow** (AH's Mac, Apple M2 Max, 8 cores; nothing on tux26, Gadi or AWS; no SBC; no change to EMC2). AH chose a race flow; the LBA (`twin = LBA`, context v, sv, B, A, t0, v identity with box [-1, 5], A zero-box, spline range [-4, 10] for the LBA's 1/t survivor tail; `nleflow/examples/lba/`). Acceptance: (a) both specs validate and `nleflow spec` prints them resolved; the simulator's PIT vs EMC2's pLBA is uniform (KS p 0.36, at A = 0 0.32, at v < 0 0.70); (b) smoke chain (240 000 rows, 2 epochs, 20 s): float64 gate 5.0e-14, `nleflow golden` byte-identical, `nle_verify.R` PASS (golden 8.5e-14), compiled vs R path of the race likelihood 2.3e-13; ONNX does not apply to a race card; (c) full recipe on the laptop (24M rows, 300 epochs, 419 min): card lba_e299 (val loss 0.909400, analytic floor 0.9078) in port/export, float64 gate 4.6e-13 (float32 gap 1.9e-3), `nn_golden_check` 4.5e-12, `nle_verify.R` all PASS, compiled vs R 1.7e-13, per-accumulator KL vs dLBA 0.0019 (|dlog p| median 0.006, 99 % 0.068); the flow overstates the density at the leading edge where the LBA's is below e^-15; (d) package defects found: none; nothing outside spec.yaml, the simulator and the twin needed an edit (the check scripts and the test are additions). Name-coupling seen in passing that the LBA did not reach, for the choice path: golden.py's zero-box DDM names (sv, SZ, st0, eta) and st0 support rule, spec.py's probit default for an input named SZ. pytest 48 passed, 6 skipped (EMC2's test tree is not in the local checkout).
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
 Model: **Sonnet 5.5** (or above), auto mode. Laptop or cloud instance; needs Python 3.11/3.12, `uv`, and R with EMC2
@@ -1148,4 +1149,41 @@ Work with absolute paths, at most 8 cores. Commit on nleflow-plan (nle repo) and
 those (and dev-nle-rebased if C ran), append one line to the plan's progress log, and end with ONE next stage: the
 first real use of the package, training a new model end to end (AH chooses the model), or, if AH prefers,
 packaging nleflow for PyPI; model Opus 5.5 or Fable, auto mode, with its full prompt.
+```
+
+## Next stage after the LBA: the first real use of the choice path (a DDM variant as a choice flow)
+
+Model: **Opus 5.5** (or Fable), auto mode. AH's Mac, at most 8 cores; nothing on tux26, Gadi or AWS. The race path
+needed no package edit for the LBA; the choice path carries the name-coupling the LBA did not reach (golden.py's
+zero-box DDM names and st0 support rule, spec.py's probit default for SZ, the ddm_unit scaling), so a new choice
+model is where the package's remaining defects are.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode.
+Context: handover/NLEFLOW_PLAN.md (progress log, M0-M4 and the LBA entry), nleflow/README.md and nleflow/docs/
+(train-a-choice-flow.md, export-and-check-a-card.md, onnx-out.md), nleflow/examples/ddmnle/ and examples/lba/ (the
+pattern: spec, smoke spec, spec-driven simulator, check scripts, README); repo nle, branch nleflow-plan (push only
+that branch, never main). EMC2 dev-nle-m0 252e155f is installed in ~/R/nle-m4-lib (use it as NLEFLOW_RLIB and
+R_LIBS, with R_PROFILE_USER=/dev/null; ~/R/nle-m0-lib and ~/R/nle-lib are older builds).
+
+Ask AH ONE question first: which DDM variability set to train as a choice flow (an eight-parameter flow_joint card,
+no scaling), offering (1) sv and st0 free, SZ = 0 (start-point variability off), (2) SZ and st0 free, sv = 0,
+(3) all three free with a box differing from DDMnle's (state which). Then proceed without further questions.
+
+Steps: (1) write the spec and a simulator (the data contract, README "The data contract"; exact P(R = 2) targets
+from WienR for the classifier); `nleflow spec` must print it resolved; check the simulator against WienR (a PIT of
+the simulated rows given R). (2) Run the smoke spec through simulate, train (flow + classifier), export,
+nleflow golden, nle_verify.R and nleflow onnx + onnx-check on this Mac. (3) Decide the full recipe's data size and
+epochs from timings at 10x the smoke data; run it on the laptop only if it fits in about 8 hours at 8 cores,
+otherwise stop and write the Gadi or AWS command for AH (never launch anything on tux26, Gadi or AWS). (4) Export
+the best checkpoint and gate it: the float64 gate, nn_golden_check in EMC2 with twin = DDM, nle_verify.R, the ONNX
+check against the golden rows and against EMC2, compiled vs R path through a design, and the card vs WienR per
+trial on held-out rows; run an SBC cell or the score-bias check only if AH asks. (5) Record every place the package
+made you edit anything outside spec.yaml, the simulator and the twin; each is a defect of the package, fixed in a
+separate commit with a test that fails before the fix.
+
+Acceptance (one line each): the spec validates; the smoke chain passes all checks; the full card's gates are
+quoted; the list of package defects found (each with its commit). Commit on nleflow-plan, push only it, append one
+line to the plan's progress log, and end with ONE next stage and its full prompt (never a model below Sonnet 4.6,
+auto mode).
 ```
