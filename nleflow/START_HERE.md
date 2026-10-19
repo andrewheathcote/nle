@@ -75,6 +75,7 @@ EMC2 itself ships `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` (`DDMnn`, `RDM
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
+| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (dev-nle-ondev >= cb40f173) | `inst/scripts/using_a_trained_flow_data.R` |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | each example's `check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
