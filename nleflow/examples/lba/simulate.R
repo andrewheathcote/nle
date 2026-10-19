@@ -20,17 +20,18 @@
 # Run by `nleflow simulate <spec>`, which sets NLEFLOW_SPEC (the resolved spec,
 # JSON), NLEFLOW_TRAIN, NLEFLOW_VAL, NLEFLOW_ROWS, NLEFLOW_VAL_ROWS and
 # NLEFLOW_CORES. Also:
-#   NLEFLOW_RLIB      the library holding EMC2 (asserted when given)
+#   NLEFLOW_RLIB      the library holding EMC2, or a list a:b as R_LIBS (asserted when given)
 #   NLEFLOW_FORMAT    parquet (default when the arrow package is installed) or csv
 #   NLEFLOW_SIM_SEED  the data seed (default 9017; the validation set uses
 #                     seed + 1). training.seed is the network's seed.
 # Needs EMC2 (dLBA) and jsonlite; arrow for parquet.
 
 LIB <- Sys.getenv("NLEFLOW_RLIB", "")
-if (nzchar(LIB)) .libPaths(c(normalizePath(path.expand(LIB)), .libPaths()))
+LIBS <- if (nzchar(LIB)) normalizePath(path.expand(strsplit(LIB, ":", fixed = TRUE)[[1]])) else character(0)
+if (nzchar(LIB)) .libPaths(c(LIBS, .libPaths()))   # one library or a list, as R_LIBS
 suppressPackageStartupMessages({library(EMC2); library(jsonlite); library(parallel)})
 if (nzchar(LIB))
-  stopifnot(startsWith(normalizePath(find.package("EMC2")), normalizePath(path.expand(LIB))))
+  stopifnot(any(startsWith(normalizePath(find.package("EMC2")), LIBS)))
 have_arrow <- requireNamespace("arrow", quietly = TRUE)
 FORMAT <- Sys.getenv("NLEFLOW_FORMAT", if (have_arrow) "parquet" else "csv")
 if (FORMAT == "parquet" && !have_arrow) stop("NLEFLOW_FORMAT=parquet needs the arrow package")

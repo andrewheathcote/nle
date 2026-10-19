@@ -303,7 +303,9 @@ def test_fixed_is_validated(tmp_path):
 
 def test_joint_card_with_fixed_parameters_registers_in_emc2(tmp_path, emc2_lib):
     """The card registers with twin = DDM and the card's `fixed` as exceptions,
-    and passes nn_golden_check(); without them EMC2 names what is missing."""
+    and passes nn_golden_check(). Without them, an EMC2 that reads the card's
+    `fixed` (dev-nle-ondev >= 1d9fb41d) registers it with those values; an older
+    one (dev-nle-m0 252e155f) names what is missing."""
     spec = make_joint_spec(tmp_path)
     run = train(spec, runs=tmp_path / "runs", quiet=True)
     res = export(run, say=lambda *a: None)
@@ -311,7 +313,8 @@ def test_joint_card_with_fixed_parameters_registers_in_emc2(tmp_path, emc2_lib):
     .libPaths(c('{emc2_lib}', .libPaths())); suppressPackageStartupMessages(library(EMC2))
     card <- jsonlite::fromJSON('{res["weights"]}')
     e <- tryCatch(register_nn_model('{res["weights"]}', twin = DDM), error = function(e) conditionMessage(e))
-    stopifnot(is.character(e), grepl('trained without', e))
+    if (is.character(e)) stopifnot(grepl('trained without', e)) else
+      stopifnot(isTRUE(all.equal(e()$nn$fixed[names(card$fixed)], unlist(card$fixed))))
     m <- register_nn_model('{res["weights"]}', twin = DDM, exceptions = unlist(card$fixed))
     reg <- m()$nn
     stopifnot(reg$kind == 'flow_joint', reg$card_version == 1)
