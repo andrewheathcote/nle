@@ -532,9 +532,12 @@ def check_against(sess, theta, rt, choice, ref, floor, label, say=print, tol=1e-
 
 def check_onnx(model_path, card_path, golden=None, cases=None, tol_density=1e-10, tol_window=1e-8, say=print):
     """`nleflow onnx-check`: the graph against the card's golden rows and,
-    when given, the EMC2 cases of scripts/onnx_cases_scaled.R. Returns True
-    when every comparison is within tolerance."""
-    from .golden import golden_path_for
+    when given, EMC2 cases: for a scaled card those of
+    scripts/onnx_cases_scaled.R (the eight natural DDM parameters), for a
+    flow_joint card rows of its context on the stored scale (as golden_cases
+    reads them), rt, choice and logp. Returns True when every comparison is
+    within tolerance."""
+    from .golden import card_kind, golden_path_for
     card = json.load(open(card_path))
     sess = session(model_path)
     floor = float(card["ll_floor_log"])
@@ -548,7 +551,22 @@ def check_onnx(model_path, card_path, golden=None, cases=None, tol_density=1e-10
         ok_all &= ok
     else:
         say(f"no golden file at {golden}: skipped")
-    if cases:
+    if cases and card_kind(card) != "flow_scaled":
+        # a flow_joint card: the cases carry the card's own inputs, the context on
+        # the stored scale (-Inf at an exact zero), and every row is a density
+        d = np.genfromtxt(cases, delimiter=",", names=True, dtype=None, encoding=None)
+        ctx = list(card["context_names"])
+        missing = [c for c in ctx + ["rt", "choice", "logp"] if c not in d.dtype.names]
+        if missing:
+            raise ValueError(f"the cases {cases} lack the columns {missing} (a flow_joint card's cases carry "
+                             f"its context {ctx} on the stored scale, rt, choice and logp)")
+        theta = np.column_stack([d[c] for c in ctx]).astype(np.float64)
+        rt = d["rt"].astype(np.float64); choice = d["choice"].astype(np.float64); ref = d["logp"].astype(np.float64)
+        ok, worst = check_against(sess, theta, rt, choice, ref, floor, "EMC2 cases (the card's inputs)", say=say,
+                                  tol=tol_density)
+        say(f"  {'PASS' if ok else 'FAIL'} against {tol_density:.0e}")
+        ok_all &= ok
+    elif cases:
         d = np.genfromtxt(cases, delimiter=",", names=True, dtype=None, encoding=None)
         theta = np.column_stack([d[c] for c in SCALED_INPUTS]).astype(np.float64)
         rt = d["rt"].astype(np.float64); choice = d["choice"].astype(np.float64); ref = d["logp"].astype(np.float64)

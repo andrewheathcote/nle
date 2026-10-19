@@ -233,7 +233,10 @@ asinh(x) = log(x + √(x² + 1)).
 `nleflow onnx-check <model> <card> [--cases cases.csv]` compares the graph
 with the card's golden rows and with EMC2's evaluation over prior draws
 (`scripts/onnx_cases_scaled.R`: 200 draws × 100 trials in each of the six
-regimes of `sbc/scaled_cell.R`, half the draws with s ≠ 1). Measured on the
+regimes of `sbc/scaled_cell.R`, half the draws with s ≠ 1). For a
+`flow_joint` card the cases carry the card's own inputs instead (its context
+on the stored scale, then `rt`, `choice`, `logp`; every row a density, against
+`--tol`); `examples/ddm_svst0/check_in_emc2.R` writes them. Measured on the
 committed DDMnle card, both signatures:
 
 | comparison | rows above the floor | max \|Δ log p\| | median |

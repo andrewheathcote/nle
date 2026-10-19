@@ -169,3 +169,27 @@ def test_scaled_graph_against_emc2(sc_models, export_dir, emc2_lib, tmp_path):
         ok, worst = check_against(s, theta[wide], rt[wide], choice[wide], ref[wide], card["ll_floor_log"],
                                   f"{sig} window", say=lambda *a: None, tol=1e-8)
         assert ok, (sig, "window", worst)
+
+
+def test_onnx_check_takes_cases_of_a_joint_card(export_dir, tmp_path):
+    """`onnx-check --cases` on a flow_joint card: the cases carry the card's own
+    inputs (the context on the stored scale), not the scaled card's eight natural
+    parameters; here the z0 card's golden rows written as cases."""
+    from nleflow.onnx_export import check_onnx
+    golden = EMC2_GOLDEN / "ddm_z0_s503_e282_golden.csv"
+    if not golden.exists():
+        pytest.skip("the z0 golden file lives in EMC2's test tree")
+    card_path = export_dir / "ddm_z0_s503_e282_weights.json"
+    card = json.load(open(card_path))
+    theta, rt, choice, ref = golden_cases(card, golden)
+    cases = tmp_path / "cases.csv"
+    names = list(card["context_names"])
+    with open(cases, "w") as f:
+        f.write(",".join(["regime", "draw", *names, "rt", "choice", "logp"]) + "\n")
+        for i in range(len(rt)):
+            f.write(",".join(["full", "1", *(repr(float(x)) for x in theta[i]), repr(float(rt[i])),
+                              repr(float(choice[i])), repr(float(ref[i]))]).replace("-inf", "-Inf") + "\n")
+    p = export_onnx(card_path, out=tmp_path / "z0_shared.onnx", signature="shared", say=lambda *a: None)
+    lines = []
+    assert check_onnx(p, card_path, golden=tmp_path / "none.csv", cases=cases, say=lines.append), lines
+    assert any(l.startswith("EMC2 cases") for l in lines) and sum("PASS" in l for l in lines) == 1, lines
