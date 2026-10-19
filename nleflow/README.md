@@ -103,6 +103,19 @@ control_limits: {s: [0.1, 2], vb_over_s2_max: 354}   # the Wald control's limits
 mass_tolerance: 1.0e-3
 ```
 
+**Parameters fixed in training.** `fixed: {s: 1, SZ: 0}` names twin
+parameters that are not network inputs and the natural value the data were
+simulated at; `transforms` may give their EMC2 scale (`s: log, SZ: probit`),
+else the card says `identity`. The card records them as the vignette asks: the
+names in `context_transforms` but not in `context_names`, their box the value
+itself in `bounds_natural`, and the values in `fixed`. EMC2 then needs them at
+registration, `register_nn_model(card, twin = DDM, exceptions = c(s = 1, SZ = 0))`
+(`unlist(jsonlite::fromJSON(card)$fixed)`), and says which is missing when they
+are not given. EMC2 `dev-nle-m0` does not read `fixed` itself, so
+`nle_verify.R`, which registers with the card alone, cannot check such a card
+yet; `nn_golden_check()` after registering with the exceptions is the same
+golden check (`examples/ddm_svst0/`).
+
 YAML note: write exponents with a sign (`1.0e-4`, not `1e-4`) or as plain
 integers; PyYAML reads `24e6` as a string and the spec refuses it.
 

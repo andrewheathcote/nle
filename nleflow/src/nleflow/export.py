@@ -113,6 +113,9 @@ def build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss=Non
         raise ValueError(f"checkpoint has {num_bins} bins, affine={affine}; the spec says "
                          f"{spec['spline']['bins']}, affine={spec['conditioner']['affine']}")
     nat, net = bounds(spec, names)
+    fixed = spec.get("fixed") or {}        # held in training: context_transforms, not context_names
+    for c, v in fixed.items():
+        nat["lower"].append(v); nat["upper"].append(v)
     rmin, rmax = spec["spline"]["range"]
     card = {
         "card_version": 1,
@@ -125,7 +128,9 @@ def build_card(spec, scaler, step, layers, norms, num_bins, affine, val_loss=Non
         "exporter_version": f"nleflow {__version__}",
         "source": f"{run_name or spec['name']} step {step}",
         "context_names": names,
-        "context_transforms": {c: spec["transforms"][c] for c in names},
+        "context_transforms": {**{c: spec["transforms"][c] for c in names},
+                               **{c: spec["transforms"].get(c, "identity") for c in fixed}},
+        **({"fixed": dict(fixed)} if fixed else {}),
         "parameter_scale": "sampled",
         **({"zerobox_c": {c: spec["zerobox_c"][c] for c in names if c in spec["zerobox_c"]}}
            if any(c in spec["zerobox_c"] for c in names) else {}),
@@ -190,6 +195,11 @@ def build_card_joint(spec, scaler, step, layers, norms, num_bins, affine, clf_la
     if num_bins != spec["spline"]["bins"]:
         raise ValueError(f"checkpoint has {num_bins} bins; the spec says {spec['spline']['bins']}")
     nat, net = bounds(spec, names)
+    # parameters fixed in training (vignette: a name in context_transforms that is
+    # not in context_names), their box the value itself, natural scale
+    fixed = spec.get("fixed") or {}
+    for c, v in fixed.items():
+        nat["lower"].append(v); nat["upper"].append(v)
     rmin, rmax = spec["spline"]["range"]
     zb = {c: spec["zerobox_c"][c] for c in names if c in spec["zerobox_c"]}
     scaled = spec["scaling"] is not None
@@ -209,7 +219,9 @@ def build_card_joint(spec, scaler, step, layers, norms, num_bins, affine, clf_la
         "context_encoding": "zerobox" if zb else "emc2",
         **({"zerobox_c": zb} if zb else {}),
         **({"scaling": dict(spec["scaling"])} if scaled else {}),
-        "context_transforms": {c: spec["transforms"][c] for c in names},
+        "context_transforms": {**{c: spec["transforms"][c] for c in names},
+                               **{c: spec["transforms"].get(c, "identity") for c in fixed}},
+        **({"fixed": dict(fixed)} if fixed else {}),
         "parameter_scale": "sampled",
         "response_coding": ("flow context gets raw R (1.0 or 2.0) appended after standardized params; "
                             "classifier logit is for P(R=2)"),

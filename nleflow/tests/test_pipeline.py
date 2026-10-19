@@ -225,3 +225,111 @@ def test_choice_card_registers_in_emc2(tmp_path, emc2_lib):
                             capture_output=True, text=True, env={**os.environ, "R_PROFILE_USER": "/dev/null"})
     assert verify.returncode == 0, verify.stdout + verify.stderr
     assert "FAIL" not in verify.stdout and "compiled vs R path" in verify.stdout
+
+
+# --- an eight-parameter DDM card (flow_joint, no scaling) with parameters fixed in training ---
+def synthetic_joint(n, seed):
+    """Rows in the DDM's names (v, a, t0, Z, sv, st0; s and SZ fixed): a
+    shifted log-normal time and a v-dependent choice, not a DDM."""
+    rng = np.random.default_rng(seed)
+    v = rng.uniform(-2.0, 2.0, n); a = rng.uniform(0.5, 2.0, n); t0 = rng.uniform(0.1, 0.4, n)
+    Z = rng.uniform(0.3, 0.7, n)
+    sv = rng.uniform(0.0, 2.0, n); sv[rng.random(n) < 0.3] = 0.0
+    st0 = rng.uniform(0.0, 0.3, n); st0[rng.random(n) < 0.3] = 0.0
+    p2 = 1.0 / (1.0 + np.exp(-v * a))
+    R = np.where(rng.random(n) < p2, 2, 1)
+    rt = t0 + rng.uniform(0, 1, n) * st0 + np.exp(np.log(a) - 1.0 + 0.3 * rng.standard_normal(n))
+    from scipy.special import ndtri
+    with np.errstate(divide="ignore"):
+        ctx = {"v": v, "a": np.log(a), "t0": np.log(t0), "Z": ndtri(Z), "sv": np.log(sv), "st0": np.log(st0)}
+    return {"param_id": np.arange(1, n + 1), "R": R, "rt": rt, **ctx}, ctx, p2
+
+
+def make_joint_spec(tmp_path, fixed=True):
+    spec = {
+        "name": "synthetic_joint", "model": "DDM", "response": "choice",
+        "context": ["v", "a", "t0", "Z", "sv", "st0"],
+        "transforms": {"v": "identity", "a": "log", "t0": "log", "Z": "probit", "sv": "zerobox", "st0": "zerobox",
+                       **({"s": "log", "SZ": "probit"} if fixed else {})},
+        "zerobox_c": {"sv": 0.1, "st0": 0.01},
+        "box_natural": {"v": [-2, 2], "a": [0.5, 2], "t0": [0.1, 0.4], "Z": [0.3, 0.7], "sv": [0, 2], "st0": [0, 0.3]},
+        **({"fixed": {"s": 1, "SZ": 0}} if fixed else {}),
+        "spline": {"bins": 8, "range": [-4, 3]},
+        "conditioner": {"widths": [16, 8]},
+        "classifier": {"widths": [16, 8], "epochs": 5, "batch": 128},
+        "training": {"batch": 256, "epochs": 2, "keep": 2, "peak_lr": 1e-3, "seed": 3, "shuffle_seed": 1},
+        "data": {"train": "train", "val": "val", "choice_train": "choice/train.parquet",
+                 "choice_val": "choice/val.parquet"},
+    }
+    rows, _, _ = synthetic_joint(4096, 1); write_parquet(tmp_path / "train" / "t.parquet", rows)
+    rows, _, _ = synthetic_joint(512, 2); write_parquet(tmp_path / "val" / "v.parquet", rows)
+    for name, n, seed in (("train", 1024, 5), ("val", 128, 6)):
+        _, ctx, p2 = synthetic_joint(n, seed)
+        write_parquet(tmp_path / "choice" / f"{name}.parquet", ctx | {"p_R2": p2})
+    return validate_spec(spec, base=tmp_path, source=str(tmp_path / "spec.yaml"))
+
+
+def test_joint_card_records_the_fixed_parameters(tmp_path):
+    """`fixed` (twin parameters held at a value in training: s = 1, SZ = 0)
+    reaches the card as the vignette states it: names in context_transforms
+    that are not in context_names, with their box in bounds_natural, and the
+    values in `fixed` (what register_nn_model's exceptions need)."""
+    spec = make_joint_spec(tmp_path)
+    assert spec["fixed"] == {"s": 1.0, "SZ": 0.0}
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    res = export(run, say=lambda *a: None)
+    card = json.loads(res["weights"].read_text())
+    assert card["kind"] == "flow_joint" and card["model"] == "DDM" and "scaling" not in card
+    assert card["context_names"] == ["v", "a", "t0", "Z", "sv", "st0"]
+    assert list(card["context_transforms"]) == ["v", "a", "t0", "Z", "sv", "st0", "s", "SZ"]
+    assert card["context_transforms"]["s"] == "log" and card["context_transforms"]["SZ"] == "probit"
+    assert card["fixed"] == {"s": 1.0, "SZ": 0.0}
+    assert card["bounds_natural"]["lower"][6:] == [1.0, 0.0] and card["bounds_natural"]["upper"][6:] == [1.0, 0.0]
+    assert len(card["bounds_sampled"]["lower"]) == 6
+    assert res["gate"]["max_abs_dlog_pdf_f64"] <= 1e-8
+
+
+def test_fixed_is_validated(tmp_path):
+    from nleflow.spec import SpecError
+    spec = make_joint_spec(tmp_path, fixed=False)
+    raw = {k: v for k, v in spec.items() if k not in ("spec_file", "beyond_support")}
+    with pytest.raises(SpecError, match="input of the network"):
+        validate_spec({**raw, "fixed": {"v": 1}}, base=tmp_path)
+    with pytest.raises(SpecError, match="finite number"):
+        validate_spec({**raw, "fixed": {"s": "one"}}, base=tmp_path)
+    with pytest.raises(SpecError, match="zerobox"):
+        validate_spec({**raw, "fixed": {"SZ": 0}, "transforms": {**raw["transforms"], "SZ": "zerobox"}}, base=tmp_path)
+
+
+def test_joint_card_with_fixed_parameters_registers_in_emc2(tmp_path, emc2_lib):
+    """The card registers with twin = DDM and the card's `fixed` as exceptions,
+    and passes nn_golden_check(); without them EMC2 names what is missing."""
+    spec = make_joint_spec(tmp_path)
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    res = export(run, say=lambda *a: None)
+    r_code = f"""
+    .libPaths(c('{emc2_lib}', .libPaths())); suppressPackageStartupMessages(library(EMC2))
+    card <- jsonlite::fromJSON('{res["weights"]}')
+    e <- tryCatch(register_nn_model('{res["weights"]}', twin = DDM), error = function(e) conditionMessage(e))
+    stopifnot(is.character(e), grepl('trained without', e))
+    m <- register_nn_model('{res["weights"]}', twin = DDM, exceptions = unlist(card$fixed))
+    reg <- m()$nn
+    stopifnot(reg$kind == 'flow_joint', reg$card_version == 1)
+    g <- nn_golden_check(m, error = FALSE); cat(format(g), '\\n'); stopifnot(g$pass)
+    """
+    out = subprocess.run(["Rscript", "-e", r_code], capture_output=True, text=True,
+                         env={**os.environ, "R_PROFILE_USER": "/dev/null"})
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "PASS" in out.stdout
+
+
+def test_race_card_records_the_fixed_parameters(tmp_path):
+    spec = make_spec(tmp_path)
+    raw = {k: v for k, v in spec.items() if k not in ("spec_file", "beyond_support")}
+    spec = validate_spec({**raw, "fixed": {"w": 0.5}, "transforms": {**raw["transforms"], "w": "probit"}},
+                         base=tmp_path, source=str(tmp_path / "spec.yaml"))
+    run = train(spec, runs=tmp_path / "runs", quiet=True)
+    card = json.loads(export(run, say=lambda *a: None)["weights"].read_text())
+    assert card["kind"] == "flow_race" and card["fixed"] == {"w": 0.5}
+    assert list(card["context_transforms"]) == ["v", "B", "t0", "s", "A", "w"] and card["context_transforms"]["w"] == "probit"
+    assert card["bounds_natural"]["lower"][-1] == card["bounds_natural"]["upper"][-1] == 0.5

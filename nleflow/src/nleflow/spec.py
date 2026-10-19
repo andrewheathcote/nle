@@ -12,6 +12,10 @@ form written into the run directory as spec.json.
     stored: {A: log}              # how the data store a zero-box input: log
                                   # (default) or probit; -Inf at an exact 0
     box_natural: {v: [1e-3, 5], B: [0.1, 3], t0: [0.05, 1], s: [0.1, 2], A: [0, 2]}
+    fixed: {}                     # twin parameters held at a natural value in training
+                                  # (not inputs; e.g. {s: 1, SZ: 0}); `transforms` may
+                                  # give their scale. The card records them (`fixed`)
+                                  # for register_nn_model(exceptions = ...)
     sampling: {A: {uniform: 0.70, asinh_uniform: 0.15, zero: 0.15}}
     pre: null                     # t0: the flow models rt - t0 (unproven option)
     scaling: null                 # the scaled DDM (M2)
@@ -140,14 +144,29 @@ def validate_spec(raw, base=None, source=None):
     for c in ctx:
         _need(c not in ("rt", "d", "ll", "R", "param_id"), f"'{c}' is a reserved column name")
 
+    fx = s.get("fixed") or {}
+    _need(isinstance(fx, dict), "'fixed' must map twin parameters to the natural value they were held at")
+    for k, v in fx.items():
+        _need(k not in ctx, f"fixed: '{k}' is an input of the network; only parameters outside the context are fixed")
+        _need(k not in ("rt", "d", "ll", "R", "param_id"), f"fixed: '{k}' is a reserved column name")
+        _num(v, f"fixed[{k}]")
+    fx = {k: float(v) for k, v in fx.items()}
+    s["fixed"] = fx
+
     tr = s["transforms"]
     _need(isinstance(tr, dict), "'transforms' must map each context name to a transform")
     for c in ctx:
         _need(c in tr, f"transforms: no transform for context '{c}'")
         _need(tr[c] in TRANSFORMS, f"transforms: '{c}' is {tr[c]!r}, not one of {TRANSFORMS}")
-    extra = [k for k in tr if k not in ctx]
-    _need(not extra, f"transforms names {extra} that are not in the context")
-    s["transforms"] = {c: tr[c] for c in ctx}
+    for c in fx:
+        if c in tr:
+            _need(tr[c] in TRANSFORMS and tr[c] != "zerobox",
+                  f"transforms: the fixed '{c}' is {tr[c]!r}; a fixed parameter's scale is one of "
+                  f"identity, log, probit (zerobox is for network inputs)")
+    extra = [k for k in tr if k not in ctx and k not in fx]
+    _need(not extra, f"transforms names {extra} that are neither in the context nor fixed")
+    # the context's transforms in network order, then those given for fixed parameters
+    s["transforms"] = {**{c: tr[c] for c in ctx}, **{c: tr[c] for c in fx if c in tr}}
 
     zb = [c for c in ctx if tr[c] == "zerobox"]
     zc = dict(s.get("zerobox_c") or {})
@@ -250,6 +269,7 @@ def validate_spec(raw, base=None, source=None):
         _need(s["transforms"] == {"kappa": "identity", "eta": "zerobox", "Z": "probit", "SZ": "zerobox"},
               "a ddm_unit scaling needs transforms kappa identity, eta zerobox, Z probit, SZ zerobox")
         _need(pre is None, "a scaled card applies t0 itself; pre does not apply")
+        _need(not fx, "a scaled card takes every DDM parameter; fixed does not apply")
     s["scaling"] = sc
     cl = s.get("classifier")
     if resp == "choice":
@@ -351,7 +371,7 @@ def validate_spec(raw, base=None, source=None):
     if source is not None:
         s["spec_file"] = source
     known = {"name", "model", "response", "context", "transforms", "zerobox_c", "stored",
-             "box_natural", "sampling", "regimes", "pre", "scaling", "spline", "conditioner", "classifier",
+             "box_natural", "fixed", "sampling", "regimes", "pre", "scaling", "spline", "conditioner", "classifier",
              "training", "data", "simulator", "control_limits", "mass_tolerance",
              "beyond_support", "validation", "spec_file", "notes"}
     unknown = sorted(k for k in s if k not in known)
