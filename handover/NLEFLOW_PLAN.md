@@ -951,6 +951,8 @@ So: M0 now on `dev-nle`; rebase once, after AH's `dev` work lands, before M1's E
   not said `dev` has settled. The EMC2 checkout holding `dev-nle-m0` on the Mac is
   `~/Documents/Projects/EMCpackage/EMCrelease/EMC2` (a worktree was used); `../EMC2` does not exist there.
 - 2026-10-19 **First real use: the LBA race flow** (AH's Mac, Apple M2 Max, 8 cores; nothing on tux26, Gadi or AWS; no SBC; no change to EMC2). AH chose a race flow; the LBA (`twin = LBA`, context v, sv, B, A, t0, v identity with box [-1, 5], A zero-box, spline range [-4, 10] for the LBA's 1/t survivor tail; `nleflow/examples/lba/`). Acceptance: (a) both specs validate and `nleflow spec` prints them resolved; the simulator's PIT vs EMC2's pLBA is uniform (KS p 0.36, at A = 0 0.32, at v < 0 0.70); (b) smoke chain (240 000 rows, 2 epochs, 20 s): float64 gate 5.0e-14, `nleflow golden` byte-identical, `nle_verify.R` PASS (golden 8.5e-14), compiled vs R path of the race likelihood 2.3e-13; ONNX does not apply to a race card; (c) full recipe on the laptop (24M rows, 300 epochs, 419 min): card lba_e299 (val loss 0.909400, analytic floor 0.9078) in port/export, float64 gate 4.6e-13 (float32 gap 1.9e-3), `nn_golden_check` 4.5e-12, `nle_verify.R` all PASS, compiled vs R 1.7e-13, per-accumulator KL vs dLBA 0.0019 (|dlog p| median 0.006, 99 % 0.068); the flow overstates the density at the leading edge where the LBA's is below e^-15; (d) package defects found: none; nothing outside spec.yaml, the simulator and the twin needed an edit (the check scripts and the test are additions). Name-coupling seen in passing that the LBA did not reach, for the choice path: golden.py's zero-box DDM names (sv, SZ, st0, eta) and st0 support rule, spec.py's probit default for an input named SZ. pytest 48 passed, 6 skipped (EMC2's test tree is not in the local checkout).
+- 2026-10-20 **The choice path's first real use: ddm_svst0** (AH's Mac, Apple M2 Max, 8 cores; nothing on tux26, Gadi or AWS; no SBC, no score-bias check). EMC2's DDM with sv and st0 free (zero-box, four regimes of exact zeros), s = 1 and SZ = 0 fixed, as a `flow_joint` card (`nleflow/examples/ddm_svst0/`). Acceptance: (a) both specs validate; (b) smoke chain passes (float64 gate 5.1e-13, golden byte-identical, `nn_golden_check` 3.1e-13, compiled vs R 9.9e-14, ONNX both signatures 2.9e-13 on the golden rows and 2.8e-13 on 79 200 EMC2 rows, simulator PIT KS p 0.51-0.95); (c) full recipe (24 M rows, 300 epochs, 7.2 h): card ddm_svst0_e299 in port/export (sha256 67739e2d...), `gate_full.sh`: float64 gate 9.08e-12, golden identical, `nn_golden_check` 7.58e-12, compiled vs R 9.95e-14, per trial vs WienR on 1e5 held-out rows KL 0.0002 (|dlog p| median 0.012, 99 % 0.10; rt > 3 s 99 % 0.35), through a design mean |Δ| 0.43 over the 49 draws with every rt past t0 (max 118 on the one draw with t0 above the fastest rt), ONNX both signatures 3.3e-12 golden and 8.2e-11 on 79 200 EMC2 rows, `nle_verify.R` FAIL on EMC2 252e155f (does not read `fixed`, expected) and all PASS on 1d9fb41d; (d) package defects: f7f8247 (spec `fixed`, recorded in the card), 8737e86 (`onnx-check --cases` for a `flow_joint` card); EMC2's side: register_nn_model reads the card's `fixed` as default exceptions (052bbc43 on dev-nle-card-fixed from 252e155f; 1d9fb41d on dev-nle-ondev, the nle work rebuilt onto dev fd72125d without the dev-sampler merge, dev's suite 265 passed; both local, not pushed).
+- 2026-10-20 **H1 done: nleflow handover material** (AH's Mac, 8 cores; EMC2 dev-nle-ondev 1d9fb41d in `~/R/nle-ondev-lib` with dependencies from `~/R/nle-m4-lib`, unchanged; no EMC2 branch pushed). Acceptance: (a) `examples/lan_in` passes (HSSM's ddm_uniform_st at revision 40e0327c22a4, sha256 checked; convert vs float64 graph 1.07e-14, vs float32 4.80e-06; `nn_golden_check` 4.80e-06; `nle_verify.R` on the card alone all PASS; vs EMC2's DDM per trial median 0.037, wrong mappings 10-61x worse; 4 s); (b) `examples/onnx_use` (numpy + onnxruntime only) matches the golden rows of ddm_svst0_e299 to 3.31e-12 with both graphs, mass 0.9995-0.9998, 1.1 us/trial shared, 16 us trialwise; (c) `TUTORIAL.md` followed literally in a fresh clone: 3 min 35 s of machine time (sim 63 s, train 126 s, the rest under 30 s), about 30 min with reading; one fix from the timed run (step 1's check reads the resolved JSON); (d) `START_HERE.md` exists, linked from README with TUTORIAL and both examples; (e) pytest 67 passed, 0 skipped at 6691e2b (`NLEFLOW_EMC2_LIB` ondev, `NLEFLOW_EMC2_SRC` the ondev tree); `run_smoke.sh` (82 s), `lan_in/run.sh` and `onnx_use/run.sh` pass from a fresh worktree at 6691e2b; `examples/lba` and `rdm_a0` have only hours-long recipes and were not rerun; (f) package defects: e74486a (convert: no unused gelu constants in a tanh graph's float64 copy), f969dfb (convert: preset versions by sha256; the published ddm_uniform_st was replaced under the same name, box st <= 0.35), c122288 (convert: the card carries the preset's p_types, so `nle_verify.R` checks a LAN card alone). Not a package defect: 1fc0f53 (the example simulators accept an NLEFLOW_RLIB list; the fixed-card test takes either EMC2).
 ## Next stage after M0: M1, the Python package skeleton with the RDM example
 
 Model: **Sonnet 5.5** (or above), auto mode. Laptop or cloud instance; needs Python 3.11/3.12, `uv`, and R with EMC2
@@ -1186,4 +1188,47 @@ Acceptance (one line each): the spec validates; the smoke chain passes all check
 quoted; the list of package defects found (each with its commit). Commit on nleflow-plan, push only it, append one
 line to the plan's progress log, and end with ONE next stage and its full prompt (never a model below Sonnet 4.6,
 auto mode).
+```
+
+## Next stage after H1: H2, the EMC2 vignette "Using a trained flow"
+
+Model: Opus 5.5 (not below Sonnet 4.6), auto mode.
+
+```
+AUTO MODE REQUIRED: refuse to start unless this session is in auto mode. Ask no questions unless blocked.
+
+Context: handover/NLEFLOW_PLAN.md (progress log: the ddm_svst0 and H1 entries), nleflow/START_HERE.md,
+nleflow/TUTORIAL.md, nleflow/examples/ddm_svst0/README.md (the full card's gates). Repos: nle (branch nleflow-plan;
+push only that branch, never main) and EMC2 at ~/Documents/Projects/EMCpackage/EMCrelease/EMC2, branch
+dev-nle-ondev (1d9fb41d: the nle work on dev fd72125d plus "a card's `fixed` supplies the default exceptions").
+Work on EMC2 in a durable worktree of your own (e.g. ../EMC2-nle-ondev) and commit there; do not push any EMC2
+branch. Laptop only, at most 8 cores; never launch anything on tux26, Gadi or AWS. Install EMC2 from your worktree
+into ~/R/nle-ondev-lib (MAKEFLAGS=-j4 R CMD INSTALL --preclean); R_LIBS=~/R/nle-ondev-lib:~/R/nle-m4-lib,
+R_PROFILE_USER=/dev/null always; leave ~/R/nle-m4-lib unchanged. No SBC cell and no score-bias run unless AH asks.
+
+Task: write vignettes/using-a-trained-flow.Rmd in EMC2 (dev-nle-ondev): how a user takes a card trained with
+nleflow into EMC2 and fits data with it, on the ddm_svst0_e299 card (nle repo,
+handover/nle-methods/port/export/ddm_svst0_e299_weights.json, sha256 67739e2d...). The card is not shipped in EMC2,
+so every chunk that loads it is eval = FALSE and its results come from vignettes/data/using-a-trained-flow.RData,
+written by a script you add under vignettes/data/ (or inst/scripts) that regenerates them from the card. The
+vignette covers, each with the shown output from the RData:
+  1. the card: what it is (one JSON; nleflow's spec -> card; link to nleflow START_HERE), its inputs, box and
+     `fixed`; register_nn_model(card, twin = DDM) and nn_golden_check(); nle_verify.R on the card;
+  2. a design with the card (v ~ S, the rest ~ 1; s and SZ constant from the card), a prior inside the box
+     (nn_in_box()), make_emc(..., rt_resolution = 1/1000) and why (the 1/60 default biases t0);
+  3. one simulated subject (N = 400, generating values inside the box, sv and st0 > 0), fitted with the card and
+     with the analytic DDM on the same data, same prior, same seeds; posterior means and 95 % intervals side by
+     side, and the time per fit. Fit at most 8 cores (cores_per_chain x chains <= 8);
+  4. what the gates checked and what they did not (point accuracy is not calibration): pointers to the
+     "Neural likelihoods" vignette (nn_cell, nn_score_bias, run_sbc) without running them;
+  5. the same card outside R: nleflow onnx, and a pointer to nleflow/examples/onnx_use.
+Keep the RData small (< 1 MB: summaries, not samplers). The vignette must build with the card absent
+(R CMD build, then rmarkdown::render of the built vignette) and EMC2's test suite must still pass. Any change
+outside the vignette, its data and its script is an EMC2 defect: its own commit with a test that fails first.
+
+Acceptance (one line each): the vignette renders with the card absent; the card fit vs the analytic fit
+(posterior means, interval overlap, time); the RData size; EMC2 tests (passed / failed / skipped); EMC2 commits
+(local, unpushed); the defect list with commits. In nle: append one progress-log line to handover/NLEFLOW_PLAN.md,
+link the vignette from nleflow/START_HERE.md, commit and push nleflow-plan only. End with ONE next stage and its
+full prompt (H3: dev-nle-ondev onto joint_move when AH says joint_move is final; never below Sonnet 4.6, auto mode).
 ```
