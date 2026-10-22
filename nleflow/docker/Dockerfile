@@ -8,13 +8,13 @@
 #
 # Build arguments:
 #   EMC2_TARBALL  the file name of an `R CMD build` tarball placed in nleflow/docker/emc2/ (git-ignored);
-#                 when set, EMC2 is installed from it and nothing is cloned. This is how a branch that is
-#                 not on GitHub (dev-flow) gets into the image:
+#                 when set, EMC2 is installed from it and nothing is cloned. This is how a local build
+#                 of EMC2 not on GitHub gets into the image:
 #                   R CMD build <EMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
 #                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
 #                     --build-arg EMC2_SHA=9f2801b2 -t nleflow:dev-flow .
-#   EMC2_SHA      without EMC2_TARBALL, the commit of ampl-psych/EMC2 to clone and build (default: branch
-#                 dev-nle-m0); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
+#   EMC2_SHA      without EMC2_TARBALL, the commit of ampl-psych/EMC2 to clone and build (default: dev-flow,
+#                 9f2801b2 on GitHub); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
 #                 tarball's sha256.
 # Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped artefacts by sha256, so R comes from
 # CRAN's own Ubuntu repository (R >= 4.5); the R packages, WienR included, come from CRAN.
@@ -25,7 +25,7 @@
 # needs no rebuild.
 FROM ubuntu:24.04
 
-ARG EMC2_SHA=252e155f
+ARG EMC2_SHA=9f2801b2741cf5a9d5f4a4a8dbdbd71daff401ae
 ARG EMC2_TARBALL=
 ARG DEBIAN_FRONTEND=noninteractive
 

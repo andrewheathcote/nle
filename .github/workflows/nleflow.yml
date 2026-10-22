@@ -21,7 +21,7 @@ jobs:
         run: uv run pytest -rs -q
 
   container:
-    # the image of nleflow/docker/Dockerfile: R >= 4.5, EMC2 dev-nle-m0, the lock; both of its checks
+    # the image of nleflow/docker/Dockerfile: R >= 4.5, EMC2 dev-flow, the lock; its three checks
     runs-on: ubuntu-latest
     needs: python-tests
     timeout-minutes: 90
@@ -33,3 +33,5 @@ jobs:
         run: docker run --rm nleflow nle-verify
       - name: pytest with the R checks
         run: docker run --rm nleflow pytest -q
+      - name: EMC2's own tests (x86_64)
+        run: docker run --rm nleflow emc2-tests

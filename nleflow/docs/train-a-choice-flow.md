@@ -4,7 +4,7 @@ A choice model (`response: choice`) has two responses: a flow over rt given the
 parameters and the response, and a classifier for P(R = 2). The example is the scaled DDM
 (DDMnle, `examples/ddmnle/`): the flow models the unit-scale decision time
 u = (rt - t0)(s/a)^2 given kappa, eta, Z and SZ, and t0, st0, a and s are applied exactly by
-the card's evaluator. Needs the Python environment, R with EMC2 `dev-nle-m0` and `WienR` (the
+the card's evaluator. Needs the Python environment, R with EMC2 `dev-flow` and `WienR` (the
 exact choice probabilities); `arrow` for parquet, else CSV
 ([install and check](install-and-check.md)). The smoke spec is 1 % of the data and 2 epochs.
 

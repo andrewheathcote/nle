@@ -34,9 +34,8 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
 1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
    Today that is EMC2 branch **`dev-flow`** (the nle work on top of `dev` after the
    `joint_move` sampler merge, origin/dev ff374317; it reads a card's `fixed` field;
-   stage H3). Until it is pushed to `ampl-psych/EMC2` it is local to AH's machine;
-   `dev-nle-ondev` (the same nle work on `dev` before `joint_move`) also works, and
-   `dev-nle-m0` on GitHub works for everything except registering a card with fixed
+   stage H3). It is on GitHub (`ampl-psych/EMC2`, `git clone -b dev-flow`);
+   `dev-nle-m0` also works for everything except registering a card with fixed
    parameters from the card alone (see "Known limits").
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>

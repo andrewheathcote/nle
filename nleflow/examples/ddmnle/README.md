@@ -14,7 +14,7 @@ the data (6000 draws × 40) and 2 epochs; the classifier keeps its 194 epochs
 on 2000 targets. DDMnle itself is not retrained here: the committed card and
 its golden file are the references the tests use.
 
-Needs R with EMC2 `dev-nle-m0` in a dedicated library (`rDDM`, `dDDM`),
+Needs R with EMC2 `dev-flow` in a dedicated library (`rDDM`, `dDDM`),
 WienR (the exact choice probabilities) and jsonlite; arrow for parquet, else
 CSV.
 
