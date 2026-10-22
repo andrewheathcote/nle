@@ -89,17 +89,66 @@ OpenBLAS and 1.8e-11 on Apple Accelerate, only where z lies in the top bin.
 ## 4. The container (no local R or Python needed)
 
 `docker/Dockerfile` reproduces the cloud steps of the plan's section 9.2: Ubuntu 24.04,
-R >= 4.5 from CRAN's Ubuntu repository, the R packages, `WienR`, EMC2 `dev-nle-m0` in
-`/opt/emc2/lib` with `EMC2_SHA.txt` beside it, `uv` and the lock. From the root of the
-nle repository:
+R >= 4.5 from CRAN's Ubuntu repository, EMC2's R packages, `WienR` and the test suite's
+`testthat`, `vdiffr`, `withr`, `DiagrammeR`, EMC2 in `/opt/emc2/lib` (its source in
+`/opt/emc2/src`, `EMC2_SHA.txt` beside the library), `uv` and the lock, a UTF-8 locale.
+From the root of the nle repository, either EMC2 from GitHub at `EMC2_SHA` (default
+`dev-nle-m0`):
 
 ```sh
 docker build -f nleflow/docker/Dockerfile -t nleflow .
-docker run --rm nleflow nle-verify     # EMC2's verification command; one PASS per card
-docker run --rm nleflow pytest         # nleflow's tests with the R checks on
 ```
 
-Check: both commands exit 0. The three commands were not run on the Mac this was written
-on (no Docker there); they run in `.github/workflows/nleflow.yml` on every push to
-`nleflow-plan`, where the image built and `nle-verify` printed `all checks passed` on R 4.6.1
-and `pytest` gave 51 passed.
+or from a source tarball of a branch that is not on GitHub (`dev-flow`), placed in
+`nleflow/docker/emc2/` (git-ignored); `EMC2_SHA` is then only a label:
+
+```sh
+R CMD build <EMC2 worktree> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
+docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
+  --build-arg EMC2_SHA=9f2801b2 -t nleflow:dev-flow .
+```
+
+Then:
+
+```sh
+docker run --rm nleflow nle-verify     # EMC2's verification command; one PASS per card
+docker run --rm nleflow pytest         # nleflow's tests with the R checks on
+docker run --rm nleflow emc2-tests     # EMC2's testthat suite (NOT_CRAN=true, as devtools::test())
+```
+
+Check: each exits 0. `emc2-tests` prints `EMC2 tests: <passed> / 0 failed / <skipped>`.
+
+**BLAS.** R and EMC2 link `libblas.so.3`, which the image points at the reference BLAS;
+OpenBLAS is installed beside it. In a container (as root) `r-blas openblas` switches
+both BLAS and LAPACK, `r-blas reference` switches back, `r-blas` prints the choice. A
+card's fit is faster on OpenBLAS (the flows are matrix products); the analytic DDM is not
+affected. Use `OPENBLAS_NUM_THREADS=1` when the chains run in parallel.
+
+**Measured** (AH's Mac, Apple M2 Max, colima VM with 8 CPUs and 24 GB, linux/arm64;
+2026-10-22, EMC2 `dev-flow` 9f2801b2 from its tarball, R 4.6.1): the image builds in
+4 min 21 s and is 4.35 GB (1.09 GB content). EMC2's suite gives 1472 passed / 0 failed /
+9 skipped in 75 s; the Mac gives 1474 / 0 / 8. The difference is two macOS-only
+expectations: the Accelerate link-order test skips, and the `VECLIB_MAXIMUM_THREADS`
+check in `test-nn-validate.R` does not run. `nle-verify` passes on the shipped cards,
+DDMnle, the RDM A = 0 card and ddm_svst0_e299, with the same maxima as on the Mac.
+EMC2's compiled likelihood on the inputs of `test-nn-reference.R`, exported from the
+Mac, against the Mac's values: trial-wise max |diff| 3.1e-13 (ddm_cap256w_c4), 1.35e-12
+(ddm_st0zero, one trial of 9600; the median is 6e-16), 9.5e-14 and 1.3e-13 (rdm_small
+with 2 and 3 accumulators) and 4.1e-14 (ddm_svst0_e299); sums agree within 1.2e-14
+relative. The reference and OpenBLAS builds agree with each other to 1.8e-15, so the
+Mac-to-Linux difference comes from the compiler and libm, not the BLAS. In the image,
+[TUTORIAL.md](../TUTORIAL.md) takes 243 s (Mac 208 s; simulation 52 s, training 163 s,
+the rest 29 s) with every check as the page says; `pytest` gives 67 passed in 66 s;
+`run_smoke.sh` takes 57 s; `lan_in` and `onnx_use` pass. The fits of EMC2's vignette
+"Using a trained flow" (`inst/scripts/using_a_trained_flow_data.R`, 3 chains x 2 cores):
+
+| BLAS | card fit | analytic DDM fit |
+|---|---|---|
+| reference (the image's default) | 17.3 s | 23.0 s |
+| OpenBLAS | 11.0 s | 23.0 s |
+| OpenBLAS, `OPENBLAS_NUM_THREADS=1` | 10.1 s | 23.0 s |
+| Mac, Accelerate (native) | 5.9 s | 23.2 s |
+
+The posterior tables on the two BLAS agree to 4e-15. CI
+(`.github/workflows/nleflow.yml`) builds the default image on x86_64 on every push to
+`nleflow-plan` and runs `nle-verify` and `pytest`.

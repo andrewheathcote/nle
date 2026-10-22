@@ -52,7 +52,7 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
 4. **The tests**: `R_PROFILE_USER=/dev/null uv run pytest -rs` in `nleflow/`; set
    `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies), `NLEFLOW_RLIB`
    and `NLEFLOW_EMC2_SRC` (an EMC2 source tree) to turn on the R cases.
-5. **Or Docker**: `docker/Dockerfile` (R, EMC2, the lock); `docker run <image> nle-verify`.
+5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from GitHub or from a source tarball of `dev-flow`, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
 
 ## Where the cards are
 

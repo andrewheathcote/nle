@@ -1,0 +1,12 @@
+#!/bin/sh
+# EMC2's test suite (tests/testthat of the source in /opt/emc2/src) against the installed EMC2;
+# prints the expectations passed / failed / skipped and exits 1 on any failure or error.
+export NOT_CRAN=${NOT_CRAN:-true}    # as devtools::test(): the skip_on_cran() tests run
+cd /opt/emc2/src/tests/testthat && exec Rscript -e '
+  library(testthat); library(EMC2)
+  r <- as.data.frame(test_dir(".", package = "EMC2", load_package = "installed", stop_on_failure = FALSE,
+                              reporter = ProgressReporter$new(show_praise = FALSE)))
+  n <- c(passed = sum(r$passed), failed = sum(r$failed), skipped = sum(r$skipped), errors = sum(r$error))
+  cat(sprintf("EMC2 tests: %d passed / %d failed / %d skipped (%d files with an error)\n",
+              n[["passed"]], n[["failed"]], n[["skipped"]], n[["errors"]]))
+  quit(status = as.integer(n[["failed"]] > 0 || n[["errors"]] > 0))'

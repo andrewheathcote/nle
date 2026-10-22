@@ -1,0 +1,15 @@
+#!/bin/sh
+# r-blas reference|openblas: point libblas.so.3 and liblapack.so.3 (R's and EMC2's BLAS / LAPACK)
+# at the reference implementation or at OpenBLAS; with no argument, print the current choice.
+set -e
+A=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+L=/usr/lib/$A
+case "${1:-}" in
+  reference) update-alternatives --quiet --set libblas.so.3-$A $L/blas/libblas.so.3
+             update-alternatives --quiet --set liblapack.so.3-$A $L/lapack/liblapack.so.3 ;;
+  openblas)  update-alternatives --quiet --set libblas.so.3-$A $L/openblas-pthread/libblas.so.3
+             update-alternatives --quiet --set liblapack.so.3-$A $L/openblas-pthread/liblapack.so.3 ;;
+  "") ;;
+  *) echo "usage: r-blas [reference|openblas]" >&2; exit 2 ;;
+esac
+readlink -f $L/libblas.so.3 $L/liblapack.so.3
