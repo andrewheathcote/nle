@@ -20,8 +20,8 @@ def export_dir():
 
 @pytest.fixture(scope="session")
 def emc2_lib():
-    """A library holding EMC2 dev-nle-m0 (NLEFLOW_EMC2_LIB), or skip."""
+    """A library holding EMC2 dev-flow (NLEFLOW_EMC2_LIB), or skip."""
     lib = os.environ.get("NLEFLOW_EMC2_LIB", "")
     if not lib or not (Path(lib) / "EMC2").exists():
-        pytest.skip("set NLEFLOW_EMC2_LIB to a library holding EMC2 dev-nle-m0 for the R checks")
+        pytest.skip("set NLEFLOW_EMC2_LIB to a library holding EMC2 dev-flow for the R checks")
     return lib
