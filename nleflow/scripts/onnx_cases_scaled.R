@@ -4,7 +4,7 @@
 #
 #   Rscript onnx_cases_scaled.R <card_weights.json> <out.csv> [draws per regime = 200] [trials = 100]
 #
-# Env: NLEFLOW_RLIB (library holding EMC2 dev-nle-m0). Columns: regime, draw, the
+# Env: NLEFLOW_RLIB (library holding EMC2 dev-flow). Columns: regime, draw, the
 # natural DDM parameters v, a, t0, s, Z, SZ (proportion), sv, st0, rt, choice
 # (-1 lower, +1 upper), logp (log density; -Inf for rt <= t0 or pdf = 0).
 LIB <- Sys.getenv("NLEFLOW_RLIB", "")
