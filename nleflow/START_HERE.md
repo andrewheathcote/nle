@@ -66,7 +66,7 @@ Cards live in this repository, `handover/nle-methods/port/export/`, each as
 | `rdm_ss_base_s801_e271`, `rdm_rdm_small_e195` | RDM | `flow_race` | `examples/rdm_a0` |
 | `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | `examples/lan_in` converts the current file |
 
-EMC2 itself ships `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` (`DDMnn`, `RDMnn`).
+EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability cases) and `rdm_ss_base_s801_e271_weights.json` (the RDM flow), loaded via `register_nn_model()`. The older `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` cards remain for backward compatibility.
 
 ## A map
 
