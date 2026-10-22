@@ -32,11 +32,12 @@ EMC2's vignette "Neural likelihoods").
 Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.md). In short:
 
 1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
-   Today that is EMC2 branch **`dev-nle-ondev`** (the nle work on top of `dev`; it
-   reads a card's `fixed` field). It is being integrated with the sampler work on
-   `joint_move` (stage H3); until it is pushed to `ampl-psych/EMC2`, `dev-nle-m0` there
-   works for everything except registering a card with fixed parameters from the card
-   alone (see "Known limits").
+   Today that is EMC2 branch **`dev-flow`** (the nle work on top of `dev` after the
+   `joint_move` sampler merge, origin/dev ff374317; it reads a card's `fixed` field;
+   stage H3). Until it is pushed to `ampl-psych/EMC2` it is local to AH's machine;
+   `dev-nle-ondev` (the same nle work on `dev` before `joint_move`) also works, and
+   `dev-nle-m0` on GitHub works for everything except registering a card with fixed
+   parameters from the card alone (see "Known limits").
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>
    export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null     # always both (a second EMC2 can shadow yours)
@@ -75,7 +76,7 @@ EMC2 itself ships `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` (`DDMnn`, `RDM
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (dev-nle-ondev >= cb40f173) | `inst/scripts/using_a_trained_flow_data.R` |
+| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (dev-flow, or dev-nle-ondev >= cb40f173) | `inst/scripts/using_a_trained_flow_data.R` |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | each example's `check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
@@ -90,7 +91,7 @@ EMC2 itself ships `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` (`DDMnn`, `RDM
   float64 card to about 1e-5 in log density (the golden check's tolerance is 1e-4 and
   is recorded in the card); our graphs are float64 and match EMC2 to about 1e-13 (1e-8
   where st0 > 0 makes the density a difference of two CDFs).
-- **Cards with fixed parameters need EMC2 >= 1d9fb41d** (`dev-nle-ondev`). A twin
+- **Cards with fixed parameters need EMC2 >= 1d9fb41d** (`dev-flow` or `dev-nle-ondev`). A twin
   parameter held at a value in training (`fixed` in the spec, e.g. s = 1 and SZ = 0 for
   `ddm_svst0`) is recorded in the card; older EMC2 ignores it, so registration needs
   `exceptions = unlist(jsonlite::fromJSON(card)$fixed)` and `nle_verify.R` fails on
