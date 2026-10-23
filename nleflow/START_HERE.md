@@ -64,9 +64,10 @@ Cards live in this repository, `handover/nle-methods/port/export/`, each as
 | `ddm_sc_s1106_e245` | the full DDM, scaled (DDMnle) | `flow_scaled` | the adopted DDM network; `examples/ddmnle` |
 | `lba_e299` | LBA | `flow_race` | `examples/lba` |
 | `rdm_ss_base_s801_e271`, `rdm_rdm_small_e195` | RDM | `flow_race` | `examples/rdm_a0` |
+| `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | shipped by EMC2; not an nleflow example |
 | `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | `examples/lan_in` converts the current file |
 
-EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability cases) and `rdm_ss_base_s801_e271_weights.json` (the RDM flow), loaded via `register_nn_model()`. The older `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` cards remain for backward compatibility.
+EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow) and `rtcon2_r3_s2_e006_weights.json` (RTCONnn), loaded via `register_nn_model()` or the `DDMnn()`, `RDMnn()` and `RTCONnn()` model functions (DDMnn() defaults to the DDMnle card). The older `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` `.rds` artefacts are gone from EMC2 dev-flow.
 
 ## A map
 

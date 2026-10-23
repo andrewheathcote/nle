@@ -92,7 +92,7 @@ R >= 4.5 from CRAN's Ubuntu repository, EMC2's R packages, `WienR` and the test 
 `testthat`, `vdiffr`, `withr`, `DiagrammeR`, EMC2 in `/opt/emc2/lib` (its source in
 `/opt/emc2/src`, `EMC2_SHA.txt` beside the library), `uv` and the lock, a UTF-8 locale.
 From the root of the nle repository, either EMC2 from GitHub at `EMC2_SHA` (default
-`dev-flow`, 9f2801b2):
+`dev-flow`, bb96fb03):
 
 ```sh
 docker build -f nleflow/docker/Dockerfile -t nleflow .
@@ -104,7 +104,7 @@ or from a source tarball of a local EMC2 build, placed in
 ```sh
 R CMD build <EMC2 worktree> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
 docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
-  --build-arg EMC2_SHA=9f2801b2 -t nleflow:dev-flow .
+  --build-arg EMC2_SHA=bb96fb03 -t nleflow:dev-flow .
 ```
 
 Then:
