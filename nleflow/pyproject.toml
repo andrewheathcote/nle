@@ -9,8 +9,8 @@ description = "Train normalizing-flow neural likelihoods for evidence-accumulati
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 authors = [
-    { name = "Andrew Heathcote" },
     { name = "Julian Wuth" },
+    { name = "Andrew Heathcote" },
 ]
 # The versions every shipped flow was trained and exported with
 # (handover/nle-methods/flow/uv.lock); onnx/onnxruntime were installed by hand
