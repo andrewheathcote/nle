@@ -1,6 +1,6 @@
 # DDMnle: a calibrated neural likelihood for the DDM with variability
 
-Report for Russ and Julian. Draft of 2026-10-16.
+Report for Russ and Julian. Draft of 2026-10-25.
 
 ## 0. Summary
 
@@ -13,7 +13,9 @@ Report for Russ and Julian. Draft of 2026-10-16.
 - **Speed.** DDMnle is 1.9–6.2x faster at N = 100 and 2.9–11.5x faster at N = 400 than EMC2's default-precision (5e-3) compiled WienR,
   and 9–685x faster than WienR at the project's reference precision 1e-8, with the largest gains where st0 and SZ are both free
   (§1).
-- **LAN.** In Appendix A we use our methodology to test a published LAN from HSSM for the st0 case.
+- **Availability.** DDMnle ships with EMC2 on the `main` branch of the DMC2 repository and is the default network of `DDMnn()`; the
+  Python package nleflow trains such networks, exports them as cards and as ONNX graphs, and converts published LANs (§6).
+- **LAN.** In Appendix A we use our methodology to test a published LAN from HSSM for the st0 case. It is not calibrated in its own box (four of five parameters outside the envelope; coverage of `a` 0.71), while the analytic control is clean.
 
 ## 1. Speed
 
@@ -37,7 +39,9 @@ Cases with no variability, or with sv only, are not covered here, because the an
 Notes.
 
 - Timings are single thread, in ms per likelihood evaluation at N trials, median over repeats and prior draws.
-- WienR at 5e-3 is EMC2's default DDM precision. 1e-8 is the precision the project uses as ground truth.
+- WienR at 5e-3 is EMC2's default DDM precision; `DDM(precision = )` and `DDM_precision()` set it. 1e-8 is the precision the project uses
+  as ground truth. At 5e-3 the log density can be off by up to 0.04 when sv, SZ and st0 are all free (about 1e-3 otherwise); at 1e-8 the
+  error is 2e-7 or smaller.
 - The laptop was also running the 8-core LAN SBC while these were timed, so absolute times are probably a little high for all columns.
 - Models with st0 cost somewhat more for DDMnle than those without, because each trial needs two CDF evaluations instead of one density.
 
@@ -128,6 +132,23 @@ differences with 95% envelopes) for each model.
   untested. The SBC was run on the reference implementation; the compiled path was verified against it by likelihood agreement
   (≤ 1.1e-11), not by rerunning SBC.
 
+## 6. Using DDMnle
+
+- **In EMC2.** The network is a card in the DMC2 repository (`main`, private), registered by `DDMnn()`; designs, priors, samplers and
+  plots are those of the analytic DDM. The vignette "Using a trained flow" fits one participant (200 trials, sv, SZ and st0 free) with
+  the standard DDM, the DDM at precision 1e-8 and DDMnle: the posteriors agree to within 0.09 posterior sd, and the fits take 52 s, 1410 s
+  and 8 s. DDMnle's log-likelihood sits about 4 units below the exact one, a roughly constant offset.
+- **Keep the prior inside the box.** A network returns its floor outside the region it was trained on, which truncates a posterior
+  there; EMC2 checks that a prior's mean ± 4 sd lies inside the box before a cell or an SBC run.
+- **Response-time resolution.** The default `rt_resolution = 1/60` floors each RT to a 1/60 s grid, which corrects the delay a 60 Hz
+  display adds to real data but, on simulated or millisecond-accurate data, shifts t0 down by about 8 ms (about −1.3 posterior sd at
+  N = 100). The bias is in the data, not the likelihood, and holds for analytic and neural likelihoods alike. Use 1/1000 unless the RTs
+  carry that noise.
+- **Training your own.** nleflow takes a short model specification and a simulator, trains a race or choice flow, and exports a card
+  and an ONNX graph; the same checks as here (golden vectors, score bias, SBC) are run in EMC2. It also converts a published LAN
+  (Appendix A). A trained flow varies as much by seed and by checkpoint as by architecture, so several checkpoints should be screened
+  before one is adopted.
+
 ## Appendix A: ONNX, EMC2, and LAN Comparison
 
 ### A.1 Bringing ONNX networks into EMC2
@@ -149,31 +170,67 @@ run an ONNX file directly, and does not need to: a LAN is a small multilayer per
   likelihood) available to EMC2 designs, and it gives a like-for-like test: the same SBC cell run with the LAN and with the analytic
   DDM in the LAN's parameterisation as control.
 
-### A.2 Making DDMnle available through ONNX
+### A.2 DDMnle as an ONNX graph
 
-DDMnle has not been exported to ONNX yet; the route is the one already proven for other DDM flows.
+DDMnle exports to ONNX in the shape of a published LAN, so code written for a LAN can call it.
 
-- **Interface.** The LAN-shaped signature is a float64 `[N, 10]` input: the parameters on the sampled scale, then rt and choice
-  (−1 lower, +1 upper); the output is log p(rt, choice | θ), the joint defective log-density a LAN returns. A flow exported this way
-  reproduced its reference implementation to 2.4e-12. A second build takes θ once and rt and choice as vectors; it is 25x faster
-  (0.58 against 14.5 ms per 1000 trials) because a trial-wise graph re-runs the network for every trial.
-- **What is new for DDMnle.** The network sees (κ, η, Z, SZ), and the transformations that make it a DDM likelihood sit outside it:
-  the scaling c = (s/a)^2^, the t0 shift and, when st0 > 0, a difference of two CDFs. The ONNX graph must therefore contain the
-  network's CDF as well as its density (the spline CDF and a normal CDF through the ONNX Erf operator), and the preprocessing
-  (κ, η, c from v, a, sv, s) and the st0 branch must be written as graph operations. The natural contract is that the caller passes
-  EMC2's natural parameters (v, a, t0, s, Z, SZ, sv, st0) and the graph does the rest. Probit and log transforms stay with the
-  caller, because the probit has no exact ONNX operator.
-- **Acceptance test.** The export is accepted only if it matches the compiled DDMnle in EMC2 to about 1e-11 over the same 200 prior
-  draws in each of the six models, plus the card's golden vectors.
+- **Interface.** The graph takes EMC2's eight natural parameters (v, a, t0, s, Z, SZ, sv, st0), then rt and choice (−1 lower, +1
+  upper), in float64, and returns log p(rt, choice | θ), the joint defective log-density a LAN returns. It does the rest itself: the
+  preprocessing (κ, η, c from v, a, sv, s), the t0 shift, the st0 branch as a difference of two CDFs, −Inf for rt at or below t0 and the
+  network's floor outside its box. The network's CDF is in the graph (the spline CDF, and a normal CDF and its inverse written as graph
+  operations because the runtime has no double-precision Erf). Probit and log transforms stay with the caller.
+- **Two signatures.** A trial-wise graph takes one row per trial, each with its own parameters, as a LAN does. A shared graph takes the
+  parameters once and rt and choice as vectors; it runs the network's conditioner twice (once per response) instead of once per trial.
+  For a DDM flow, 100 000 trials at one parameter vector take 16 µs per trial trial-wise and 1.1 µs shared, about 15 times faster, so
+  trials that share parameters should be grouped and sent to the shared graph.
+- **Agreement with EMC2.** Against the compiled DDMnle over 200 prior draws in each of the six variability models, and against the
+  card's golden vectors:
+
+| comparison | rows above the floor | max \|Δ log p\| | median |
+|---|---|---|---|
+| golden vectors | 1010 | 5.3e-11 | 7e-15 |
+| EMC2, st0 = 0 (a density) | 38 400 | 4.4e-11 | 1e-14 |
+| EMC2, st0 > 0 (a CDF difference) | 78 400 | 5.6e-9 | 4e-15 |
+
+  The st0 > 0 branch is a difference of two CDFs, which amplifies round-off; the same difference appears between EMC2 and an independent
+  float64 implementation.
 - **What an HSSM contribution would still need.** A model configuration for the seven-parameter DDM (v, a, z, t, sz, sv, st), the
   parameter-conversion wrapper above, bounds from DDMnle's box and, as the project would insist, an SBC run through HSSM's own
   sampler rather than EMC2's.
 
 ### A.3 The LAN SBC
 
-[Pending: the LAN's SBC in its own training box, with the analytic DDM in the same parameterisation as control. A 3-replicate smoke
-test gave a v standardised bias of +4.3 and coverage 0/3; three replicates are not a result. The LAN and DDMnle's st0 model use
-different boxes and priors, so each is read against its own analytic control, not against the other.]
+We ran the HSSM `ddm_uniform_st` LAN (the DDM with uniform non-decision-time variability, st0 the only variability) through the same
+SBC as DDMnle: N = 400 trials, 500 replicates, in the LAN's own training box, with the prior inside the box at ±4 sd. The control is
+the analytic DDM in the same parameterisation, design and prior (a~EMC2~ = 2a~LAN~, t0 = t − st, st0 = 2 st, s = 1). The LAN's box and
+prior differ from those of DDMnle's st0-only model, so each is read against its own control and the two are not compared with each
+other.
+
+| Parameter | LAN std bias | LAN coverage | LAN in envelope | Control std bias | Control coverage | Control in envelope |
+|---|---|---|---|---|---|---|
+| v  | +0.16 | 0.902 | no  | +0.03 | 0.932 | yes |
+| a  | −1.19 | 0.710 | no  | +0.06 | 0.945 | yes |
+| z  | −0.06 | 0.924 | yes | −0.07 | 0.961 | yes |
+| t  | +0.20 | 0.930 | no  | −0.03 | 0.950 | yes |
+| st | +0.10 | 0.910 | no  | −0.03 | 0.952 | yes |
+
+- **The LAN is not calibrated in this box.** Four of five parameters leave the envelope. The boundary separation `a` is the clear
+  failure: standardised bias −1.19, coverage 0.71. The posterior for `a` is too narrow and shifted, so a user would be overconfident
+  about it.
+- **The control is clean.** All five parameters are inside the envelope (worst |std bias| 0.07, coverage 0.932–0.961, min KS p 0.068),
+  so the failures belong to the LAN and not to the cell.
+- **The control has 458 of 500 replicates.** The analytic DDM's WienR code returns too few densities at a few extreme sampler
+  proposals; rows it cannot evaluate were given zero density, which the likelihood floors, so the replicates complete. The
+  remaining 42 did not complete.
+- The rank-ECDF plots are in Figures A1 (LAN) and A2 (control).
+
+![LAN](report_figs/lan_net.png){width=100%}
+
+**Figure A1.** LAN.
+
+![Analytic control](report_figs/lan_ctl.png){width=100%}
+
+**Figure A2.** Analytic DDM control.
 
 ## Appendix B: SBC plots
 
@@ -203,3 +260,124 @@ Rank-ECDF difference plots for DDMnle, N = 400 trials, 500 replicates per model;
 
 **Figure B6.** sv+SZ+st0.
 
+
+## Appendix C: Our RDM flow, and how it compares with Malte's
+
+### C.1 The flow
+
+- **Model.** A conditional rational-quadratic spline flow over log rt for a single accumulator. The race
+  likelihood is assembled at inference from each accumulator's flow density and survivor: L(rt, R) = f~R~(rt) · Π~j≠R~ S~j~(rt).
+  For the plain RDM a closed form exists, so the flow is a demonstration of generality, not a speed gain (both flows are slower
+  than the closed form).
+- **Box and exact zero for A.** v ∈ [10^-3^, 5], B ∈ [0.1, 3], t0 ∈ [0.05, 1], s ∈ [0.1, 2], A ∈ [0, 2] continuous to zero. A is
+  encoded as asinh(A/0.05), which is exactly 0 at A = 0, and is sampled as a mixture: 70% uniform on [0, 2], 15% uniform in the
+  asinh coordinate, 15% exactly 0 (the plain Wald). Training data are 24 million rows, one trial per parameter draw.
+- **Architecture and training.** [256, 128] conditioner, 64 bins, batch 1024, 300 epochs, 30 checkpoints kept per seed. Four seeds
+  gave 120 checkpoints, each screened by score bias in two cells (the standard cell and the A = 0 cell); the flow with the smallest
+  worst-case score bias W = max |g| over both cells was kept (W = 0.0022; the median checkpoint is 0.0139 and the quartiles are
+  0.0103 and 0.0208). Selection matters: the median checkpoint is worse than Malte's flow on every measure below.
+
+### C.2 Checks on our flow
+
+- **Density error over A.** Between 0.0068 and 0.0118 at A from 0 to 1, against a target of at most 0.014, so it is flat in A and the
+  approach to A = 0 is no longer a weak spot.
+- **Score bias.** Max |g| = 0.0022 in the standard cell, no worse than the earlier flow's 0.004.
+- **SBC, five cells, all clean.** A = 0 at N = 400 (250 replicates; our flow and Malte's final flow, both run), A = 0 at N = 100,
+  and the standard cell at N = 100 and N = 400 (500 replicates; network and analytic control). Across the cells |standardised
+  bias| ≤ 0.13 for network and control, coverage 0.92–0.98, and 2 of 40 rank ECDFs touch the envelope (one control, one network;
+  KS p 0.057 and 0.052), which is the chance rate. The analytic control does it as often as the network.
+
+### C.3 Comparison with Malte's flow
+
+Malte's flow models decision time (t0 an exact shift) with a per-context affine stage on log time, 12 bins and a [128, 128]
+conditioner, a plain Wald (no A), log(x+ε) inputs, online simulation, right-censored loss and float64. It is a single run with no
+checkpoint selection. We ingest it through a converter that reproduces his evaluator to 3.6 × 10^-11^ in log density, and our
+reproduction of his published density comparison agrees set by set to a KL of 2 × 10^-7^.
+
+The comparison uses the A = 0 cell, which lies inside both boxes (s = 1), on 200 prior draws. Three measures, with the decision rule
+fixed before any number was seen: density error (median KL to the reference), score bias (max |g|) and posterior shift (largest
+shift in analytic posterior standard deviations).
+
+| flow | median KL | max \|g\| | max posterior shift (sd) |
+|---|---|---|---|
+| Malte, final | 2.7 × 10^-5^ | 0.0043 | 0.021 |
+| Malte, plain (no affine stage) | 4.4 × 10^-4^ | 0.037 | 0.431 (t0) |
+| Ours, selected | 1.5 × 10^-4^ | 0.0010 | 0.041 |
+| Ours, median checkpoint | 1.6 × 10^-4^ | 0.0076 | 0.113 |
+
+- **Ours against Malte's final flow: not separated.** His density is 5.6 times closer in KL, but both flows are below the floors for
+  score bias and posterior shift, and inference depends on those, not on density error. The A = 0 SBC cell at N = 400 confirms that
+  both pass; the predicted difference between them (about 0.02 posterior sd) is far below what that cell can resolve (about 0.13).
+- **Ours against Malte's plain flow: ours as good or better.** The plain flow cannot place mass below 6.7 ms (its spline lives on
+  log t in [−5, 5] with no affine stage), so it fails whenever b/s is below about 0.2 and is poor above 3.
+- **Open question.** Whether adding his affine stage to our flow improves its score bias is an arm of our seed study that has not yet
+  been screened, so it is not claimed either way.
+
+### C.4 SBC plots
+
+Rank-ECDF difference plots for the A = 0 cell at N = 400 (250 replicates), the cell in which the two flows were compared; the shaded
+region is the 95% envelope.
+
+![Our flow](report_figs/rdm_ours.png){width=85%}
+
+**Figure C1.** Our flow, A = 0 cell, N = 400.
+
+![Malte's final flow](report_figs/rdm_malte.png){width=85%}
+
+**Figure C2.** Malte's final flow, A = 0 cell, N = 400.
+
+## Appendix D: The CRDM
+
+The CRDM is the RDM with a gamma-shaped drift pulse (amplitude and time constant) on the accumulator matching a distractor, and it
+is nested in the RDM at amplitude 0. It has no closed-form density: the reference is a Volterra (Fortet) integral-equation solver,
+which is slow. The CRDM flow is Malte's; our work is its integration into EMC2 and its validation.
+
+### D.1 What we built
+
+- **A hybrid race likelihood in EMC2.** The flow supplies the density and survivor of the pulsed accumulator and the analytic Wald
+  supplies the other, assembled in the compiled likelihood. Amplitude is exactly 0 outside the distractor-matched condition, so
+  such trials reduce to the plain RDM.
+- **A CRDM model with a reference.** A compiled simulator and a Volterra solver, usable as the analytic comparison. Our solver agrees
+  with Malte's to a relative error of 9 × 10^-14^ (time step 0.002) and 3.7 × 10^-13^ (0.0005); at amplitude 0 it equals the closed-form
+  Wald to 4 × 10^-14^. Its convergence in the time step has order about 1.5–1.9, with a density error relative to the peak of
+  5.9 × 10^-3^, 2.1 × 10^-3^ and 5.6 × 10^-4^ at steps 0.002, 0.001 and 0.0005 (against a step of 0.00025). Our simulator
+  matches his draws (KS p ≥ 0.33) and the Volterra CDF (p ≥ 0.084).
+- **Exact ingestion.** Our evaluator reproduces his flow's log density to 3.6 × 10^-11^, and the compiled hybrid likelihood agrees
+  with an independent reference race implementation to 1.5 × 10^-13^ or better.
+
+### D.2 Checks on the flow
+
+- **Density.** For the flow trained against the 0.0005 reference, median KL 9.7 × 10^-5^ and KS 2.5 × 10^-3^ against that reference; at
+  amplitude 0 it matches the Wald with a maximum KL of 5.4 × 10^-5^. Flows trained against coarser references inherit their error: the
+  0.05 flow is poor on its own terms (median KS 0.018, maximum 0.16 here and 0.43 on his grid), and the 0.0005 reference itself has
+  an error of up to 1.5 × 10^-3^ in KS.
+- **SBC at N = 400, six parameters.** The hybrid network (500 replicates): |standardised bias| ≤ 0.092, coverage 0.948–0.966, all six
+  rank ECDFs inside the envelope (smallest KS p 0.063). The Volterra analytic control at step 0.002 (250 replicates): ≤ 0.153,
+  coverage 0.944–0.972, all inside. At step 0.0005 (50 replicates): ≤ 0.156, coverage 0.94–0.98, one ECDF (amplitude) outside the
+  envelope, accepted as chance (1 of 18 control cells; the network and the 0.002 control are clean on it). Network against each
+  control: no disagreement beyond chance (smallest p 0.114 and 0.075, Bonferroni over 18 tests).
+- **Posterior shift against the reference** (200 datasets, the largest shift in analytic posterior sd): 0.017 for the 0.0005 flow,
+  below the 0.10 floor, so it passes; 0.117 for the 0.005 flow, narrowly over; 0.59 for the 0.05 flow, which fails.
+- **Speed.** Per likelihood evaluation in the timing check: hybrid flow 0.23 ms, Volterra at step 0.002 3.4 ms, at 0.0005 42.5 ms,
+  so the flow is 15 times and 185 times faster. A full Volterra SBC cell took 2.7 h (step 0.002, 250 replicates) and 8.5 h (0.0005,
+  50 replicates) on 48 cores, against 22 minutes for the 500-replicate network cell.
+- **Verdict.** The hybrid network with the 0.0005 flow passes SBC at N = 400 and is indistinguishable from the Volterra reference at
+  both resolutions.
+- **Limit.** The score-bias screen cannot yet resolve amplitude: its analytic control is 0.021 on that parameter, 21 times its
+  floor, so the screen cannot separate flow bias from solver noise there. The posterior-shift and SBC measures are unaffected.
+
+### D.3 SBC plots
+
+Rank-ECDF difference plots at N = 400; the shaded region is the 95% envelope.
+
+![Hybrid network](report_figs/crdm_net.png){width=100%}
+
+**Figure D1.** Hybrid network, 500 replicates.
+
+![Volterra control, step 0.002](report_figs/crdm_ctl_dt2e-3.png){width=100%}
+
+**Figure D2.** Volterra analytic control, step 0.002, 250 replicates.
+
+![Volterra control, step 0.0005](report_figs/crdm_ctl_dt5e-4.png){width=100%}
+
+**Figure D3.** Volterra analytic control, step 0.0005, 50 replicates (amplitude is the parameter at the envelope edge).
