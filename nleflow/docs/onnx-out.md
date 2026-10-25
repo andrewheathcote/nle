@@ -9,6 +9,13 @@ signatures:
 | `trialwise` | one `[N, k + 2]` tensor: the k parameters, rt, choice (-1 lower, +1 upper) | `[N]` log p(rt, choice \| theta) |
 | `shared` | `theta [k]`, `rt [N]`, `choice [N]`; the conditioner runs twice (once per response) and the classifier once | `[N]` |
 
+**Trialwise or shared, and why it matters.** The two graphs compute the same number. Both pass the same checks to about 1e-12 on the golden rows, and the check lines further down are run on each. They differ in how often the network's parameter-dependent part, the conditioner that turns the parameters into the spline's shape, has to be run.
+
+- **`trialwise`** takes a row per trial, each with its own parameter vector. It must run the conditioner for every row. Use it when the parameters really differ from trial to trial (a trial-level covariate, a trend, a hierarchical design evaluated at many subjects at once). Its input has the same layout as a published LAN's (`[N, k + 2]`: parameters, rt, choice), so code written for a LAN can call it unchanged.
+- **`shared`** takes one parameter vector `theta [k]` and vectors of `rt` and `choice`. It runs the conditioner twice, once per response, and the classifier once, however many trials there are, and then only evaluates the cheap spline per trial. Use it when a block of trials shares its parameters, which is the usual case when fitting: all the trials of one participant in one design cell, or all the data scored at one posterior draw.
+
+The cost difference is large: on the shipped `ddm_svst0` card, 100 000 trials at one parameter vector take 16 µs per trial with `trialwise` and 1.1 µs with `shared` (one thread; [examples/onnx_use](../examples/onnx_use/README.md)), about 15 times faster, and the gap grows with the block size. The rule: if the parameters repeat across trials, group the trials by parameter vector and call `shared` once per group. `shared` cannot take a different vector per trial, so `trialwise` is the only correct choice there. Calling `trialwise` on a block with one repeated vector is correct, only slower.
+
 For a `flow_scaled` card the k inputs are the eight natural DDM parameters v, a, t0, s, Z, SZ
 (the start-point proportion), sv, st0; the graph computes kappa, eta, the encodings and the
 st0 branch exactly as EMC2's `nn_eval_scaled()` does, gives -Inf for rt <= t0 and the card's
