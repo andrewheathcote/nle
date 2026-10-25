@@ -8,8 +8,7 @@ both. Every step below has one check. Commands run from `nleflow/` unless said.
 Order: R and EMC2 first, then the verification command, then Python.
 
 **Which EMC2.** The steps use the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for
-access), once `main` contains the branch `vignette-ddmnle`; until it does, use that branch
-(`git clone -b vignette-ddmnle`). It contains the neural-likelihood code and reads a card's `fixed` field
+access). It contains the neural-likelihood code and reads a card's `fixed` field
 ([START_HERE.md](../START_HERE.md), "Known limits").
 
 ## 1. R >= 4.5 and EMC2
@@ -25,7 +24,7 @@ and a JSON card still registers, but use 4.5 or later.
 4. EMC2 from https://github.com/andrewheathcote/DMC2, into a dedicated library:
 
    ```sh
-   git clone -b vignette-ddmnle https://github.com/andrewheathcote/DMC2 EMC2   # drop -b once main has it
+   git clone https://github.com/andrewheathcote/DMC2 EMC2
    mkdir -p ~/R/nle-lib
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib EMC2
    ```
@@ -146,7 +145,7 @@ shipped DDMnle card instead):
 
 The posterior tables on the two BLAS agree to 4e-15.
 
-**Rebuilt 2026-10-25** from the tarball of the DMC2 branch `vignette-ddmnle` (6d3f99db, R 4.6.1, same VM):
+**Rebuilt 2026-10-25** from the tarball of DMC2 main (6d3f99db, R 4.6.1, same VM):
 `nle-verify` passes on the three shipped cards, `pytest` gives 67 passed and 1 skipped (R `arrow` is not in the
 image), and `emc2-tests` gives 5306 passed / 3 failed / 11 skipped. The three failures are two tests that
 compare with values written on the Mac: `test-ddm-precision.R` (the default-precision likelihood differs from

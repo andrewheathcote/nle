@@ -32,9 +32,8 @@ EMC2's vignette "Neural likelihoods").
 Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.md). In short:
 
 1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
-   That is the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for access),
-   once `main` contains the branch `vignette-ddmnle`; until it does, install that branch:
-   `git clone -b vignette-ddmnle https://github.com/andrewheathcote/DMC2`. It reads a card's `fixed` field,
+   That is the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for access):
+   `git clone https://github.com/andrewheathcote/DMC2`. It reads a card's `fixed` field,
    ships the cards listed below and has the vignette "Using a trained flow".
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>
