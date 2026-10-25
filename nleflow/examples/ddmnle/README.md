@@ -3,9 +3,8 @@
 The flow over the unit-scale decision time u = (rt − t0)(s/a)² of a diffusion
 with a = s = 1, conditioned on κ = v a/s², η = sv a/s², Z and SZ, with a
 choice classifier for P(R = 2); t0, st0, a and s are applied exactly by the
-card's evaluator (EMC2's `flow_scaled` kind; NLEFLOW_PLAN.md section 2,
-`handover/SCALED_DDM_PLAN.md`). `spec.yaml` is the recipe of the committed
-card `ddm_sc_s1106_e245` (`handover/nle-methods/port/export/`): [256, 128],
+card's evaluator (EMC2's `flow_scaled` kind). `spec.yaml` is the recipe of the committed
+card `ddm_sc_s1106_e245` (`nleCards/`): [256, 128],
 64 bins on log u ∈ [−12, 2], batch 1024, 300 epochs, 30 kept checkpoints,
 600 000 draws × 40 trials, the box and strata of `simulation/scaled.R`, and
 the [256, 256, 256] classifier trained on exact P(R = 2) targets
@@ -14,7 +13,7 @@ the data (6000 draws × 40) and 2 epochs; the classifier keeps its 194 epochs
 on 2000 targets. DDMnle itself is not retrained here: the committed card and
 its golden file are the references the tests use.
 
-Needs R with EMC2 `dev-flow` in a dedicated library (`rDDM`, `dDDM`),
+Needs R with EMC2 (neural-likelihood build) in a dedicated library (`rDDM`, `dDDM`),
 WienR (the exact choice probabilities) and jsonlite; arrow for parquet, else
 CSV.
 

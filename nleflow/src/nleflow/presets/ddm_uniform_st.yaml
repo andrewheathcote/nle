@@ -52,7 +52,7 @@ checked:
   mapping: >-
     determined empirically against WienR and verified to 4.3e-7 (handover/EMC2_IMPLEMENTATION_BRIEF.md,
     "What the files look like"); recovered as the best agreement by a profile scan over a, t0, st0, Z and v
-    in EMC2's tests/testthat/test-nn-mlp.R (dev-flow), which also rejects the three wrong mappings
+    in EMC2's tests/testthat/test-nn-mlp.R, which also rejects the three wrong mappings
     (a not doubled, t as the lower end, responses swapped)
   box_v_a: >-
     equal to HSSM's own DDM LAN box, v in (-3, 3) and a in (0.3, 2.5)

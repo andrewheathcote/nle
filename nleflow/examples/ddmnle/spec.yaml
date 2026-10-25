@@ -1,9 +1,9 @@
-# DDMnle, the scaled DDM (NLEFLOW_PLAN.md section 2; handover/SCALED_DDM_PLAN.md):
+# DDMnle, the scaled DDM:
 # a flow over the unit-scale decision time u = (rt - t0) (s/a)^2 of a diffusion
 # with a = s = 1, conditioned on kappa = v a/s^2, eta = sv a/s^2, Z and SZ, with a
 # choice classifier for P(R = 2). t0, st0, a and s are applied exactly by the
 # card's evaluator (EMC2's flow_scaled kind). This is the recipe of the committed
-# card ddm_sc_s1106_e245 (handover/nle-methods/port/export/).
+# card ddm_sc_s1106_e245 (nleCards/).
 name: ddmnle
 model: DDM                        # the analytic twin; the card's model is DDMsc
 response: choice
@@ -27,7 +27,7 @@ regimes:                          # which inputs are exactly 0, jointly
   - {share: 0.15, zero: [SZ]}
   - {share: 0.15, zero: [eta, SZ]}
 scaling: {kind: ddm_unit, sz: proportion}
-spline: {bins: 64, range: [-12, 2]}   # log u; set from the pilot data (SCALED_DDM_PLAN.md section 4)
+spline: {bins: 64, range: [-12, 2]}   # log u; set from the pilot data
 conditioner: {widths: [256, 128], norm: false, affine: false}
 classifier: {widths: [256, 256, 256], lr: 1.491898934850391e-3, batch: 256, epochs: 194, loss: mse}
 training:

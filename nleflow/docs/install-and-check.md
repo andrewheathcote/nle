@@ -1,15 +1,15 @@
 # Install and check
 
-What you need depends on the task (NLEFLOW_PLAN.md section 9.1): **using a card in
-EMC2** needs R and EMC2 `dev-flow`; **training, exporting, ONNX and converting** need
+What you need depends on the task: **using a card in
+EMC2** needs R and EMC2 with the neural-likelihood code; **training, exporting, ONNX and converting** need
 the Python environment of this directory; the **simulator of a worked example** needs
 both. Every step below has one check. Commands run from `nleflow/` unless said.
 
 Order: R and EMC2 first, then the verification command, then Python.
 
-**Which EMC2.** The steps name `dev-flow` of `ampl-psych/EMC2`: the nle work on `dev` after
-the `joint_move` sampler merge; it reads a card's `fixed` field. The older `dev-nle-m0`
-serves except for cards with fixed parameters ([START_HERE.md](../START_HERE.md), "Known limits").
+**Which EMC2.** The steps use the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for
+access). It contains the neural-likelihood code and reads a card's `fixed` field
+([START_HERE.md](../START_HERE.md), "Known limits").
 
 ## 1. R >= 4.5 and EMC2
 
@@ -21,10 +21,10 @@ and a JSON card still registers, but use 4.5 or later.
    `g++` >= 11. Check: `R CMD config CXX17` prints a compiler.
 3. EMC2's R packages and `WienR` >= 0.3-17 (not packaged for Ubuntu; from CRAN).
    Check: `Rscript -e 'stopifnot(packageVersion("WienR") >= "0.3.17")'` exits 0.
-4. EMC2 branch `dev-flow` of `ampl-psych/EMC2`, into a dedicated library:
+4. EMC2 from https://github.com/andrewheathcote/DMC2, into a dedicated library:
 
    ```sh
-   git clone -b dev-flow https://github.com/ampl-psych/EMC2
+   git clone https://github.com/andrewheathcote/DMC2 EMC2
    mkdir -p ~/R/nle-lib
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib EMC2
    ```
@@ -73,7 +73,7 @@ R_PROFILE_USER=/dev/null uv run pytest -rs
 ```
 
 Check: no failures. Without the three variables the R-dependent cases skip and say why
-(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 `dev-flow`) turns on the cases that
+(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 (neural-likelihood build)) turns on the cases that
 register cards in R and compare the ONNX graph with EMC2, `NLEFLOW_RLIB` the R simulator
 cases, and `NLEFLOW_EMC2_SRC` the LAN and z0 cases, which read EMC2's
 `tests/testthat/golden/`.
@@ -87,24 +87,18 @@ OpenBLAS and 1.8e-11 on Apple Accelerate, only where z lies in the top bin.
 
 ## 4. The container (no local R or Python needed)
 
-`docker/Dockerfile` reproduces the cloud steps of the plan's section 9.2: Ubuntu 24.04,
+`docker/Dockerfile` reproduces the steps below as an image: Ubuntu 24.04,
 R >= 4.5 from CRAN's Ubuntu repository, EMC2's R packages, `WienR` and the test suite's
 `testthat`, `vdiffr`, `withr`, `DiagrammeR`, EMC2 in `/opt/emc2/lib` (its source in
 `/opt/emc2/src`, `EMC2_SHA.txt` beside the library), `uv` and the lock, a UTF-8 locale.
-From the root of the nle repository, either EMC2 from GitHub at `EMC2_SHA` (default
-`dev-flow`, bb96fb03):
+From the root of this repository, from a source tarball of your clone of EMC2
+(step 1.4; the repository is private, so the image takes a tarball rather than cloning),
+placed in `nleflow/docker/emc2/` (git-ignored); `EMC2_SHA` is then only a label:
 
 ```sh
-docker build -f nleflow/docker/Dockerfile -t nleflow .
-```
-
-or from a source tarball of a local EMC2 build, placed in
-`nleflow/docker/emc2/` (git-ignored); `EMC2_SHA` is then only a label:
-
-```sh
-R CMD build <EMC2 worktree> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
+R CMD build <your EMC2 clone> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
 docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
-  --build-arg EMC2_SHA=bb96fb03 -t nleflow:dev-flow .
+  --build-arg EMC2_SHA=<commit of your clone> -t nleflow:latest .
 ```
 
 Then:
@@ -124,7 +118,7 @@ card's fit is faster on OpenBLAS (the flows are matrix products); the analytic D
 affected. Use `OPENBLAS_NUM_THREADS=1` when the chains run in parallel.
 
 **Measured** (AH's Mac, Apple M2 Max, colima VM with 8 CPUs and 24 GB, linux/arm64;
-2026-10-22, EMC2 `dev-flow` 9f2801b2 from its tarball, R 4.6.1): the image builds in
+2026-10-22, EMC2 (neural-likelihood build) 9f2801b2 from its tarball, R 4.6.1): the image builds in
 4 min 21 s and is 4.35 GB (1.09 GB content). EMC2's suite gives 1472 passed / 0 failed /
 9 skipped in 75 s; the Mac gives 1474 / 0 / 8. The difference is two macOS-only
 expectations: the Accelerate link-order test skips, and the `VECLIB_MAXIMUM_THREADS`

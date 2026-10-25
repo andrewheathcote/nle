@@ -1,9 +1,8 @@
 # nleflow
 
 Train a normalizing-flow neural likelihood for an evidence-accumulation model
-from a model specification, and export it as a card that EMC2 (branch
-`dev-flow`) loads with `register_nn_model()`. Milestones M1 to M3 of
-`handover/NLEFLOW_PLAN.md`: the race-model path with the RDM A = 0 example;
+from a model specification, and export it as a card that EMC2 (the neural-likelihood
+build, https://github.com/andrewheathcote/DMC2) loads with `register_nn_model()`. It covers the race-model path with the RDM A = 0 example;
 the choice-model path (flow + choice classifier; the scaled DDM card,
 DDMnle) with its ONNX export; and the converter that brings a published
 likelihood approximation network (a LAN, in ONNX) into EMC2 as a card.
@@ -40,16 +39,16 @@ minutes).
 Each page gives its commands with a one-line check each. The sections below are the
 reference they are built from: the spec, the data contract, the card and its gate, the
 ONNX export, the converter. `docker/Dockerfile` builds an image with R >= 4.5, EMC2
-`dev-flow` and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
+(neural-likelihood build) and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
 are its checks.
 
 What a flow is, how the cards are evaluated and validated, and the card
-format are EMC2's: `vignette("neural-likelihood-cards")` on `dev-flow` is
+format are EMC2's: `vignette("neural-likelihood-cards")` in the EMC2 repository is
 the contract this package writes to.
 
-## Installation (the Python side of NLEFLOW_PLAN.md section 9.2)
+## Installation (the Python side)
 
-Each step has its one-line check. R and EMC2 `dev-flow` are needed only
+Each step has its one-line check. R and EMC2 (neural-likelihood build) are needed only
 for the simulator of the RDM example (`EMC2:::rWald`) and for registering
 the exported card; their steps are in the plan's section 9.2.
 
@@ -68,7 +67,7 @@ the exported card; their steps are in the plan's section 9.2.
 4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
 5. **The tests.** Check: `uv run pytest -rs` passes. With `NLEFLOW_EMC2_LIB=<library holding
-   EMC2 dev-flow>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
+   EMC2 (neural-likelihood build)>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
    `NLEFLOW_EMC2_SRC=<EMC2 source tree>` (its `tests/testthat/golden/`: the LAN and z0
    files; default `../EMC2` beside this repository) all 51 run;
    without them the R-dependent cases skip and `-rs` says
@@ -117,8 +116,8 @@ names in `context_transforms` but not in `context_names`, their box the value
 itself in `bounds_natural`, and the values in `fixed`. EMC2 then needs them at
 registration, `register_nn_model(card, twin = DDM, exceptions = c(s = 1, SZ = 0))`
 (`unlist(jsonlite::fromJSON(card)$fixed)`), and says which is missing when they
-are not given. EMC2 `dev-flow` reads `fixed` itself, so `nle_verify.R` checks such a card from the
-card alone (`examples/ddm_svst0/`); the older `dev-nle-m0` does not (see "Known limits" in
+are not given. EMC2 (neural-likelihood build) reads `fixed` itself, so `nle_verify.R` checks such a card from the
+card alone (`examples/ddm_svst0/`); an older EMC2 does not (see "Known limits" in
 START_HERE.md).
 
 YAML note: write exponents with a sign (`1.0e-4`, not `1e-4`) or as plain
@@ -342,7 +341,7 @@ defaults EMC2's `nle_verify.R` registers it with (`p_types`, from the preset) an
 inference"` always, and with `--verify` the golden file and the tolerance it
 holds at. No other fields. EMC2 used to read cards with R's `$`, which matches
 partial names, so a field such as `preset` was read as `pre` (a decision-time
-shift) and the card refused; `dev-flow` reads every card field by exact
+shift) and the card refused; EMC2 now reads every card field by exact
 name, and the converter still writes only fields the vignette names.
 
 **`--verify N`** (or `--rows <csv>` to verify on given rows) compares the

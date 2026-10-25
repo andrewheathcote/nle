@@ -2,7 +2,7 @@
 
 A card is the JSON file EMC2 loads with `register_nn_model()`, written beside golden
 vectors that every evaluator of the card is tested against. The card format is EMC2's:
-`vignette("neural-likelihood-cards")` on `dev-flow`. Run after training
+`vignette("neural-likelihood-cards")` in the EMC2 repository. Run after training
 ([race](train-a-race-flow.md) or [choice](train-a-choice-flow.md)); the commands below use
 the choice smoke run, the race run is the same with `rdm_a0` and `twin = RDM`.
 

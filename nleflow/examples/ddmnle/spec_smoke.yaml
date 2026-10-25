@@ -23,7 +23,7 @@ regimes:                          # which inputs are exactly 0, jointly
   - {share: 0.15, zero: [SZ]}
   - {share: 0.15, zero: [eta, SZ]}
 scaling: {kind: ddm_unit, sz: proportion}
-spline: {bins: 64, range: [-12, 2]}   # log u; set from the pilot data (SCALED_DDM_PLAN.md section 4)
+spline: {bins: 64, range: [-12, 2]}   # log u; set from the pilot data
 conditioner: {widths: [256, 128], norm: false, affine: false}
 classifier: {widths: [256, 256, 256], lr: 1.491898934850391e-3, batch: 256, epochs: 194, loss: mse}
 training:

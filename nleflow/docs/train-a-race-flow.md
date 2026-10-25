@@ -2,7 +2,7 @@
 
 A race flow (`response: race`) models rt for one accumulator of an evidence-accumulation
 race given the parameters; the example is the RDM with `A = 0` allowed (`examples/rdm_a0/`).
-Needs the Python environment and, for the simulator, R with EMC2 `dev-flow`
+Needs the Python environment and, for the simulator, R with EMC2 (neural-likelihood build)
 ([install and check](install-and-check.md)). Run from `nleflow/`; the smoke spec is 1 % of
 the data and 2 epochs, a pipeline check and not a fit.
 

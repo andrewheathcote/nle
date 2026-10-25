@@ -1,9 +1,8 @@
 from pathlib import Path
 
 
-def test_emc2_lib_skip_names_dev_flow():
-    """emc2_lib fixture's skip message must reference dev-flow, not dev-nle-m0."""
+def test_emc2_lib_skip_names_dmc2():
+    """emc2_lib fixture's skip message must name DMC2 main, not an old branch."""
     conftest = (Path(__file__).parent / "conftest.py").read_text()
-    assert "dev-flow" in conftest, (
-        "emc2_lib skip reason still names dev-nle-m0; update to dev-flow"
-    )
+    assert "DMC2 main" in conftest
+    assert "dev-flow" not in conftest and "dev-nle" not in conftest

@@ -1,6 +1,6 @@
 # Start here
 
-For Julian and Russ: what nleflow is, how to install and check it, where the cards
+What nleflow is, how to install and check it, where the cards
 are, and which page to read for each task. Thirty minutes from install to your own
 card in EMC2 and in ONNX: [TUTORIAL.md](TUTORIAL.md).
 
@@ -32,11 +32,8 @@ EMC2's vignette "Neural likelihoods").
 Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.md). In short:
 
 1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
-   Today that is EMC2 branch **`dev-flow`** (the nle work on top of `dev` after the
-   `joint_move` sampler merge, origin/dev ff374317; it reads a card's `fixed` field;
-   stage H3). It is on GitHub (`ampl-psych/EMC2`, `git clone -b dev-flow`);
-   `dev-nle-m0` also works for everything except registering a card with fixed
-   parameters from the card alone (see "Known limits").
+   That is the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for access):
+   `git clone https://github.com/andrewheathcote/DMC2`. It reads a card's `fixed` field and ships the cards listed below.
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>
    export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null     # always both (a second EMC2 can shadow yours)
@@ -51,23 +48,33 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
 4. **The tests**: `R_PROFILE_USER=/dev/null uv run pytest -rs` in `nleflow/`; set
    `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies), `NLEFLOW_RLIB`
    and `NLEFLOW_EMC2_SRC` (an EMC2 source tree) to turn on the R cases.
-5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from GitHub or from a source tarball of `dev-flow`, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
+5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from the repository above or from a source tarball, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
 
 ## Where the cards are
 
-Cards live in this repository, `handover/nle-methods/port/export/`, each as
-`<tag>_weights.json` with `<tag>_golden.csv` (and `_intermediates.json`) beside it:
+The cards are in `nleCards/` at the root of this folder, each as
+`<tag>_weights.json` with `<tag>_golden.csv` (and `_intermediates.json`) beside it;
+`nleCards/SHA256SUMS` lists their checksums.
 
-| card | model | kind | notes |
-|---|---|---|---|
-| `ddm_svst0_e<N>` | DDM with sv and st0 free, s = 1, SZ = 0 fixed | `flow_joint` | `examples/ddm_svst0`; its README has the gates |
-| `ddm_sc_s1106_e245` | the full DDM, scaled (DDMnle) | `flow_scaled` | the adopted DDM network; `examples/ddmnle` |
-| `lba_e299` | LBA | `flow_race` | `examples/lba` |
-| `rdm_ss_base_s801_e271`, `rdm_rdm_small_e195` | RDM | `flow_race` | `examples/rdm_a0` |
-| `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | shipped by EMC2; not an nleflow example |
-| `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | `examples/lan_in` converts the current file |
+| card | model | kind | in EMC2 | notes |
+|---|---|---|---|---|
+| `ddm_svst0_e<N>` | DDM with sv and st0 free, s = 1, SZ = 0 fixed | `flow_joint` | no | `examples/ddm_svst0`; its README has the gates |
+| `ddm_sc_s1106_e245` | the full DDM, scaled (DDMnle) | `flow_scaled` | yes, identical | the adopted DDM network; `examples/ddmnle` |
+| `lba_e299` | LBA | `flow_race` | no | `examples/lba` |
+| `rdm_ss_base_s801_e271` | RDM, A = 0 | `flow_race` | yes, identical | `examples/rdm_a0` |
+| `rdm_rdm_small_e195` | RDM, small | `flow_race` | no | used by the golden-vector tests |
+| `ddm_z0_s503_e282` | DDM, eight-parameter flow (earlier network) | `flow_joint` | no | used by the ONNX tests only |
+| `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | no | `examples/lan_in` converts the current file |
+| `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | yes (only there) | not an nleflow example |
 
-EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow) and `rtcon2_r3_s2_e006_weights.json` (RTCONnn), loaded via `register_nn_model()` or the `DDMnn()`, `RDMnn()` and `RTCONnn()` model functions (DDMnn() defaults to the DDMnle card). The older `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` `.rds` artefacts are gone from EMC2 dev-flow.
+**Why a card can be in both places.** EMC2 ships three cards in `inst/extdata/flownn/`:
+`ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability
+cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow) and `rtcon2_r3_s2_e006_weights.json`
+(RTCONnn). They load through `register_nn_model()` or the `DDMnn()`, `RDMnn()` and
+`RTCONnn()` model functions (`DDMnn()` defaults to the DDMnle card). `nleCards/` holds
+byte-identical copies of the first two so that nleflow's tests and examples run without
+EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not ship.
+`nleCards/SHA256SUMS` lets you check that a copy still matches EMC2's.
 
 ## A map
 
@@ -76,14 +83,13 @@ EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow coverin
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (dev-flow, or dev-nle-ondev >= cb40f173) | `inst/scripts/using_a_trained_flow_data.R` |
+| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | each example's `check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
 | bring a published LAN into EMC2 | [docs/lan-in.md](docs/lan-in.md) | `examples/lan_in/run.sh` |
 | the spec, the data contract, the card, the converter | [README.md](README.md) (reference) | |
 | the card format (the contract with EMC2) | EMC2's `vignette("neural-likelihood-cards")` | |
-| why the package looks as it does; its progress log | `handover/NLEFLOW_PLAN.md` | |
 
 ## Known limits
 
@@ -91,7 +97,7 @@ EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow coverin
   float64 card to about 1e-5 in log density (the golden check's tolerance is 1e-4 and
   is recorded in the card); our graphs are float64 and match EMC2 to about 1e-13 (1e-8
   where st0 > 0 makes the density a difference of two CDFs).
-- **Cards with fixed parameters need EMC2 >= 1d9fb41d** (`dev-flow` or `dev-nle-ondev`). A twin
+- **Cards with fixed parameters need the EMC2 above.** A twin
   parameter held at a value in training (`fixed` in the spec, e.g. s = 1 and SZ = 0 for
   `ddm_svst0`) is recorded in the card; older EMC2 ignores it, so registration needs
   `exceptions = unlist(jsonlite::fromJSON(card)$fixed)` and `nle_verify.R` fails on

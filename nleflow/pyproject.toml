@@ -14,7 +14,7 @@ authors = [
 ]
 # The versions every shipped flow was trained and exported with
 # (handover/nle-methods/flow/uv.lock); onnx/onnxruntime were installed by hand
-# before this lock (NLEFLOW_PLAN.md section 9.1).
+# before this lock.
 dependencies = [
     "jax==0.5.3",
     "flax==0.10.6",

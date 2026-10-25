@@ -1,6 +1,6 @@
 """End to end on synthetic data: simulate (in Python) -> train -> export ->
 the golden file is reproduced from the card -> (with NLEFLOW_EMC2_LIB) the
-card registers in EMC2 dev-nle-m0 with twin RDM and passes nn_golden_check().
+card registers in EMC2 with twin RDM and passes nn_golden_check().
 
 The synthetic model is a shifted log-normal in the RDM's parameter names
 (v, B, t0, s, A), not an RDM: the test is of the pipeline and the card
@@ -304,8 +304,8 @@ def test_fixed_is_validated(tmp_path):
 def test_joint_card_with_fixed_parameters_registers_in_emc2(tmp_path, emc2_lib):
     """The card registers with twin = DDM and the card's `fixed` as exceptions,
     and passes nn_golden_check(). Without them, an EMC2 that reads the card's
-    `fixed` (dev-nle-ondev >= 1d9fb41d) registers it with those values; an older
-    one (dev-nle-m0 252e155f) names what is missing."""
+    `fixed` (the current EMC2) registers it with those values; an older
+    one names what is missing."""
     spec = make_joint_spec(tmp_path)
     run = train(spec, runs=tmp_path / "runs", quiet=True)
     res = export(run, say=lambda *a: None)

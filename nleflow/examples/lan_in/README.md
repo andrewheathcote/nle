@@ -9,7 +9,7 @@ describes the converter.
 
 ```sh
 cd nleflow/examples/lan_in
-export NLEFLOW_RLIB=<library holding EMC2 dev-nle-ondev and its dependencies>   # default ~/R/nle-ondev-lib:~/R/nle-m4-lib
+export NLEFLOW_RLIB=<library holding EMC2 (neural-likelihood build) and its dependencies>   # default ~/R/nle-ondev-lib:~/R/nle-m4-lib
 ./run.sh                      # about 5 s; LAN_ONNX=<file> to use a file you have
 ```
 

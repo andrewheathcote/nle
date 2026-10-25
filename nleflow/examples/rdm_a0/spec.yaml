@@ -1,6 +1,6 @@
-# The RDM A = 0 worked example (NLEFLOW_PLAN.md section 3): one accumulator's
+# The RDM A = 0 worked example: one accumulator's
 # first-passage density, the training box reaching A = 0 exactly. This is the
-# recipe of the committed card rdm_ss_base_s801_e271 (handover/RDM_A0_BOX_PLAN.md).
+# recipe of the committed card rdm_ss_base_s801_e271.
 name: rdm_a0
 model: RDM                        # the analytic twin: EMC2's RDM (a Wald race)
 response: race

@@ -7,7 +7,7 @@ describes the export and `nleflow onnx-check`.
 
 ```sh
 cd nleflow/examples/onnx_use
-./run.sh                 # the ddm_svst0 card in handover/nle-methods/port/export; about 5 s
+./run.sh                 # the ddm_svst0 card in nleCards; about 5 s
 ./run.sh <card_weights.json>    # another flow_joint card, its golden file beside it
 ```
 

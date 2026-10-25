@@ -6,7 +6,7 @@
 #   LIB=~/R/nle-scaled-lib Rscript sbc/ddmnle_bench/bench.R [K] [REPS]
 a <- commandArgs(trailingOnly = TRUE)
 K <- if (length(a) > 0) as.integer(a[1]) else 400L; REPS <- if (length(a) > 1) as.integer(a[2]) else 7L
-CARD <- "handover/nle-methods/port/export/ddm_sc_s1106_e245_weights.json"
+CARD <- "nleCards/ddm_sc_s1106_e245_weights.json"
 CASES <- c(`2 st0+SZ` = "sv0", `3 st0+sv` = "SZ0", `4 sv+SZ` = "st00", `5 st0` = "st0only", `7 SZ` = "SZonly", `8 all` = "full")
 src <- readLines("sbc/scaled_cell.R"); stop_at <- grep("^# ---- checks", src)[1] - 1
 Sys.setenv(NATIVE = "1", BENCH = "0")

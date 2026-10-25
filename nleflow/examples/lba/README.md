@@ -22,7 +22,7 @@ e^10 s, about 2e-5 of the training rows; the simulator prints that share.
 
 ```sh
 cd nleflow/examples/lba
-export NLEFLOW_RLIB=<library holding EMC2 dev-flow> R_PROFILE_USER=/dev/null
+export NLEFLOW_RLIB=<library holding EMC2 (neural-likelihood build)> R_PROFILE_USER=/dev/null
 uv run --project ../.. nleflow spec     spec_smoke.yaml   # the spec, resolved
 uv run --project ../.. nleflow simulate spec_smoke.yaml   # 1 s: data_smoke/{train,val}
 R_LIBS=$NLEFLOW_RLIB Rscript check_simulator.R             # the simulator vs pLBA
@@ -61,7 +61,7 @@ over `data/val`) is 0.908.
 ## The full card
 
 `lba_e299` (the best validation loss, 0.909400 at step 299; the analytic floor
-0.9078), in `handover/nle-methods/port/export/` as `lba_e299_weights.json`
+0.9078), in `nleCards/` as `lba_e299_weights.json`
 with its golden file and intermediates; sha256 `65fe6178cc83e51b1157e73dee9e689b5ac93c48b1907453ec96faa99789429c`.
 
 | check | result |

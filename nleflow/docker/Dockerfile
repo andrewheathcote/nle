@@ -1,5 +1,4 @@
-# nleflow + EMC2 (a source tarball, or a commit of ampl-psych/EMC2), the cloud recipe of
-# NLEFLOW_PLAN.md section 9.2 as an image.
+# nleflow + EMC2 (a source tarball, or a commit of DMC2 main), as an image.
 #
 #   docker build -f nleflow/docker/Dockerfile -t nleflow .     # from the root of the nle repository
 #   docker run --rm nleflow nle-verify                          # EMC2's verification command, R >= 4.5
@@ -12,9 +11,12 @@
 #                 of EMC2 not on GitHub gets into the image:
 #                   R CMD build <EMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
 #                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
-#                     --build-arg EMC2_SHA=bb96fb03 -t nleflow:dev-flow .
-#   EMC2_SHA      without EMC2_TARBALL, the commit of ampl-psych/EMC2 to clone and build (default: dev-flow,
-#                 bb96fb03 on GitHub); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
+#                     --build-arg EMC2_SHA=<commit of your clone> -t nleflow .
+#   EMC2_REPO     without EMC2_TARBALL, the repository to clone (default: DMC2; it is private, so pass a
+#                 URL that carries your credentials, e.g. https://<user>:<token>@github.com/andrewheathcote/DMC2,
+#                 or use a tarball).
+#   EMC2_SHA      without EMC2_TARBALL, the commit of EMC2_REPO to clone and build (default: a commit of
+#                 DMC2 main); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
 #                 tarball's sha256.
 # Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped artefacts by sha256, so R comes from
 # CRAN's own Ubuntu repository (R >= 4.5); the R packages, WienR included, come from CRAN.
@@ -25,7 +27,8 @@
 # needs no rebuild.
 FROM ubuntu:24.04
 
-ARG EMC2_SHA=bb96fb0394d0d83be9a35056c96658ecdccf9ec4
+ARG EMC2_REPO=https://github.com/andrewheathcote/DMC2
+ARG EMC2_SHA=ee8f2375efabf6783230fa3cb425a263cafa60ed
 ARG EMC2_TARBALL=
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -67,7 +70,7 @@ RUN set -e; mkdir -p /opt/emc2/lib; \
       printf '%s tarball %s sha256 %s\n' "${EMC2_SHA}" "${EMC2_TARBALL}" \
         "$(sha256sum "/opt/emc2/in/${EMC2_TARBALL}" | cut -d' ' -f1)" > /opt/emc2/EMC2_SHA.txt; \
     else \
-      git clone --quiet https://github.com/ampl-psych/EMC2 /opt/emc2/src; \
+      git clone --quiet "${EMC2_REPO}" /opt/emc2/src; \
       git -C /opt/emc2/src checkout --quiet "${EMC2_SHA}"; \
       git -C /opt/emc2/src rev-parse HEAD > /opt/emc2/EMC2_SHA.txt; \
     fi; \
@@ -79,9 +82,9 @@ RUN set -e; mkdir -p /opt/emc2/lib; \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_LINK_MODE=copy
 
-# the package and the reference exports its tests read (REPO/handover/nle-methods/port/export)
+# the package and the reference exports its tests read (REPO/nleCards)
 COPY nleflow /opt/nle/nleflow
-COPY handover/nle-methods/port/export /opt/nle/handover/nle-methods/port/export
+COPY nleCards /opt/nle/nleCards
 WORKDIR /opt/nle/nleflow
 RUN rm -rf /opt/nle/nleflow/docker/emc2 && uv sync --frozen --group dev
 
