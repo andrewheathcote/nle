@@ -8,7 +8,8 @@ both. Every step below has one check. Commands run from `nleflow/` unless said.
 Order: R and EMC2 first, then the verification command, then Python.
 
 **Which EMC2.** The steps use the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for
-access). It contains the neural-likelihood code and reads a card's `fixed` field
+access), once `main` contains the branch `vignette-ddmnle`; until it does, use that branch
+(`git clone -b vignette-ddmnle`). It contains the neural-likelihood code and reads a card's `fixed` field
 ([START_HERE.md](../START_HERE.md), "Known limits").
 
 ## 1. R >= 4.5 and EMC2
@@ -24,7 +25,7 @@ and a JSON card still registers, but use 4.5 or later.
 4. EMC2 from https://github.com/andrewheathcote/DMC2, into a dedicated library:
 
    ```sh
-   git clone https://github.com/andrewheathcote/DMC2 EMC2
+   git clone -b vignette-ddmnle https://github.com/andrewheathcote/DMC2 EMC2   # drop -b once main has it
    mkdir -p ~/R/nle-lib
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib EMC2
    ```
@@ -143,6 +144,14 @@ shipped DDMnle card instead):
 | OpenBLAS, `OPENBLAS_NUM_THREADS=1` | 10.1 s | 23.0 s |
 | Mac, Accelerate (native) | 5.9 s | 23.2 s |
 
-The posterior tables on the two BLAS agree to 4e-15. CI
+The posterior tables on the two BLAS agree to 4e-15.
+
+**Rebuilt 2026-10-25** from the tarball of the DMC2 branch `vignette-ddmnle` (6d3f99db, R 4.6.1, same VM):
+`nle-verify` passes on the three shipped cards, `pytest` gives 67 passed and 1 skipped (R `arrow` is not in the
+image), and `emc2-tests` gives 5306 passed / 3 failed / 11 skipped. The three failures are two tests that
+compare with values written on the Mac: `test-ddm-precision.R` (the default-precision likelihood differs from
+the stored vector in the last bit of one trial, 1.8e-15, a libm difference) and `test-mtlnr.R` (its snapshot
+records the Mac's C++ random-number format, `libc++`, where Linux has `libstdc++`). The Mac, against the same
+branch, gives `pytest` 68 passed, and `run_smoke.sh`, `lan_in/run.sh` and `onnx_use/run.sh` pass from a fresh clone. CI
 (`.github/workflows/nleflow.yml`) builds the default image on x86_64 on every push to
 `nleflow-plan` and runs `nle-verify` and `pytest`.

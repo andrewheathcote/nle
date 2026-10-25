@@ -32,8 +32,10 @@ EMC2's vignette "Neural likelihoods").
 Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.md). In short:
 
 1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
-   That is the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for access):
-   `git clone https://github.com/andrewheathcote/DMC2`. It reads a card's `fixed` field and ships the cards listed below.
+   That is the EMC2 on the `main` branch of https://github.com/andrewheathcote/DMC2 (private; ask for access),
+   once `main` contains the branch `vignette-ddmnle`; until it does, install that branch:
+   `git clone -b vignette-ddmnle https://github.com/andrewheathcote/DMC2`. It reads a card's `fixed` field,
+   ships the cards listed below and has the vignette "Using a trained flow".
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>
    export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null     # always both (a second EMC2 can shadow yours)
@@ -119,6 +121,10 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
   and neural likelihoods alike; `make_emc()` warns when a neural-likelihood design
   samples t0 at a coarser resolution. Use a coarser resolution only if you know your RTs
   carry the noise it corrects, and match it to that noise.
+- **`DDM_precision()` exists.** The analytic DDM's WienR precision defaults to 5e-3, which is up to 0.04 off
+  in the log density with sv, SZ and st0 all free; `DDM_precision(1e-8)` is the model to compare a card with.
+- **`RTCONnn()` is the way to use the RTCON2 card.** `register_nn_model()` on that card alone errors, as it has
+  no analytic twin to take the parameterisation from; `RTCONnn()` supplies it.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.
   Screen several checkpoints of a run (`nleflow steps`, then EMC2's score-bias check)
   before adopting one, as DDMnle and the RDM card were.
