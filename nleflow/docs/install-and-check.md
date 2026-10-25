@@ -132,8 +132,9 @@ relative. The reference and OpenBLAS builds agree with each other to 1.8e-15, so
 Mac-to-Linux difference comes from the compiler and libm, not the BLAS. In the image,
 [TUTORIAL.md](../TUTORIAL.md) takes 243 s (Mac 208 s; simulation 52 s, training 163 s,
 the rest 29 s) with every check as the page says; `pytest` gives 67 passed in 66 s;
-`run_smoke.sh` takes 57 s; `lan_in` and `onnx_use` pass. The fits of EMC2's vignette
-"Using a trained flow" (`inst/scripts/using_a_trained_flow_data.R`, 3 chains x 2 cores):
+`run_smoke.sh` takes 57 s; `lan_in` and `onnx_use` pass. The fits of the earlier version of EMC2's vignette
+"Using a trained flow" (a card fitted against the analytic DDM, 3 chains x 2 cores; the current vignette fits the
+shipped DDMnle card instead):
 
 | BLAS | card fit | analytic DDM fit |
 |---|---|---|

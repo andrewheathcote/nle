@@ -84,7 +84,7 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `nleflow/examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` |
+| use the shipped cards in EMC2: specify the RDM and RTCON2 models, and fit one participant with DDMnle against the standard DDM and a 1e-8 DDM (prior in the box, rt resolution, checks) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` (reruns the fits) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | `nleflow/examples/<name>/check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
