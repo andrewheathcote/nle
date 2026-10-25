@@ -37,7 +37,7 @@ uv run --project ../.. nleflow onnx-check $E/ddmnle_smoke_e1_shared.onnx $E/ddmn
 ```
 
 For a `flow_joint` card (`examples/ddm_svst0/`) the cases are the card's own inputs on the
-stored scale with `rt`, `choice` and `logp`, written by that example's `check_in_emc2.R`; the
+stored scale with `rt`, `choice` and `logp`, written by that example's `check_in_emc2.R` (`nleflow/examples/ddm_svst0/check_in_emc2.R`); the
 check is one `EMC2 cases (the card's inputs)` line against 1e-10.
 
 Check: two more `PASS` lines, `EMC2 cases, st0 = 0 (a density)` against 1e-10 and `EMC2 cases,

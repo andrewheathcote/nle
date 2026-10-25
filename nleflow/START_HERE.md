@@ -7,7 +7,7 @@ card in EMC2 and in ONNX: [TUTORIAL.md](TUTORIAL.md).
 ## What nleflow is
 
 A Python package (JAX) that trains a **neural likelihood** for an evidence-accumulation
-model from a short model specification (`spec.yaml`) and a simulator you write (R or
+model from a short model specification (a `spec.yaml`; the worked ones are `nleflow/examples/<name>/spec.yaml`) and a simulator you write (R or
 Python), and exports it as a **card**: one JSON file with the weights, the input
 transforms, the training box and golden vectors. EMC2 loads a card with
 `register_nn_model()` and uses it like any other model (design, prior, fit, SBC); the
@@ -43,6 +43,7 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
    against its golden vectors, and any card you name):
    ```sh
    Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' [card.json ...]
+   # nle_verify.R is part of the installed EMC2 (inst/scripts/); system.file finds it
    ```
    Check: one `PASS` line per card and `all checks passed`.
 4. **The tests**: `R_PROFILE_USER=/dev/null uv run pytest -rs` in `nleflow/`; set
@@ -80,11 +81,11 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
 
 | to do this | read | run |
 |---|---|---|
-| the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `examples/ddm_svst0/run_smoke.sh` |
+| the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `nleflow/examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
 | fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` |
-| export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | each example's `check_in_emc2.R` |
+| export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | `nleflow/examples/<name>/check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
 | bring a published LAN into EMC2 | [docs/lan-in.md](docs/lan-in.md) | `examples/lan_in/run.sh` |

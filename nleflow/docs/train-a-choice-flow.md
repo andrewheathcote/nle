@@ -14,7 +14,7 @@ exact choice probabilities); `arrow` for parquet, else CSV
 
 ```sh
 export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
-cd examples/ddmnle
+cd examples/ddmnle     # from nleflow/; spec_smoke.yaml is nleflow/examples/ddmnle/spec_smoke.yaml
 uv run --project ../.. nleflow simulate spec_smoke.yaml   # data_smoke/{train,val,choice}
 uv run --project ../.. nleflow train    spec_smoke.yaml   # the flow, then the classifier
 ```
@@ -41,6 +41,6 @@ not retrained here: the committed card `ddm_sc_s1106_e245` is the reference the 
 The DDM's own eight-parameter flows (`flow_joint` cards, no `scaling`) are the same path
 without the scaling block: `examples/ddm_svst0/` trains one with sv and st0 free and s = 1,
 SZ = 0 held fixed (the spec's `fixed`, recorded in the card for `register_nn_model(...,
-exceptions = ...)`); its `run_smoke.sh` runs the whole chain with one check per step.
+exceptions = ...)`); its `examples/ddm_svst0/run_smoke.sh` runs the whole chain with one check per step.
 
 Next: [export and check a card](export-and-check-a-card.md).

@@ -36,6 +36,9 @@ A LAN has no analytic twin in its own parameterisation, so it registers with def
 for its parameters (`p_types`). The converter writes the preset's into the card, where
 `nle_verify.R` reads them; `register_nn_model()` takes them as an argument:
 
+The card is the file `lan_ddm_uniform_st_weights.json` that `nleflow/examples/lan_in/run.sh`
+writes to `nleflow/examples/lan_in/out/`; run these from that folder:
+
 ```sh
 export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
 Rscript -e 'library(EMC2); f <- "lan_ddm_uniform_st_weights.json"

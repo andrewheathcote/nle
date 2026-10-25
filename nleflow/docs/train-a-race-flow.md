@@ -12,7 +12,7 @@ the data and 2 epochs, a pipeline check and not a fit.
 
 ```sh
 export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
-cd examples/rdm_a0
+cd examples/rdm_a0     # from nleflow/; spec_smoke.yaml is nleflow/examples/rdm_a0/spec_smoke.yaml
 uv run --project ../.. nleflow spec     spec_smoke.yaml   # the spec, resolved
 uv run --project ../.. nleflow simulate spec_smoke.yaml   # data_smoke/{train,val}
 uv run --project ../.. nleflow train    spec_smoke.yaml   # runs/rdm_a0_smoke/
@@ -28,7 +28,7 @@ Checks, in order:
 | `train` | one `epoch n/2  train ...  val ...` line per epoch, then `flow done` |
 | `steps` | `step 1: val_loss ... (best)` |
 
-The recipe of the full run is `spec.yaml` (24 000 000 rows, 300 epochs); the spec's keys
+The recipe of the full run is `examples/rdm_a0/spec.yaml` (24 000 000 rows, 300 epochs); the spec's keys
 are documented in `src/nleflow/spec.py` and in the README ("The spec"). Training is the NLE
 project's `train_race.py`: the zero-box encoding computed in float64 from the stored value,
 the context standardised by the training moments (`scaler.json` in the run), the spline

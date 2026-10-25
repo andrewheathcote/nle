@@ -6,15 +6,15 @@ EMC2's DDM with drift and non-decision-time variability, check it, use it in EMC
 export it to ONNX and use it from Python; then bring a published LAN into EMC2. The
 network is trained on 10 % of the full recipe's data for 10 epochs: enough to see
 every step work, not a card to fit data with (the full recipe is
-`examples/ddm_svst0/run_full.sh`, about 7 h).
+`nleflow/examples/ddm_svst0/run_full.sh`, about 7 h).
 
 Every step prints a check line; this page shows what to expect. Before you start,
 do [install and check](docs/install-and-check.md) (EMC2 in a library of its own, `uv
 sync`), or read [START_HERE.md](START_HERE.md).
 
-## 0. Where you are (1 minute)
+## 0. Where you are
 
-From the repository root:
+From the root of the unpacked folder (the one that holds `nleflow/` and `nleCards/`):
 
 ```sh
 export NLE=$PWD/nleflow
@@ -25,12 +25,18 @@ mkdir -p ~/nle-tutorial && cd ~/nle-tutorial
 cp $NLE/examples/ddm_svst0/{spec_smoke.yaml,simulate.R,check_simulator.R,check_in_emc2.R} .
 ```
 
+The `cp` line copies four files from `nleflow/examples/ddm_svst0/` into your working
+folder `~/nle-tutorial`; every file name below (`spec_smoke.yaml`, `simulate.R`,
+`check_simulator.R`, `check_in_emc2.R`) means that copy, and the commands in steps 1 to 6
+run from `~/nle-tutorial`.
+
 `R_PROFILE_USER=/dev/null` and `R_LIBS` matter: a second EMC2 elsewhere on your R
 path can be picked up instead of yours.
 
-## 1. The spec (5 minutes reading)
+## 1. The spec
 
-Open `spec_smoke.yaml`. A spec is everything nleflow needs to know about a model:
+Open `spec_smoke.yaml` (in `~/nle-tutorial`, copied from
+`nleflow/examples/ddm_svst0/spec_smoke.yaml`; the full recipe's `spec.yaml` is beside it). A spec is everything nleflow needs to know about a model:
 
 - `model: DDM` names EMC2's analytic twin; `response: choice` makes this a choice
   flow (rt given the response, plus a classifier for P(response)).
@@ -42,7 +48,7 @@ Open `spec_smoke.yaml`. A spec is everything nleflow needs to know about a model
 - `sampling` and `regimes` say how draws fill the box (here 30 % of draws have
   `sv = 0` exactly, 30 % `st0 = 0`).
 - `spline`, `conditioner`, `classifier` and `training` are the network and its
-  schedule; `simulator` is the command that writes the data (`simulate.R`, which
+  schedule; `simulator` is the command that writes the data (`simulate.R` in `~/nle-tutorial`, which
   uses EMC2's DDM and WienR).
 
 Make it yours: a new name, a narrower drift box, 10 % of the data, 10 epochs.
@@ -58,12 +64,12 @@ $NF spec my_ddm.yaml > resolved.json && echo "my_ddm.yaml validates"
 grep -E '"name"|rows"|"epochs"' resolved.json; grep -A3 '"box_natural"' resolved.json
 ```
 
-Check: `my_ddm.yaml validates`; then, from the spec resolved as JSON, `"name":
+Check: `my_ddm.yaml validates` (the new file is `~/nle-tutorial/my_ddm.yaml`; steps 2 to 4 write `data/`, `runs/my_ddm/` and `cases.csv` there too); then, from the spec resolved as JSON, `"name":
 "my_ddm"`, the four row counts, `"epochs": 10` (the flow; the classifier keeps its
 194) and the `v` box `-4.0, 4.0`. A mistake stops `nleflow spec` with a message
 naming the field.
 
-## 2. Data (1 minute)
+## 2. Data
 
 ```sh
 $NF simulate --cores 8 my_ddm.yaml
@@ -77,7 +83,7 @@ per regime and response, and the `ll` column against `dWDM` to about 1e-5. This
 tests your simulator, not the network: if the PIT is not uniform, the data are not
 the model.
 
-## 3. Train (2 minutes)
+## 3. Train
 
 ```sh
 $NF train --cores 8 my_ddm.yaml
@@ -88,7 +94,7 @@ Check: ten `epoch` lines with the validation loss falling, `flow done`, then the
 classifier's lines ending `classifier done: val mean |err| ...`; `steps` lists the
 three kept checkpoints and marks the best.
 
-## 4. Export the card (10 seconds)
+## 4. Export the card
 
 ```sh
 $NF export runs/my_ddm
@@ -101,7 +107,7 @@ by the reference port of EMC2's code, reproduces the trained network — and thr
 network's own log densities at fixed points, which every consumer must reproduce)
 and intermediates. The card is the one file EMC2 needs.
 
-## 5. In EMC2 (under a minute)
+## 5. In EMC2
 
 The one verification command, on your card alone:
 
@@ -125,7 +131,7 @@ design_my <- design(factors = list(subjects = 1, S = c("left", "right")), Rlevel
 ```
 
 (`twin = DDM` lets EMC2 compare the card with the analytic DDM.) Then the example's
-check, which does that through a design and per trial against WienR:
+check, `check_in_emc2.R` (in `~/nle-tutorial`), which does that through a design and per trial against WienR:
 
 ```sh
 Rscript check_in_emc2.R $CARD data/val cases.csv
@@ -143,12 +149,12 @@ When you sample with this design, set `rt_resolution = 1/1000` in `make_emc()`
 check calibration before trusting a posterior: `nn_cell()`, `nn_score_bias()`,
 `run_sbc()` in EMC2's vignette "Neural likelihoods".
 
-## 6. In ONNX (10 seconds)
+## 6. In ONNX
 
 ```sh
 $NF onnx $CARD
 for s in trialwise shared; do $NF onnx-check ${CARD%_weights.json}_$s.onnx $CARD --cases cases.csv; done
-uv run --project $NLE python $NLE/examples/onnx_use/use_onnx.py $CARD
+uv run --project $NLE python $NLE/examples/onnx_use/use_onnx.py $CARD   # nleflow/examples/onnx_use/use_onnx.py
 ```
 
 Check: two `wrote` lines (`_trialwise.onnx`, a parameter vector per trial;
@@ -160,10 +166,10 @@ trained card), the golden rows `PASS` with both graphs, and the time per trial.
 [examples/onnx_use](examples/onnx_use/README.md) explains the stored scale the graph
 takes and shows the full card's numbers.
 
-## 7. A published LAN into EMC2 (5 seconds and a 1 MB download)
+## 7. A published LAN into EMC2
 
 ```sh
-$NLE/examples/lan_in/run.sh
+$NLE/examples/lan_in/run.sh      # nleflow/examples/lan_in/run.sh
 ```
 
 Check: the download's sha256, the preset's two known versions, `PASS` for the
@@ -175,7 +181,7 @@ worse. [examples/lan_in](examples/lan_in/README.md) reads the output.
 ## Next
 
 - The full recipe for this model and its gates: [examples/ddm_svst0](examples/ddm_svst0/README.md)
-  (`run_full.sh`, `gate_full.sh`).
+  (`nleflow/examples/ddm_svst0/run_full.sh` and `gate_full.sh`).
 - Your own model: [train a choice flow](docs/train-a-choice-flow.md) or [a race
   flow](docs/train-a-race-flow.md); the simulator contract is in [README.md](README.md).
 - Several checkpoints, not one: a flow varies by seed and by checkpoint as much as by
