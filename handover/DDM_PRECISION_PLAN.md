@@ -1,6 +1,6 @@
 # Plan: user control of the DDM likelihood precision in DMC2
 
-Status: plan only, nothing implemented (2026-10-25). Written against DMC2 `main` ee8f2375.
+Status: P1 done 2026-10-25 on branch `ddm-precision` (worktree `~/Downloads/julian/fresh-check/DMC2-precision`, from upstream/dev 4f1fa123, local, not pushed); results in section 11. Plan written against DMC2 `main` ee8f2375.
 
 ## 1. Why
 
@@ -125,7 +125,50 @@ side, then the C++ side. 3. Suite on the `upstream/dev` branch; merge into `main
 (`?DDM`, `NEWS_DMC2.md`). 5. Then the vignette work: update `using-a-trained-flow` to follow AH's example, and the
 new single-participant DDMnle vignette with the 1e-8 comparison as a real fit, not a reweighting.
 
-## 10. Next stage prompt
 
-See the end of the session that wrote this file; the prompt is for stage P1 (sections 6 and 5.1-5.2) and is
-reproduced there.
+## 11. P1 results (2026-10-25, AH's Mac, one thread, upstream/dev 4f1fa123 plus the change)
+
+Script: `inst/scripts/ddm_precision_study.R` on the branch (reference = the R path at `precision = 1e-12`;
+compiled = the real likelihood through `calc_ll_manager`, trial-wise; densities below 1e-10 masked, the likelihood's
+floor). 4 parameter sets (v = -1.5 and 1.2, a = 0.8 and 1.6, t0 = .25, Z = .5, s = 1) x 240 rts from t0 + 0.03 s to
+t0 + 3 s, both responses. Variability cases: sv = .8, SZ = .3, st0 = .1 where non-zero.
+
+**Max |difference in log density| against the 1e-12 reference, compiled path** (the R path gives the same to two
+digits wherever it is above 1e-9: the compiled code is a port of the same algorithm):
+
+| precision | none | sv | SZ | st0 | sv + st0 | all three |
+|---|---|---|---|---|---|---|
+| 5e-3 (default) | 9.2e-4 | 7.7e-4 | 3.4e-4 | 6.0e-4 | 6.6e-6 | **3.8e-2** |
+| 1e-4 | 3.9e-6 | 3.9e-6 | 1.5e-7 | 6.0e-6 | 6.2e-6 | 3.0e-3 |
+| 1e-6 | 8.3e-9 | 1.2e-9 | 3.3e-10 | 4.0e-9 | 4.0e-9 | 2.4e-5 |
+| 1e-8 | 2.2e-11 | 2.2e-11 | 1.2e-11 | 9.4e-11 | 9.4e-11 | **1.6e-7** |
+| 1e-10 | 2.2e-11 | 2.2e-11 | 1.2e-11 | 3.2e-11 | 3.2e-11 | 1.1e-8 |
+
+(2e-11 in the first rows is the floor of the comparison: both sides are summed series in double precision.)
+
+**Time per density, compiled, microseconds**:
+
+| precision | none | sv + st0 | all three |
+|---|---|---|---|
+| 5e-3 | 0.28 | 1.1 | 2.5 |
+| 1e-6 | 0.27 | 1.3 | 7.6 |
+| 1e-8 | 0.28 | 1.4 | 25 |
+| 1e-10 | 0.28 | 1.5 | 60 |
+
+Findings. (1) At the default, the log density is wrong by up to 0.04 when sv, SZ and st0 are all free, and by
+about 1e-3 otherwise. The default is a speed setting, not the exact likelihood. (2) The error falls steadily with
+the precision in every case; `precision = 1e-8` gives errors of about 1e-10 without the double integral and 1.6e-7
+with all three variabilities (the integrals' tolerance is split between three dimensions, so the delivered error is
+larger than the requested one: do not read `precision` as the error of the log density in that case). (3) Cost: the
+cases without a cubature do not change; the three-variability case costs 10 times more at 1e-8 and 24 times more at
+1e-10 than at the default. A fit at 1e-8 is slow, not impossible. (4) Not checked: whether the 6000-evaluation cap
+`DDM_NEVAL` is reached for the all-three case at 1e-10 (the error there is 1.1e-8, which may be the cap or the
+reference's own limit); the validation range of `precision` was set to 1e-12 .. 0.1 on the strength of this study
+and should be tightened if the cap turns out to bind.
+
+**Implementation status.** R: `DDM(precision = 5e-3)`, `DDM_precision()` (exported), `dfun/pfun/rfun` use it.
+C++: `DdmEps` in `model_DDM.cpp`; `my_params` carries eps, log eps and log inner eps; `RaceSpec::ddm_eps` set in
+`particle_ll.cpp` from a new trailing argument of `LikelihoodContext`, `calc_ll` and `calc_ll_multithreaded`
+(default 5e-3); the native sampler reads `model$precision` (`src/sampler/likelihood.cpp`). Tests:
+`tests/testthat/test-ddm-precision.R` (6 groups; the twin test skips on upstream/dev, which has no shipped card)
+with the pre-change default pinned by `fixtures/ddm_precision_default.rds` (`expect_identical`).
