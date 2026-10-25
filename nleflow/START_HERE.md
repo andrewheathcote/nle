@@ -68,12 +68,15 @@ The cards are in `nleCards/` at the root of this folder, each as
 | `ddm_z0_s503_e282` | DDM, eight-parameter flow (earlier network) | `flow_joint` | no | used by the ONNX tests only |
 | `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | no | `examples/lan_in` converts the current file |
 | `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | yes (only there) | not an nleflow example |
+| `crdm_aff_log_h2_k12_clip_100k_dt0.0005` (CRDMnn) | conflict racing diffusion model (CRDM), A = 0 | `flow_race` | yes (only there) | Lüken's flow; not an nleflow example |
 
-**Why a card can be in both places.** EMC2 ships three cards in `inst/extdata/flownn/`:
+**Why a card can be in both places.** EMC2 ships four cards in `inst/extdata/flownn/`:
 `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability
-cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow) and `rtcon2_r3_s2_e006_weights.json`
-(RTCONnn). They load through `register_nn_model()` or the `DDMnn()`, `RDMnn()` and
-`RTCONnn()` model functions (`DDMnn()` defaults to the DDMnle card). `nleCards/` holds
+cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow), `rtcon2_r3_s2_e006_weights.json`
+(RTCONnn) and `crdm_aff_log_h2_k12_clip_100k_dt0.0005_weights.json` (CRDMnn, the conflict
+racing diffusion model as a hybrid race: the Wald where the pulse is exactly 0, the flow
+elsewhere). They load through `register_nn_model()` or the `DDMnn()`, `RDMnn()`, `RTCONnn()`
+and `CRDMnn()` model functions (`DDMnn()` defaults to the DDMnle card). `nleCards/` holds
 byte-identical copies of the first two so that nleflow's tests and examples run without
 EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not ship.
 `nleCards/SHA256SUMS` lets you check that a copy still matches EMC2's.
@@ -120,8 +123,9 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
   and neural likelihoods alike; `make_emc()` warns when a neural-likelihood design
   samples t0 at a coarser resolution. Use a coarser resolution only if you know your RTs
   carry the noise it corrects, and match it to that noise.
-- **`DDM_precision()` exists.** The analytic DDM's WienR precision defaults to 5e-3, which is up to 0.04 off
-  in the log density with sv, SZ and st0 all free; `DDM_precision(1e-8)` is the model to compare a card with.
+- **The analytic DDM's precision is a speed setting.** WienR's precision defaults to 5e-3, which is up to 0.04
+  off in the log density with sv, SZ and st0 all free; `design(model = DDM(precision = 1e-8), ...)` is the
+  model to compare a card with (`design()` takes a model list, so models with options go in directly).
 - **`RTCONnn()` is the way to use the RTCON2 card.** `register_nn_model()` on that card alone errors, as it has
   no analytic twin to take the parameterisation from; `RTCONnn()` supplies it.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.

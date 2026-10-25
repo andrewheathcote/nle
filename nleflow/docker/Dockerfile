@@ -28,7 +28,7 @@
 FROM ubuntu:24.04
 
 ARG EMC2_REPO=https://github.com/andrewheathcote/DMC2
-ARG EMC2_SHA=6d3f99db42b47b8ac2a0edddc0fd2c5a42ae0788
+ARG EMC2_SHA=ee3167d79783e2545f49407e3284badde3035587
 ARG EMC2_TARBALL=
 ARG DEBIAN_FRONTEND=noninteractive
 
