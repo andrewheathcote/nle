@@ -8,6 +8,10 @@ the card's evaluator. Needs the Python environment, R with EMC2 (neural-likeliho
 exact choice probabilities); `arrow` for parquet, else CSV
 ([install and check](install-and-check.md)). The smoke spec is 1 % of the data and 2 epochs.
 
+**Training resolution.** Train on response times at full precision: do not floor or round them
+(the example simulator writes them unrounded). The shipped cards were trained and validated at
+1 ms or finer, and we recommend `rt_resolution = 1/1000` when sampling (START_HERE, "rt resolution").
+
 ```sh
 export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
 cd examples/ddmnle

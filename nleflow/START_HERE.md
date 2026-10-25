@@ -105,12 +105,21 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
 - **Priors inside the training box.** A network returns its floor outside the box it
   was trained on, which truncates a posterior there; `nn_cell()` and `run_sbc()` refuse
   a prior whose mean ± 4 sd leaves it (`nn_in_box()`).
-- **rt resolution.** When t0 is sampled, set `rt_resolution = 1/1000` (or finer) in
-  `make_emc()`: EMC2's default 1/60 floors the response times and biases t0 by about
-  −1.9 posterior sd at N = 100, for the analytic likelihood too; `make_emc()` warns
-  when a neural-likelihood design does this.
+- **rt resolution: use 1/1000 or finer, and train at full precision.** Our recommendation
+  is `rt_resolution = 1/1000` in `make_emc()`, which matches the resolution the shipped
+  cards were trained and validated at. When you train a new network, keep the training
+  response times at full precision: do not floor or round them (the example simulators
+  write them unrounded), and validate the card at 1 ms or finer. At sampling time, the
+  default `rt_resolution = 1/60` floors each RT to a 1/60 s grid. That removes the
+  average delay a 60 Hz display adds to real data (Stevenson et al., "Throw your
+  response times in the bin"), but on data without such a delay, such as simulations or
+  recordings accurate to 1 ms, it shifts t0 down by about 8 ms (about −1.3 posterior sd
+  at N = 100). The bias is in the data, not in the likelihood, so it holds for analytic
+  and neural likelihoods alike; `make_emc()` warns when a neural-likelihood design
+  samples t0 at a coarser resolution. Use a coarser resolution only if you know your RTs
+  carry the noise it corrects, and match it to that noise.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.
   Screen several checkpoints of a run (`nleflow steps`, then EMC2's score-bias check)
-  before adopting one, as DDMnle and the RDM card were (the plan's sections 2 and 3).
+  before adopting one, as DDMnle and the RDM card were.
 - **Laptop runs at <= 8 cores.** `nleflow train` uses `min(8, cores)` threads; a full
   recipe (24 M rows, 300 epochs) is about 7 h on an Apple M2 Max.

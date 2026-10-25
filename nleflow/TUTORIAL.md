@@ -139,7 +139,7 @@ trial on 1e5 held-out rows (`mean log p - log q` is the KL estimate; after 10 ep
 full card); `wrote cases.csv` (EMC2's evaluation of the card, the ONNX reference).
 
 When you sample with this design, set `rt_resolution = 1/1000` in `make_emc()`
-(EMC2's default 1/60 biases t0), keep the prior inside the box (`nn_in_box()`), and
+(EMC2's default 1/60 floors the RTs; see START_HERE's note on rt resolution), keep the prior inside the box (`nn_in_box()`), and
 check calibration before trusting a posterior: `nn_cell()`, `nn_score_bias()`,
 `run_sbc()` in EMC2's vignette "Neural likelihoods".
 
