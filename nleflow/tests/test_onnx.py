@@ -1,4 +1,4 @@
-"""The ONNX export (M2): the graph of the committed DDMnle card reproduces
+"""The ONNX export (M2): the graph of the committed scaled DDM card reproduces
 its golden rows in both signatures, the eight-parameter graph reproduces
 the z0 card's golden rows, and (with NLEFLOW_EMC2_LIB) the scaled graph
 agrees with EMC2's evaluation over prior draws in the six regimes of

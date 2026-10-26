@@ -30,7 +30,7 @@ form written into the run directory as spec.json.
     mass_tolerance: 1e-3
     validation: {}
 
-A choice model (the scaled DDM, DDMnle) differs in these keys:
+A choice model (the scaled DDM card) differs in these keys:
 
     response: choice
     context: [kappa, eta, Z, SZ]
@@ -51,7 +51,7 @@ A choice model (the scaled DDM, DDMnle) differs in these keys:
 
 The flow of a choice model is conditioned on (context, R) and the classifier
 maps the context to the logit of P(R = 2), trained on exact probabilities
-(retrain_classifier.py's `big` configuration, the DDMnle recipe).
+(retrain_classifier.py's `big` configuration, the scaled DDM card's recipe).
 """
 from __future__ import annotations
 

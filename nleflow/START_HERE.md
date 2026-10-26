@@ -20,7 +20,7 @@ Two kinds of network are trained:
 | path | what it learns | card kind | worked example |
 |---|---|---|---|
 | race | the density of each accumulator's finishing time; EMC2 combines them | `flow_race` | `examples/rdm_a0`, `examples/lba` |
-| choice | rt given the response (a spline flow) and P(response) (a classifier) | `flow_joint`, `flow_scaled` | `examples/ddm_svst0`, `examples/ddmnle` |
+| choice | rt given the response (a spline flow) and P(response) (a classifier) | `flow_joint`, `flow_scaled` | `examples/ddm_svst0`, `examples/ddm_scaled` |
 
 **What it is not.** It does not fit models (EMC2 does), it does not train LANs (it
 converts them), and a card that passes every check here is still not shown to give
@@ -48,8 +48,8 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
    ```
    Check: one `PASS` line per card and `all checks passed`.
 4. **The tests**: `R_PROFILE_USER=/dev/null uv run pytest -rs` in `nleflow/`; set
-   `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies), `NLEFLOW_RLIB`
-   and `NLEFLOW_EMC2_SRC` (an EMC2 source tree) to turn on the R cases.
+   `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies) and `NLEFLOW_RLIB`
+   to turn on the R cases.
 5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from the repository above or from a source tarball, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
 
 ## Where the cards are
@@ -61,7 +61,7 @@ The cards are in `nleCards/` at the root of this folder, each as
 | card | model | kind | in EMC2 | notes |
 |---|---|---|---|---|
 | `ddm_svst0_e<N>` | DDM with sv and st0 free, s = 1, SZ = 0 fixed | `flow_joint` | no | `examples/ddm_svst0`; its README has the gates |
-| `ddm_sc_s1106_e245` | the full DDM, scaled (DDMnle) | `flow_scaled` | yes, identical | the adopted DDM network; `examples/ddmnle` |
+| `ddm_sc_s1106_e245` | the full DDM, scaled (the scaled DDM card, EMC2's `DDMnn()`) | `flow_scaled` | yes, identical | the adopted DDM network; `examples/ddm_scaled` |
 | `lba_e299` | LBA | `flow_race` | no | `examples/lba` |
 | `rdm_ss_base_s801_e271` | RDM, A = 0 | `flow_race` | yes, identical | `examples/rdm_a0` |
 | `rdm_rdm_small_e195` | RDM, small | `flow_race` | no | used by the golden-vector tests |
@@ -71,12 +71,12 @@ The cards are in `nleCards/` at the root of this folder, each as
 | `crdm_aff_log_h2_k12_clip_100k_dt0.0005` (CRDMnn) | conflict racing diffusion model (CRDM), A = 0 | `flow_race` | yes (only there) | Lüken's flow; not an nleflow example |
 
 **Why a card can be in both places.** EMC2 ships four cards in `inst/extdata/flownn/`:
-`ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability
+`ddm_sc_s1106_e245_weights.json` (the scaled DDM card, one DDM flow covering all variability
 cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow), `rtcon2_r3_s2_e006_weights.json`
 (RTCONnn) and `crdm_aff_log_h2_k12_clip_100k_dt0.0005_weights.json` (CRDMnn, the conflict
 racing diffusion model as a hybrid race: the Wald where the pulse is exactly 0, the flow
 elsewhere). They load through `register_nn_model()` or the `DDMnn()`, `RDMnn()`, `RTCONnn()`
-and `CRDMnn()` model functions (`DDMnn()` defaults to the DDMnle card). `nleCards/` holds
+and `CRDMnn()` model functions (`DDMnn()` defaults to the scaled DDM card). `nleCards/` holds
 byte-identical copies of the first two so that nleflow's tests and examples run without
 EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not ship.
 `nleCards/SHA256SUMS` lets you check that a copy still matches EMC2's.
@@ -86,9 +86,9 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
 | to do this | read | run |
 |---|---|---|
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `nleflow/examples/ddm_svst0/run_smoke.sh` |
-| train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
+| train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddm_scaled` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| use the shipped cards in EMC2: specify the RDM, CRDM and RTCON2 models, and fit one participant with DDMnle (`DDMnn()`) against the standard DDM and the precise DDM, `DDM(precision = 1e-8)` (prior in the box, rt resolution, checks) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` (reruns the fits) |
+| use the shipped cards in EMC2: specify the RDM, CRDM and RTCON2 models, and fit one participant with the scaled DDM card (`DDMnn()`) against the standard DDM and the precise DDM, `DDM(precision = 1e-8)` (prior in the box, rt resolution, checks) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` (reruns the fits) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | `nleflow/examples/<name>/check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
@@ -133,6 +133,6 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
   `run_control = FALSE`.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.
   Screen several checkpoints of a run (`nleflow steps`, then EMC2's score-bias check)
-  before adopting one, as DDMnle and the RDM card were.
+  before adopting one, as the scaled DDM card and the RDM card were.
 - **Laptop runs at <= 8 cores.** `nleflow train` uses `min(8, cores)` threads; a full
   recipe (24 M rows, 300 epochs) is about 7 h on an Apple M2 Max.

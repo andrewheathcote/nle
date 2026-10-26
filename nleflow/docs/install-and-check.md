@@ -68,22 +68,20 @@ change).
 
 ```sh
 export NLEFLOW_EMC2_LIB=$HOME/R/nle-lib NLEFLOW_RLIB=$HOME/R/nle-lib
-export NLEFLOW_EMC2_SRC=/path/to/EMC2        # EMC2's source tree; default ../EMC2 beside the nle repo
 R_PROFILE_USER=/dev/null uv run pytest -rs
 ```
 
-Check: no failures. Without the three variables the R-dependent cases skip and say why
-(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 (DMC2 main)) turns on the cases that
-register cards in R and compare the ONNX graph with EMC2, `NLEFLOW_RLIB` the R simulator
-cases, and `NLEFLOW_EMC2_SRC` the cases that compare the converted LAN with the LAN card
-and onnxruntime rows EMC2's own tests hold (`tests/testthat/golden/`). The published LAN
-and the other reference files the tests read are in `nleCards/`.
+Check: no failures (68 passed). Without the two variables the R-dependent cases skip and
+say why (`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 (DMC2 main)) turns on the cases
+that register cards in R and compare the ONNX graph with EMC2, `NLEFLOW_RLIB` the R
+simulator cases. The published LAN, the LAN card and onnxruntime values EMC2's own tests
+hold, and the other reference files the tests read are in `nleCards/`.
 
 Golden and ONNX comparisons are bounded per row by 1e-12 plus a multiple of the
 rounding error of the spline knots over the width of the bin holding the point
 (`tests/test_golden.py`, `tests/test_onnx.py`): the two narrowest bins (1e-4) amplify
 the last bit of a matrix product, so the same card differs across BLAS libraries there.
-The golden file of DDMnle differs from this machine's output by up to 3.6e-11 on x86_64
+The golden file of the scaled DDM card differs from this machine's output by up to 3.6e-11 on x86_64
 OpenBLAS and 1.8e-11 on Apple Accelerate, only where z lies in the top bin.
 
 ## 4. The container (no local R or Python needed)
@@ -119,39 +117,35 @@ card's fit is faster on OpenBLAS (the flows are matrix products); the analytic D
 affected. Use `OPENBLAS_NUM_THREADS=1` when the chains run in parallel.
 
 **Measured** (AH's Mac, Apple M2 Max, colima VM with 8 CPUs and 24 GB, linux/arm64;
-2026-10-22, EMC2 (DMC2 main) 9f2801b2 from its tarball, R 4.6.1): the image builds in
-4 min 21 s and is 4.35 GB (1.09 GB content). EMC2's suite gives 1472 passed / 0 failed /
-9 skipped in 75 s; the Mac gives 1474 / 0 / 8. The difference is two macOS-only
-expectations: the Accelerate link-order test skips, and the `VECLIB_MAXIMUM_THREADS`
-check in `test-nn-validate.R` does not run. `nle-verify` passes on the shipped cards,
-DDMnle, the RDM A = 0 card and ddm_svst0_e299, with the same maxima as on the Mac.
-EMC2's compiled likelihood on the inputs of `test-nn-reference.R`, exported from the
-Mac, against the Mac's values: trial-wise max |diff| 3.1e-13 (ddm_cap256w_c4), 1.35e-12
-(ddm_st0zero, one trial of 9600; the median is 6e-16), 9.5e-14 and 1.3e-13 (rdm_small
-with 2 and 3 accumulators) and 4.1e-14 (ddm_svst0_e299); sums agree within 1.2e-14
-relative. The reference and OpenBLAS builds agree with each other to 1.8e-15, so the
-Mac-to-Linux difference comes from the compiler and libm, not the BLAS. In the image,
-[TUTORIAL.md](../TUTORIAL.md) takes 243 s (Mac 208 s; simulation 52 s, training 163 s,
-the rest 29 s) with every check as the page says; `pytest` gives 67 passed in 66 s;
-`run_smoke.sh` takes 57 s; `lan_in` and `onnx_use` pass. The fits of the earlier version of EMC2's vignette
-"Using a trained flow" (a card fitted against the analytic DDM, 3 chains x 2 cores; the current vignette fits the
-shipped DDMnle card instead):
+2026-10-26, DMC2 main 71b3261b from its tarball, R 4.6.1): the image builds in 4 min 53 s
+and is 5.4 GB (1.31 GB content).
 
-| BLAS | card fit | analytic DDM fit |
+- `nle-verify`: all checks pass, on the four shipped cards and on the scaled DDM and RDM
+  A = 0 copies in `nleCards/`. The largest golden differences are within a factor of three
+  of the Mac's (the scaled DDM card 1.2e-10 against 1.0e-10, the CRDM card 7.4e-14 against
+  2.8e-14, all within the cards' tolerances); compiled against R path 1.9e-13, the oracle
+  8.3e-14.
+- `pytest`: 67 passed and 1 skipped (R `arrow` is not in the image) in 72 s.
+- `emc2-tests`: 5755 passed, 5 skipped, and 6 failures and 1 error in three files, in 9 min;
+  the Mac gives 5772 passed / 0 failed / 4 skipped. The three files hold values or
+  behaviour recorded on the Mac, and none tests the neural likelihoods: `test-ddm-precision.R` (the
+  default-precision likelihood differs from its stored vector in the last bit of a few
+  trials, up to 1.8e-15, a libm difference), `test-mtlnr.R` (its snapshot records the Mac's
+  C++ random-number format, `libc++`, where Linux has `libstdc++`) and `test-hardfit.R` (a
+  seeded short fit whose early stop the test expects at the second check; on Linux the same
+  seed gives other chains and the stop does not fire). Every neural-likelihood test
+  (`test-nn-*.R`) passes.
+
+One log-likelihood evaluation of 400 trials with sv, SZ and st0 free, one thread (the mean
+of 200 evaluations):
+
+| | `DDMnn()` (the scaled DDM card) | analytic DDM |
 |---|---|---|
-| reference (the image's default) | 17.3 s | 23.0 s |
-| OpenBLAS | 11.0 s | 23.0 s |
-| OpenBLAS, `OPENBLAS_NUM_THREADS=1` | 10.1 s | 23.0 s |
-| Mac, Accelerate (native) | 5.9 s | 23.2 s |
+| reference BLAS (the image's default) | 0.39 ms | 0.99 ms |
+| OpenBLAS, `OPENBLAS_NUM_THREADS=1` | 0.30 ms | 1.06 ms |
+| Mac, Accelerate (native) | 0.20 ms | 1.19 ms |
 
-The posterior tables on the two BLAS agree to 4e-15.
-
-**Rebuilt 2026-10-25** from the tarball of DMC2 main (6d3f99db, R 4.6.1, same VM):
-`nle-verify` passes on the three shipped cards, `pytest` gives 67 passed and 1 skipped (R `arrow` is not in the
-image), and `emc2-tests` gives 5306 passed / 3 failed / 11 skipped. The three failures are two tests that
-compare with values written on the Mac: `test-ddm-precision.R` (the default-precision likelihood differs from
-the stored vector in the last bit of one trial, 1.8e-15, a libm difference) and `test-mtlnr.R` (its snapshot
-records the Mac's C++ random-number format, `libc++`, where Linux has `libstdc++`). The Mac, against the same
-branch, gives `pytest` 68 passed, and `run_smoke.sh`, `lan_in/run.sh` and `onnx_use/run.sh` pass from a fresh clone. CI
-(`.github/workflows/nleflow.yml`) builds the default image on x86_64 on every push to
-`nleflow-plan` and runs `nle-verify` and `pytest`.
+On the Mac against the same commit, `pytest` gives 68 passed, `nle_verify.R` passes on the
+shipped cards and on the scaled DDM, RDM A = 0, `ddm_svst0_e299` and `lba_e299` cards in
+`nleCards/`, and `examples/ddm_svst0/run_smoke.sh`,
+`examples/lan_in/run.sh` and `examples/onnx_use/run.sh` pass.

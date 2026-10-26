@@ -23,7 +23,7 @@ Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' \
     examples/rdm_a0/runs/rdm_a0_smoke/export/rdm_a0_smoke_e1_weights.json
 ```
 
-(`R_PROFILE_USER=/dev/null` and `.libPaths()` as in the plan's section 9.2
+(`R_PROFILE_USER=/dev/null` and `R_LIBS` as in [install and check](../../docs/install-and-check.md)
 when another EMC2 is on the path.) The full recipe is the same four commands
 with `spec.yaml` (24 million rows, 300 epochs: hours on a workstation, as the
 project ran it on tux26). Checkpoint selection (score bias over the kept window, then

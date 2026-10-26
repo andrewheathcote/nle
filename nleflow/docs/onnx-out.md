@@ -23,11 +23,11 @@ floor outside the box. Needs the Python environment with `onnx` and `onnxruntime
 ([install and check](install-and-check.md)); `--cases` needs R with EMC2.
 
 ```sh
-cd examples/ddmnle
-E=runs/ddmnle_smoke/export
-uv run --project ../.. nleflow onnx $E/ddmnle_smoke_e1_weights.json            # both signatures
-uv run --project ../.. nleflow onnx-check $E/ddmnle_smoke_e1_trialwise.onnx $E/ddmnle_smoke_e1_weights.json
-uv run --project ../.. nleflow onnx-check $E/ddmnle_smoke_e1_shared.onnx    $E/ddmnle_smoke_e1_weights.json
+cd examples/ddm_scaled
+E=runs/ddm_scaled_smoke/export
+uv run --project ../.. nleflow onnx $E/ddm_scaled_smoke_e1_weights.json            # both signatures
+uv run --project ../.. nleflow onnx-check $E/ddm_scaled_smoke_e1_trialwise.onnx $E/ddm_scaled_smoke_e1_weights.json
+uv run --project ../.. nleflow onnx-check $E/ddm_scaled_smoke_e1_shared.onnx    $E/ddm_scaled_smoke_e1_weights.json
 ```
 
 Checks: `onnx` prints two `wrote ... .onnx` lines; `onnx-check` prints `golden rows of ...:
@@ -39,8 +39,8 @@ regimes of `sbc/scaled_cell.R`, half with s != 1):
 
 ```sh
 export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
-Rscript ../../scripts/onnx_cases_scaled.R $E/ddmnle_smoke_e1_weights.json cases.csv 200 100
-uv run --project ../.. nleflow onnx-check $E/ddmnle_smoke_e1_shared.onnx $E/ddmnle_smoke_e1_weights.json --cases cases.csv
+Rscript ../../scripts/onnx_cases_scaled.R $E/ddm_scaled_smoke_e1_weights.json cases.csv 200 100
+uv run --project ../.. nleflow onnx-check $E/ddm_scaled_smoke_e1_shared.onnx $E/ddm_scaled_smoke_e1_weights.json --cases cases.csv
 ```
 
 For a `flow_joint` card (`examples/ddm_svst0/`) the cases are the card's own inputs on the
@@ -48,7 +48,7 @@ stored scale with `rt`, `choice` and `logp`, written by that example's `check_in
 check is one `EMC2 cases (the card's inputs)` line against 1e-10.
 
 Check: two more `PASS` lines, `EMC2 cases, st0 = 0 (a density)` against 1e-10 and `EMC2 cases,
-st0 > 0 (a CDF difference)` against 1e-08. Measured on the committed DDMnle card, both
+st0 > 0 (a CDF difference)` against 1e-08. Measured on the committed scaled DDM card, both
 signatures:
 
 | comparison | rows above the floor | max \|dlog p\| | median |

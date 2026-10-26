@@ -7,11 +7,11 @@ vectors that every evaluator of the card is tested against. The card format is E
 the choice smoke run, the race run is the same with `rdm_a0` and `twin = RDM`.
 
 ```sh
-cd examples/ddmnle
-CARD=runs/ddmnle_smoke/export/ddmnle_smoke_e1_weights.json
-uv run --project ../.. nleflow export runs/ddmnle_smoke       # best validation loss; --step N for another
+cd examples/ddm_scaled
+CARD=runs/ddm_scaled_smoke/export/ddm_scaled_smoke_e1_weights.json
+uv run --project ../.. nleflow export runs/ddm_scaled_smoke       # best validation loss; --step N for another
 uv run --project ../.. nleflow golden $CARD /tmp/golden.csv   # the golden vectors from the card alone
-cmp /tmp/golden.csv runs/ddmnle_smoke/export/ddmnle_smoke_e1_golden.csv
+cmp /tmp/golden.csv runs/ddm_scaled_smoke/export/ddm_scaled_smoke_e1_golden.csv
 ```
 
 Checks:
@@ -38,7 +38,7 @@ Rscript -e 'library(EMC2); m <- register_nn_model("'$CARD'", twin = DDM); nn_gol
 Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD
 ```
 
-Checks: `PASS golden check of 'ddmnle_smoke_e1_weights.json' (flow_scaled, 1150 rows): max
+Checks: `PASS golden check of 'ddm_scaled_smoke_e1_weights.json' (flow_scaled, 1150 rows): max
 |diff| ... against 1e-09` (3.6e-13 on the cloud instance), and from `nle_verify.R` also
 `PASS compiled vs R path ... against 1e-11` and `all checks passed`. A race card registers
 with `twin = RDM` and `kind flow_race`. The tolerance is the card's own

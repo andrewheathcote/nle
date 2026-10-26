@@ -20,18 +20,5 @@ jobs:
       - name: pytest
         run: uv run pytest -rs -q
 
-  container:
-    # the image of nleflow/docker/Dockerfile: R >= 4.5, EMC2 dev-flow, the lock; its three checks
-    runs-on: ubuntu-latest
-    needs: python-tests
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: docker build -f nleflow/docker/Dockerfile -t nleflow .
-      - name: nle-verify
-        run: docker run --rm nleflow nle-verify
-      - name: pytest with the R checks
-        run: docker run --rm nleflow pytest -q
-      - name: EMC2's own tests (x86_64)
-        run: docker run --rm nleflow emc2-tests
+  # The container (nleflow/docker/Dockerfile) is checked locally, not here: DMC2 is private, so the
+  # image is built from an R CMD build tarball of it (docs/install-and-check.md, section 4).

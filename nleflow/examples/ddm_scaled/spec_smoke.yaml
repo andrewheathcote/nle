@@ -1,6 +1,6 @@
 # The smoke configuration of spec.yaml: 1 % of the data, 2 epochs, the classifier
 # at its full 194 epochs on 2000 rows; end to end in a few minutes on 4 cores.
-name: ddmnle_smoke
+name: ddm_scaled_smoke
 model: DDM                        # the analytic twin; the card's model is DDMsc
 response: choice
 context: [kappa, eta, Z, SZ]

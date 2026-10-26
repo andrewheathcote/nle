@@ -2,7 +2,7 @@
 
 A choice model (`response: choice`) has two responses: a flow over rt given the
 parameters and the response, and a classifier for P(R = 2). The example is the scaled DDM
-(DDMnle, `examples/ddmnle/`): the flow models the unit-scale decision time
+card (`examples/ddm_scaled/`): the flow models the unit-scale decision time
 u = (rt - t0)(s/a)^2 given kappa, eta, Z and SZ, and t0, st0, a and s are applied exactly by
 the card's evaluator. Needs the Python environment, R with EMC2 (DMC2 main) and `WienR` (the
 exact choice probabilities); `arrow` for parquet, else CSV
@@ -14,7 +14,7 @@ exact choice probabilities); `arrow` for parquet, else CSV
 
 ```sh
 export NLEFLOW_RLIB=$HOME/R/nle-lib R_PROFILE_USER=/dev/null
-cd examples/ddmnle     # from nleflow/; spec_smoke.yaml is nleflow/examples/ddmnle/spec_smoke.yaml
+cd examples/ddm_scaled     # from nleflow/; spec_smoke.yaml is nleflow/examples/ddm_scaled/spec_smoke.yaml
 uv run --project ../.. nleflow simulate spec_smoke.yaml   # data_smoke/{train,val,choice}
 uv run --project ../.. nleflow train    spec_smoke.yaml   # the flow, then the classifier
 ```
@@ -36,7 +36,7 @@ spec's file names say, and the reader finds either.
 
 Measured on the cloud instance (4 cores): data in 10 s, flow 2 epochs in 11 s, classifier
 194 epochs in 6 s; the flow's validation loss after 2 epochs on 1 % is -1.107 against the
-project's -1.436 after 300 epochs on all of it: a smoke run, not a fit. DDMnle itself is
+project's -1.436 after 300 epochs on all of it: a smoke run, not a fit. The shipped card itself is
 not retrained here: the committed card `ddm_sc_s1106_e245` is the reference the tests use.
 The DDM's own eight-parameter flows (`flow_joint` cards, no `scaling`) are the same path
 without the scaling block: `examples/ddm_svst0/` trains one with sv and st0 free and s = 1,

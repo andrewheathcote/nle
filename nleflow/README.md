@@ -4,7 +4,7 @@ Train a normalizing-flow neural likelihood for an evidence-accumulation model
 from a model specification, and export it as a card that EMC2 (the neural-likelihood
 build, https://github.com/andrewheathcote/DMC2) loads with `register_nn_model()`. It covers the race-model path with the RDM A = 0 example;
 the choice-model path (flow + choice classifier; the scaled DDM card,
-DDMnle) with its ONNX export; and the converter that brings a published
+EMC2's `DDMnn()`) with its ONNX export; and the converter that brings a published
 likelihood approximation network (a LAN, in ONNX) into EMC2 as a card.
 
 ```
@@ -30,7 +30,7 @@ minutes).
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) |
 | install the tools and check them (R + EMC2, Python, the tests, the container) | [docs/install-and-check.md](docs/install-and-check.md) |
 | train a race flow (the RDM example; the LBA in `examples/lba/`) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
-| train a choice flow (the scaled DDM, DDMnle) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
+| train a choice flow (the scaled DDM card) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) |
 | write the ONNX graph of a card and check it | [docs/onnx-out.md](docs/onnx-out.md) |
 | bring a published LAN (ONNX) into EMC2 | [docs/lan-in.md](docs/lan-in.md); run [examples/lan_in](examples/lan_in/README.md) |
@@ -50,7 +50,7 @@ the contract this package writes to.
 
 Each step has its one-line check. R and EMC2 (DMC2 main) are needed only
 for the simulator of the RDM example (`EMC2:::rWald`) and for registering
-the exported card; their steps are in the plan's section 9.2.
+the exported card; their steps are in [docs/install-and-check.md](docs/install-and-check.md).
 
 1. **uv** (https://docs.astral.sh/uv/): `curl -LsSf https://astral.sh/uv/install.sh | sh`
    (macOS also: `brew install uv`). Check: `uv --version` prints 0.8 or later.
@@ -67,9 +67,8 @@ the exported card; their steps are in the plan's section 9.2.
 4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
 5. **The tests.** Check: `uv run pytest -rs` passes. With `NLEFLOW_EMC2_LIB=<library holding
-   EMC2 (DMC2 main)>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
-   `NLEFLOW_EMC2_SRC=<EMC2 source tree>` (its `tests/testthat/golden/`: the LAN and z0
-   files; default `../EMC2` beside this repository) all 51 run;
+   EMC2 (DMC2 main)>` and `NLEFLOW_RLIB=<the same library>` (the R simulators) all 68 run
+   (the LAN and z0 fixtures are in `nleCards/`);
    without them the R-dependent cases skip and `-rs` says
    why. About 90 s on 4 cores. The ONNX tests need `onnx` and `onnxruntime` from the lock;
    check: `uv run python -c "import onnxruntime as ort; print(ort.__version__)"`
@@ -80,7 +79,7 @@ the exported card; their steps are in the plan's section 9.2.
    installs `jax[cuda12]`. Every shipped flow was trained on CPU.
 
 Threads: `nleflow train` and `export` limit themselves to `min(8, cores)`
-threads (`--cores` to change), the plan's "at most 8 cores" rule.
+threads (`--cores` to change).
 
 ## The spec
 
@@ -123,7 +122,7 @@ START_HERE.md).
 YAML note: write exponents with a sign (`1.0e-4`, not `1e-4`) or as plain
 integers; PyYAML reads `24e6` as a string and the spec refuses it.
 
-**A choice model** (the scaled DDM, `examples/ddmnle/spec.yaml`) sets
+**A choice model** (the scaled DDM, `examples/ddm_scaled/spec.yaml`) sets
 `response: choice`, a `classifier`, `scaling: {kind: ddm_unit}` and, for the
 simulator, per-input strata in the long form (`kind`, `share`, `range`) plus
 `regimes`, the shares of draws with each set of inputs exactly 0:
@@ -255,7 +254,7 @@ regimes of `sbc/scaled_cell.R`, half the draws with s ≠ 1). For a
 `flow_joint` card the cases carry the card's own inputs instead (its context
 on the stored scale, then `rt`, `choice`, `logp`; every row a density, against
 `--tol`); `examples/ddm_svst0/check_in_emc2.R` writes them. Measured on the
-committed DDMnle card, both signatures:
+committed scaled DDM card, both signatures:
 
 | comparison | rows above the floor | max \|Δ log p\| | median |
 |---|---|---|---|
@@ -394,7 +393,7 @@ scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/lba/                 the LBA example (twin = LBA, v identity, A zero-box) and its two check scripts
-examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
+examples/ddm_scaled/          the scaled DDM card's example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/ddm_svst0/           the DDM with sv and st0 as an eight-parameter flow_joint card (s, SZ fixed) and its checks
 examples/lan_in/              HSSM's ddm_uniform_st LAN into EMC2: download, convert, verify, vs the analytic DDM
 examples/onnx_use/            a card's ONNX graphs from Python with onnxruntime alone

@@ -1,4 +1,4 @@
-# The DDMnle example (the scaled DDM)
+# The scaled DDM card's example
 
 The flow over the unit-scale decision time u = (rt − t0)(s/a)² of a diffusion
 with a = s = 1, conditioned on κ = v a/s², η = sv a/s², Z and SZ, with a
@@ -10,7 +10,7 @@ card `ddm_sc_s1106_e245` (`nleCards/`): [256, 128],
 the [256, 256, 256] classifier trained on exact P(R = 2) targets
 (`retrain_classifier.py`'s tuned configuration). `spec_smoke.yaml` is 1 % of
 the data (6000 draws × 40) and 2 epochs; the classifier keeps its 194 epochs
-on 2000 targets. DDMnle itself is not retrained here: the committed card and
+on 2000 targets. The shipped card itself is not retrained here: the committed card and
 its golden file are the references the tests use.
 
 Needs R with EMC2 (DMC2 main) in a dedicated library (`rDDM`, `dDDM`),
@@ -20,19 +20,18 @@ CSV.
 ```sh
 cd nleflow
 export NLEFLOW_RLIB=~/R/nle-lib
-uv run nleflow simulate examples/ddmnle/spec_smoke.yaml      # 10 s: data_smoke/{train,val,choice}
-uv run nleflow train    examples/ddmnle/spec_smoke.yaml      # 30 s: flow (2 epochs) + classifier
-uv run nleflow export   examples/ddmnle/runs/ddmnle_smoke    # 30 s: a flow_scaled card + golden vectors
+uv run nleflow simulate examples/ddm_scaled/spec_smoke.yaml      # 10 s: data_smoke/{train,val,choice}
+uv run nleflow train    examples/ddm_scaled/spec_smoke.yaml      # 30 s: flow (2 epochs) + classifier
+uv run nleflow export   examples/ddm_scaled/runs/ddm_scaled_smoke    # 30 s: a flow_scaled card + golden vectors
 Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' \
-    examples/ddmnle/runs/ddmnle_smoke/export/ddmnle_smoke_e1_weights.json
-uv run nleflow onnx examples/ddmnle/runs/ddmnle_smoke/export/ddmnle_smoke_e1_weights.json
+    examples/ddm_scaled/runs/ddm_scaled_smoke/export/ddm_scaled_smoke_e1_weights.json
+uv run nleflow onnx examples/ddm_scaled/runs/ddm_scaled_smoke/export/ddm_scaled_smoke_e1_weights.json
 ```
 
 As run on the cloud instance (4 cores): the smoke card registers with
 `twin = DDM` as `flow_scaled`, card_version 1; `nn_golden_check` 3.6e-13;
 `nle_verify.R` PASS on the golden check, the compiled-vs-R path (5.7e-14)
-and the oracle (8.3e-14; set `EMC2_NLE_PORT=handover/nle-methods/port/R`
-for that line); float64 gate 3.8e-13 (log pdf) and 1.1e-14 (z), float32 gap
+and the oracle (8.3e-14); float64 gate 3.8e-13 (log pdf) and 1.1e-14 (z), float32 gap
 7.5e-5. The flow's validation loss after 2 epochs on 1 % is −1.107 against
 the project's −1.436 after 300 epochs on all of it: a smoke run, not a fit.
 

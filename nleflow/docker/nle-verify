@@ -1,6 +1,6 @@
 #!/bin/sh
 # inst/scripts/nle_verify.R of the installed EMC2: the shipped cards, then the cards given;
-# with no argument, the DDMnle card and the RDM A = 0 card of the reference exports as well.
+# with no argument, the scaled DDM card and the RDM A = 0 card of the reference exports as well.
 set -e
 V=/opt/emc2/lib/EMC2/scripts/nle_verify.R
 E=/opt/nle/nleCards

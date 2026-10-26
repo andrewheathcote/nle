@@ -60,7 +60,7 @@ RUN Rscript -e 'options(Ncpus = max(1L, parallel::detectCores()), \
  && (Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/noble/latest"), HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os))); install.packages("arrow"); stopifnot(requireNamespace("arrow", quietly = TRUE))' \
      || echo "arrow not installed: the R simulator writes CSV")
 
-# --- EMC2 into /opt/emc2/lib, its source beside it (the tests read its golden files) ---------------
+# --- EMC2 into /opt/emc2/lib, its source beside it (emc2-tests runs its test suite) ----------------
 # From the tarball when EMC2_TARBALL is set (nleflow/docker/emc2/ is copied either way; it may hold
 # only its README), else from a clone at EMC2_SHA.
 COPY nleflow/docker/emc2 /opt/emc2/in
@@ -90,7 +90,6 @@ RUN rm -rf /opt/nle/nleflow/docker/emc2 && uv sync --frozen --group dev
 
 ENV NLEFLOW_EMC2_LIB=/opt/emc2/lib \
     NLEFLOW_RLIB=/opt/emc2/lib \
-    NLEFLOW_EMC2_SRC=/opt/emc2/src \
     R_LIBS=/opt/emc2/lib \
     R_PROFILE_USER=/dev/null \
     LANG=C.UTF-8 \
