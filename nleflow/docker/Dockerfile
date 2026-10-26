@@ -9,8 +9,8 @@
 #   EMC2_TARBALL  the file name of an `R CMD build` tarball placed in nleflow/docker/emc2/ (git-ignored);
 #                 when set, EMC2 is installed from it and nothing is cloned. This is how a local build
 #                 of EMC2 not on GitHub gets into the image:
-#                   R CMD build <EMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
-#                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
+#                   R CMD build --no-build-vignettes <EMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
+#                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.tar.gz \
 #                     --build-arg EMC2_SHA=<commit of your clone> -t nleflow .
 #   EMC2_REPO     without EMC2_TARBALL, the repository to clone (default: DMC2; it is private, so pass a
 #                 URL that carries your credentials, e.g. https://<user>:<token>@github.com/andrewheathcote/DMC2,
@@ -18,7 +18,7 @@
 #   EMC2_SHA      without EMC2_TARBALL, the commit of EMC2_REPO to clone and build (default: a commit of
 #                 DMC2 main); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
 #                 tarball's sha256.
-# Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped artefacts by sha256, so R comes from
+# Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped cards by sha256, so R comes from
 # CRAN's own Ubuntu repository (R >= 4.5); the R packages, WienR included, come from CRAN.
 #
 # BLAS: R and EMC2 link libblas.so.3 / liblapack.so.3, which Ubuntu's alternatives point at the
@@ -28,7 +28,7 @@
 FROM ubuntu:24.04
 
 ARG EMC2_REPO=https://github.com/andrewheathcote/DMC2
-ARG EMC2_SHA=ee3167d79783e2545f49407e3284badde3035587
+ARG EMC2_SHA=71b3261b92402cc4a82168b9e38e1c8975a41eb1
 ARG EMC2_TARBALL=
 ARG DEBIAN_FRONTEND=noninteractive
 

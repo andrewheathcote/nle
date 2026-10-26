@@ -13,13 +13,13 @@ the data (6000 draws × 40) and 2 epochs; the classifier keeps its 194 epochs
 on 2000 targets. DDMnle itself is not retrained here: the committed card and
 its golden file are the references the tests use.
 
-Needs R with EMC2 (neural-likelihood build) in a dedicated library (`rDDM`, `dDDM`),
+Needs R with EMC2 (DMC2 main) in a dedicated library (`rDDM`, `dDDM`),
 WienR (the exact choice probabilities) and jsonlite; arrow for parquet, else
 CSV.
 
 ```sh
 cd nleflow
-export NLEFLOW_RLIB=~/R/nle-m0-lib
+export NLEFLOW_RLIB=~/R/nle-lib
 uv run nleflow simulate examples/ddmnle/spec_smoke.yaml      # 10 s: data_smoke/{train,val,choice}
 uv run nleflow train    examples/ddmnle/spec_smoke.yaml      # 30 s: flow (2 epochs) + classifier
 uv run nleflow export   examples/ddmnle/runs/ddmnle_smoke    # 30 s: a flow_scaled card + golden vectors

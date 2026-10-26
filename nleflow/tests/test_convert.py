@@ -18,17 +18,26 @@ from conftest import EMC2_GOLDEN
 from nleflow.convert import ConvertError, convert, list_presets, load_preset, read_graph
 
 REPO = Path(__file__).resolve().parents[2]
-LAN_ONNX = EMC2_GOLDEN / "ddm_uniform_st.onnx"
-LAN_ORT = EMC2_GOLDEN / "lan_ddm_uniform_st_ort.csv"
-LAN_JSON = REPO / "handover" / "nle-methods" / "port" / "export" / "lan_ddm_uniform_st.json"
+LAN_ONNX = REPO / "nleCards" / "ddm_uniform_st.onnx"                 # the 3 x 100 published file
+LAN_JSON = REPO / "nleCards" / "lan_ddm_uniform_st.json"
+LAN_ORT = EMC2_GOLDEN / "lan_ddm_uniform_st_ort.csv"                    # EMC2's own LAN test files
+LAN_RDS = EMC2_GOLDEN / "lan_ddm_uniform_st.rds"
 quiet = dict(say=lambda *a: None)
 
 
 @pytest.fixture(scope="module")
 def lan_onnx():
     if not LAN_ONNX.exists():
-        pytest.skip(f"the published LAN is in EMC2's test tree ({LAN_ONNX})")
+        pytest.skip(f"the published LAN is not at {LAN_ONNX}")
     return LAN_ONNX
+
+
+@pytest.fixture(scope="module")
+def emc2_lan():
+    """EMC2's committed LAN card and onnxruntime rows (its tests/testthat/golden), or skip."""
+    if not (LAN_ORT.exists() and LAN_RDS.exists()):
+        pytest.skip(f"EMC2's LAN test files are not in {EMC2_GOLDEN}; set NLEFLOW_EMC2_SRC to an EMC2 source tree")
+    return EMC2_GOLDEN
 
 
 def small_mlp(path, act="Tanh", dims=(4, 8, 6, 1), batched=False, gemm=False, act_attrs=None, extra=None,
@@ -103,8 +112,8 @@ def test_lan_converts_to_the_committed_card(lan_onnx, tmp_path):
                 card["bounds_natural"]["upper"]))} == {k: [float(x) for x in v] for k, v in ref["box"].items()}
 
 
-def test_lan_card_equals_emc2s_committed_card(lan_onnx, tmp_path):
-    rds = EMC2_GOLDEN / "lan_ddm_uniform_st.rds"
+def test_lan_card_equals_emc2s_committed_card(lan_onnx, emc2_lan, tmp_path):
+    rds = LAN_RDS
     res = convert(lan_onnx, out=tmp_path / "lan_weights.json", preset="ddm_uniform_st", **quiet)
     fields = ["kind", "context_names", "context_transforms", "bounds_natural", "input_layout", "response_values",
               "ll_floor_log", "mlp", "source_sha256", "source", "source_model", "encoding", "map_to_emc2_ddm"]
@@ -119,7 +128,7 @@ def test_lan_card_equals_emc2s_committed_card(lan_onnx, tmp_path):
     assert out.returncode == 0, out.stdout + out.stderr
 
 
-def test_lan_verify_reproduces_the_committed_ort_csv(lan_onnx, tmp_path):
+def test_lan_verify_reproduces_the_committed_ort_csv(lan_onnx, emc2_lan, tmp_path):
     res = convert(lan_onnx, out=tmp_path / "lan_weights.json", preset="ddm_uniform_st", rows_csv=LAN_ORT, **quiet)
     v = res["verify"]
     assert v["f64_single"] < 1e-10 and v["f64_batched"] < 1e-10           # the card holds the network
@@ -269,7 +278,7 @@ def test_float64_copy_of_a_tanh_graph_has_no_gelu_constants(tmp_path):
 
 # --- EMC2 -------------------------------------------------------------------------------------------
 
-def test_lan_card_registers_in_emc2_and_passes_its_golden_check(lan_onnx, tmp_path, emc2_lib):
+def test_lan_card_registers_in_emc2_and_passes_its_golden_check(lan_onnx, emc2_lan, tmp_path, emc2_lib):
     res = convert(lan_onnx, out=tmp_path / "lan_weights.json", preset="ddm_uniform_st", verify_n=300, **quiet)
     code = f"""
     .libPaths(c('{emc2_lib}', .libPaths())); suppressPackageStartupMessages(library(EMC2))

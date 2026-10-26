@@ -3,9 +3,8 @@
 A published likelihood approximation network (Fengler et al.; HSSM's LANs) is a plain
 multilayer perceptron whose ONNX file holds weights and an input width. `nleflow convert`
 reads the graph and writes an EMC2 card of kind `mlp_joint` (card_version 1) that EMC2's
-compiled MLP evaluator runs; EMC2 never runs ONNX. The converter that used to live in
-EMC2 (`inst/scripts/onnx_to_card.py`) is replaced by this command. Needs the Python
-environment with `onnx` and `onnxruntime` ([install and check](install-and-check.md)).
+compiled MLP evaluator runs; EMC2 never runs ONNX and has no converter of its own. Needs
+the Python environment with `onnx` and `onnxruntime` ([install and check](install-and-check.md)).
 
 What a graph does not record comes from a preset (`src/nleflow/presets/*.yaml`):
 

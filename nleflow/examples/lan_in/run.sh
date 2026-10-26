@@ -5,7 +5,7 @@
 # against EMC2's analytic DDM (check_in_emc2.R). LAN_ONNX=<file> skips the download.
 set -e
 cd "$(dirname "$0")"
-export NLEFLOW_RLIB=${NLEFLOW_RLIB:-$HOME/R/nle-ondev-lib:$HOME/R/nle-m4-lib} R_PROFILE_USER=/dev/null
+export NLEFLOW_RLIB=${NLEFLOW_RLIB:-$HOME/R/nle-lib} R_PROFILE_USER=/dev/null
 export R_LIBS=$NLEFLOW_RLIB
 NF="uv run --project ../.. nleflow"
 REV=40e0327c22a4

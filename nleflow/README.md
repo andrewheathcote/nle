@@ -39,7 +39,7 @@ minutes).
 Each page gives its commands with a one-line check each. The sections below are the
 reference they are built from: the spec, the data contract, the card and its gate, the
 ONNX export, the converter. `docker/Dockerfile` builds an image with R >= 4.5, EMC2
-(neural-likelihood build) and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
+(DMC2 main) and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
 are its checks.
 
 What a flow is, how the cards are evaluated and validated, and the card
@@ -48,7 +48,7 @@ the contract this package writes to.
 
 ## Installation (the Python side)
 
-Each step has its one-line check. R and EMC2 (neural-likelihood build) are needed only
+Each step has its one-line check. R and EMC2 (DMC2 main) are needed only
 for the simulator of the RDM example (`EMC2:::rWald`) and for registering
 the exported card; their steps are in the plan's section 9.2.
 
@@ -67,7 +67,7 @@ the exported card; their steps are in the plan's section 9.2.
 4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
 5. **The tests.** Check: `uv run pytest -rs` passes. With `NLEFLOW_EMC2_LIB=<library holding
-   EMC2 (neural-likelihood build)>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
+   EMC2 (DMC2 main)>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
    `NLEFLOW_EMC2_SRC=<EMC2 source tree>` (its `tests/testthat/golden/`: the LAN and z0
    files; default `../EMC2` beside this repository) all 51 run;
    without them the R-dependent cases skip and `-rs` says
@@ -116,7 +116,7 @@ names in `context_transforms` but not in `context_names`, their box the value
 itself in `bounds_natural`, and the values in `fixed`. EMC2 then needs them at
 registration, `register_nn_model(card, twin = DDM, exceptions = c(s = 1, SZ = 0))`
 (`unlist(jsonlite::fromJSON(card)$fixed)`), and says which is missing when they
-are not given. EMC2 (neural-likelihood build) reads `fixed` itself, so `nle_verify.R` checks such a card from the
+are not given. EMC2 (DMC2 main) reads `fixed` itself, so `nle_verify.R` checks such a card from the
 card alone (`examples/ddm_svst0/`); an older EMC2 does not (see "Known limits" in
 START_HERE.md).
 
@@ -339,10 +339,8 @@ verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
 defaults EMC2's `nle_verify.R` registers it with (`p_types`, from the preset) and a
 `validation` block: `calibration: "unknown; needs its own SBC cell before
 inference"` always, and with `--verify` the golden file and the tolerance it
-holds at. No other fields. EMC2 used to read cards with R's `$`, which matches
-partial names, so a field such as `preset` was read as `pre` (a decision-time
-shift) and the card refused; EMC2 now reads every card field by exact
-name, and the converter still writes only fields the vignette names.
+holds at. No other fields: EMC2 reads card fields by exact name, so an extra
+field would be ignored, and the converter writes only fields the vignette names.
 
 **`--verify N`** (or `--rows <csv>` to verify on given rows) compares the
 card's float64 forward pass with onnxruntime, each with one-trial calls and
@@ -361,22 +359,22 @@ card's golden file (`<tag>_golden.csv`: the parameters, `rt`, `choice`,
 `nn_golden_check(m)` reads it, with the tolerance the card records. Run on the committed CSV's rows
 (`--rows`), the converter reproduces that file exactly.
 
-**EMC2's `inst/scripts/onnx_to_card.py`** was this converter's first version; it is now a
-pointer to `nleflow convert` and its test in EMC2 is skipped with that message. The output
-for `ddm_uniform_st` equals the card EMC2's tests hold
-(`tests/testthat/golden/lan_ddm_uniform_st.rds`) in every field that script wrote, apart
-from `converted_with` (provenance) and `calibration`, which moved into `validation`.
+**EMC2's own LAN card.** EMC2 has no converter; its tests hold the card of the first
+published `ddm_uniform_st` file (`tests/testthat/golden/lan_ddm_uniform_st.rds`). Converting
+that file (`nleCards/ddm_uniform_st.onnx`) gives the same card in every field EMC2
+evaluates and in the source's provenance (`tests/test_convert.py` compares them), with
+`converted_with` added and `calibration` inside `validation`.
 
 ## Checking a card in EMC2
 
 ```r
-.libPaths(c("~/R/nle-m0-lib", .libPaths())); library(EMC2)
+.libPaths(c("~/R/nle-lib", .libPaths())); library(EMC2)
 m <- register_nn_model("rdm_a0_smoke_e1_weights.json", twin = RDM)
 nn_golden_check(m)    # PASS golden check ... max |diff| 2.70e-13 (log_pdf) against 1e-09
 ```
 and the verification command,
 `Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' <card>`,
-which prints one PASS/FAIL line per shipped artefact and per card and exits 1 on any FAIL.
+which prints one PASS/FAIL line per shipped card and per card given and exits 1 on any FAIL.
 
 ## Layout
 

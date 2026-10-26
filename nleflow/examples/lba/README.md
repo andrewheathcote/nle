@@ -22,7 +22,7 @@ e^10 s, about 2e-5 of the training rows; the simulator prints that share.
 
 ```sh
 cd nleflow/examples/lba
-export NLEFLOW_RLIB=<library holding EMC2 (neural-likelihood build)> R_PROFILE_USER=/dev/null
+export NLEFLOW_RLIB=<library holding EMC2 (DMC2 main)> R_PROFILE_USER=/dev/null
 uv run --project ../.. nleflow spec     spec_smoke.yaml   # the spec, resolved
 uv run --project ../.. nleflow simulate spec_smoke.yaml   # 1 s: data_smoke/{train,val}
 R_LIBS=$NLEFLOW_RLIB Rscript check_simulator.R             # the simulator vs pLBA

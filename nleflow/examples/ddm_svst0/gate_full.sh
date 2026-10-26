@@ -6,7 +6,7 @@
 # and the ONNX graphs against the golden rows and the EMC2 cases.
 set -e
 cd "$(dirname "$0")"
-export NLEFLOW_RLIB=${NLEFLOW_RLIB:-$HOME/R/nle-m4-lib} R_PROFILE_USER=/dev/null
+export NLEFLOW_RLIB=${NLEFLOW_RLIB:-$HOME/R/nle-lib} R_PROFILE_USER=/dev/null
 export R_LIBS=$NLEFLOW_RLIB
 NF="uv run --project ../.. nleflow"
 $NF steps runs/ddm_svst0 | tail -5
@@ -18,12 +18,7 @@ $NF golden $CARD $E/regolden.csv && cmp $E/regolden.csv $E/${TAG}_golden.csv && 
 Rscript -e 'library(EMC2); f <- commandArgs(TRUE)[1]
   m <- register_nn_model(f, twin = DDM, exceptions = unlist(jsonlite::fromJSON(f)$fixed)); print(nn_golden_check(m))' $CARD
 Rscript check_in_emc2.R $CARD data/val $E/cases.csv
-Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD || echo "nle_verify.R: exit $? (see README)"
-# with an EMC2 that reads the card's `fixed` (a current EMC2), if one is given
-if [ -n "${EMC2_FIXED_LIB:-}" ]; then
-  echo "== nle_verify.R, EMC2 reading the card's fixed ($EMC2_FIXED_LIB)"
-  R_LIBS=$EMC2_FIXED_LIB:$NLEFLOW_RLIB Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD
-fi
+Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD
 $NF onnx $CARD
 for s in trialwise shared; do $NF onnx-check $E/${TAG}_$s.onnx $CARD --cases $E/cases.csv; done
 Rscript check_simulator.R data/val 100000

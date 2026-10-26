@@ -66,7 +66,7 @@ The cards are in `nleCards/` at the root of this folder, each as
 | `rdm_ss_base_s801_e271` | RDM, A = 0 | `flow_race` | yes, identical | `examples/rdm_a0` |
 | `rdm_rdm_small_e195` | RDM, small | `flow_race` | no | used by the golden-vector tests |
 | `ddm_z0_s503_e282` | DDM, eight-parameter flow (earlier network) | `flow_joint` | no | used by the ONNX tests only |
-| `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | no | `examples/lan_in` converts the current file |
+| `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | no | `examples/lan_in` converts the current file; `ddm_uniform_st.onnx` beside it is the first published file, which the converter's tests use |
 | `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | yes (only there) | not an nleflow example |
 | `crdm_aff_log_h2_k12_clip_100k_dt0.0005` (CRDMnn) | conflict racing diffusion model (CRDM), A = 0 | `flow_race` | yes (only there) | Lüken's flow; not an nleflow example |
 
@@ -88,7 +88,7 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `nleflow/examples/ddm_svst0/run_smoke.sh` |
 | train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| use the shipped cards in EMC2: specify the RDM and RTCON2 models, and fit one participant with DDMnle against the standard DDM and a 1e-8 DDM (prior in the box, rt resolution, checks) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` (reruns the fits) |
+| use the shipped cards in EMC2: specify the RDM, CRDM and RTCON2 models, and fit one participant with DDMnle (`DDMnn()`) against the standard DDM and the precise DDM, `DDM(precision = 1e-8)` (prior in the box, rt resolution, checks) | EMC2's `vignette("using-a-trained-flow")` (in the EMC2 repository above) | `inst/scripts/using_a_trained_flow_data.R` (reruns the fits) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | `nleflow/examples/<name>/check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
@@ -108,8 +108,9 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
   `exceptions = unlist(jsonlite::fromJSON(card)$fixed)` and `nle_verify.R` fails on
   the card.
 - **Priors inside the training box.** A network returns its floor outside the box it
-  was trained on, which truncates a posterior there; `nn_cell()` and `run_sbc()` refuse
-  a prior whose mean ± 4 sd leaves it (`nn_in_box()`).
+  was trained on, which truncates a posterior there; `nn_cell()`, `nn_in_box()` and
+  `run_sbc()` warn when a prior's mean ± 4 sd leaves it (`nn_in_box(error = TRUE)` stops
+  instead).
 - **rt resolution: use 1/1000 or finer, and train at full precision.** Our recommendation
   is `rt_resolution = 1/1000` in `make_emc()`, which matches the resolution the shipped
   cards were trained and validated at. When you train a new network, keep the training
@@ -118,16 +119,18 @@ EMC2 (training, export and ONNX need only Python), plus the cards EMC2 does not 
   default `rt_resolution = 1/60` floors each RT to a 1/60 s grid. That removes the
   average delay a 60 Hz display adds to real data (Stevenson et al., "Throw your
   response times in the bin"), but on data without such a delay, such as simulations or
-  recordings accurate to 1 ms, it shifts t0 down by about 8 ms (about −1.3 posterior sd
-  at N = 100). The bias is in the data, not in the likelihood, so it holds for analytic
-  and neural likelihoods alike; `make_emc()` warns when a neural-likelihood design
+  recordings accurate to 1 ms, it shifts t0 down by about 8 ms (in the scaled DDM card's
+  calibration, a standardised bias of about −1.9 posterior sd at N = 100). The bias is
+  in the data, not in the likelihood, so it holds for analytic and neural likelihoods alike; `make_emc()` warns when a neural-likelihood design
   samples t0 at a coarser resolution. Use a coarser resolution only if you know your RTs
   carry the noise it corrects, and match it to that noise.
 - **The analytic DDM's precision is a speed setting.** WienR's precision defaults to 5e-3, which is up to 0.04
   off in the log density with sv, SZ and st0 all free; `design(model = DDM(precision = 1e-8), ...)` is the
   model to compare a card with (`design()` takes a model list, so models with options go in directly).
-- **`RTCONnn()` is the way to use the RTCON2 card.** `register_nn_model()` on that card alone errors, as it has
-  no analytic twin to take the parameterisation from; `RTCONnn()` supplies it.
+- **`CRDM()` is not fitted.** It is the CRDM's exact density (the Volterra solution) and simulator, with no
+  compiled likelihood, so the sampler refuses it; `CRDMnn()` is the CRDM to fit. `CRDM()` is the card's twin and
+  simulator, and the control in `nn_score_bias()` and `nn_posterior_shift()`; `nn_sbc_cell()` runs with
+  `run_control = FALSE`.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.
   Screen several checkpoints of a run (`nleflow steps`, then EMC2's score-bias check)
   before adopting one, as DDMnle and the RDM card were.

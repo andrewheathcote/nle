@@ -13,7 +13,7 @@ access). It contains the neural-likelihood code and reads a card's `fixed` field
 
 ## 1. R >= 4.5 and EMC2
 
-R older than 4.5 has no `tools::sha256sum`; EMC2 then pins its shipped artefacts by md5
+R older than 4.5 has no `tools::sha256sum`; EMC2 then pins its shipped cards by md5
 and a JSON card still registers, but use 4.5 or later.
 
 1. R >= 4.5 from CRAN. Check: `R --version | head -1` shows 4.5 or later.
@@ -32,14 +32,14 @@ and a JSON card still registers, but use 4.5 or later.
    Check: `Rscript -e '.libPaths(c("~/R/nle-lib", .libPaths())); library(EMC2); cat(find.package("EMC2"), "\n")'`
    prints a path under `~/R/nle-lib`. If it prints another path, a second EMC2 is
    shadowing yours: put the library first with `R_LIBS=~/R/nle-lib` and run with
-   `R_PROFILE_USER=/dev/null` (the dual-install trap, section 9.2 of the plan).
+   `R_PROFILE_USER=/dev/null`.
 5. The verification command, which installs nothing:
 
    ```sh
    Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))'
    ```
 
-   Check: one `PASS` line per shipped artefact and `all checks passed`; the exit status
+   Check: one `PASS` line per shipped card and `all checks passed`; the exit status
    is 1 on any `FAIL`. Cards are checked by naming them
    (`... nle_verify.R <card>`), each against the `<tag>_golden.csv` beside it.
 
@@ -62,7 +62,7 @@ and a JSON card still registers, but use 4.5 or later.
    flow was trained on CPU.
 
 `nleflow train` and `export` limit themselves to `min(8, cores)` threads (`--cores` to
-change), the plan's "at most 8 cores" rule.
+change).
 
 ## 3. The tests
 
@@ -73,10 +73,11 @@ R_PROFILE_USER=/dev/null uv run pytest -rs
 ```
 
 Check: no failures. Without the three variables the R-dependent cases skip and say why
-(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 (neural-likelihood build)) turns on the cases that
+(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 (DMC2 main)) turns on the cases that
 register cards in R and compare the ONNX graph with EMC2, `NLEFLOW_RLIB` the R simulator
-cases, and `NLEFLOW_EMC2_SRC` the LAN and z0 cases, which read EMC2's
-`tests/testthat/golden/`.
+cases, and `NLEFLOW_EMC2_SRC` the cases that compare the converted LAN with the LAN card
+and onnxruntime rows EMC2's own tests hold (`tests/testthat/golden/`). The published LAN
+and the other reference files the tests read are in `nleCards/`.
 
 Golden and ONNX comparisons are bounded per row by 1e-12 plus a multiple of the
 rounding error of the spline knots over the width of the bin holding the point
@@ -96,8 +97,8 @@ From the root of this repository, from a source tarball of your clone of EMC2
 placed in `nleflow/docker/emc2/` (git-ignored); `EMC2_SHA` is then only a label:
 
 ```sh
-R CMD build <your EMC2 clone> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
-docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
+R CMD build --no-build-vignettes <your EMC2 clone> && mv EMC2_*.tar.gz nleflow/docker/emc2/
+docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.tar.gz \
   --build-arg EMC2_SHA=<commit of your clone> -t nleflow:latest .
 ```
 
@@ -118,7 +119,7 @@ card's fit is faster on OpenBLAS (the flows are matrix products); the analytic D
 affected. Use `OPENBLAS_NUM_THREADS=1` when the chains run in parallel.
 
 **Measured** (AH's Mac, Apple M2 Max, colima VM with 8 CPUs and 24 GB, linux/arm64;
-2026-10-22, EMC2 (neural-likelihood build) 9f2801b2 from its tarball, R 4.6.1): the image builds in
+2026-10-22, EMC2 (DMC2 main) 9f2801b2 from its tarball, R 4.6.1): the image builds in
 4 min 21 s and is 4.35 GB (1.09 GB content). EMC2's suite gives 1472 passed / 0 failed /
 9 skipped in 75 s; the Mac gives 1474 / 0 / 8. The difference is two macOS-only
 expectations: the Accelerate link-order test skips, and the `VECLIB_MAXIMUM_THREADS`

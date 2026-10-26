@@ -33,10 +33,10 @@ models the smear itself.
 
 ```sh
 cd nleflow/examples/ddm_svst0
-export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   # e.g. ~/R/nle-ondev-lib:~/R/nle-m4-lib
+export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   # e.g. ~/R/nle-lib
 ./run_smoke.sh          # 1 min: the whole chain below on 1 % of the data, 2 epochs
 ./run_full.sh           # the full recipe: simulate + 300 epochs, about 7.2 h at 8 cores
-./gate_full.sh          # the full card's gates, 2 min (EMC2_FIXED_LIB=<a current EMC2> adds nle_verify.R on the card alone)
+./gate_full.sh          # the full card's gates, 2 min
 ```
 
 `run_smoke.sh` runs, in order:
@@ -51,7 +51,7 @@ export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   
 | `nleflow golden` + `cmp` | the golden file rewritten from the card alone is identical |
 | `nn_golden_check()` | `PASS golden check ... (flow_joint, 1150 rows)` |
 | `check_in_emc2.R` | compiled vs R path below 1e-11; the network vs the analytic DDM through a design and per trial; writes `cases.csv` |
-| `nle_verify.R` | passes with the current EMC2; fails with older EMC2 (below) |
+| `nle_verify.R` | `all checks passed`, from the card alone (below) |
 | `nleflow onnx` + `onnx-check --cases` | both signatures `PASS` on the golden rows and on the EMC2 cases |
 
 `check_simulator.R` tests the simulator, not the network: given the response,
@@ -69,13 +69,12 @@ onnxruntime's batched Exp may differ from R's `exp` by an ulp, which decides
 the tie at the discontinuous onset of an `st0 = 0` density either way (42 of
 1600 such rows did so in the trialwise graph).
 
-**`nle_verify.R` needs the current EMC2 for this card.** It registers a card with
-the card alone. The current EMC2 takes the card's `fixed` values as
-the default `exceptions` (and refuses an exception that contradicts them); older
-EMC2 ignores them, so registration stops with "the network
-was trained without 's' ... declare the value it was fixed at with exceptions =
-c(s = <value>)". With older EMC2, register with the exceptions as above;
-`run_smoke.sh` and `gate_full.sh` do.
+**`nle_verify.R` registers the card alone.** EMC2 takes the card's `fixed` values
+(s = 1, SZ = 0) as the default `exceptions` and refuses an exception that
+contradicts them. An EMC2 that does not read `fixed` stops with "the network was
+trained without 's' ... declare the value it was fixed at with exceptions =
+c(s = <value>)"; with one, register with the exceptions as `run_smoke.sh` and
+`gate_full.sh` do for `nn_golden_check()`.
 
 On the laptop (Apple M2 Max, 8 cores), the smoke chain: data in 5 s, flow 2
 epochs in 3 s, classifier in 2 s; float64 gate 5.1e-13 (log pdf), 8.0e-15 (z),
@@ -97,8 +96,7 @@ the simulation 4.1 min, the flow 424.8 min (about 81 s an epoch), the classifier
 In `nleCards/`: `ddm_svst0_e299_weights.json` (sha256
 `67739e2dca9da692e0b241ea16389eadc5933d68e6873f535f47bef314a04374`), its golden file
 and intermediates. The best checkpoint is the last (validation loss −0.21778; flat
-to five digits from epoch 290). `gate_full.sh` (2 min), with an older EMC2 for the
-EMC2 checks and the current one for the second `nle_verify.R`:
+to five digits from epoch 290). `gate_full.sh` (2 min):
 
 | gate | result |
 |---|---|
@@ -110,8 +108,7 @@ EMC2 checks and the current one for the second `nle_verify.R`:
 | per trial vs WienR, 1e5 held-out rows | mean log p − log q 0.0002 (KL); \|Δ\| median 0.0124, 90 % 0.0390, 99 % 0.0998 |
 | — by regime | sv = 0: 0.0118 / 0.0915 (median / 99 %); st0 = 0: 0.0120 / 0.0976; both 0: 0.0110 / 0.0869; \|v\| > 3: 0.0150 / 0.1165 |
 | — onset and tail | rt − t0 < 0.05 s: 0.0168 / 0.1755; rt > 3 s: 0.0363 / 0.3498 |
-| `nle_verify.R`, EMC2 252e155f | FAIL: "the network was trained without 's'" (expected, above) |
-| `nle_verify.R`, current EMC2 | `all checks passed` (the card: 7.58e-12) |
+| `nle_verify.R` | `all checks passed` (the card: 7.58e-12) |
 | ONNX, both signatures, golden rows | 1106 rows above the floor: 3.31e-12; −Inf and floor rows agree; PASS against 1e-10 |
 | ONNX, both signatures, EMC2 cases | 79 200 rows: 8.19e-11; −Inf and floor rows agree; PASS against 1e-10 |
 | simulator PIT (1e5 rows of data/val) | KS p 0.096 to 0.934 overall, per regime and response; `ll` vs `dWDM` 6.4e-06 |

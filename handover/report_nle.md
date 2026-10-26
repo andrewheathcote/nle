@@ -1,6 +1,6 @@
 # DDMnle: a calibrated neural likelihood for the DDM with variability
 
-Draft of 2026-10-25.
+Draft of 2026-10-26.
 
 ## 0. Summary
 
@@ -14,8 +14,9 @@ Draft of 2026-10-25.
   and 9–685x faster than WienR at the project's reference precision 1e-8, with the largest gains where st0 and SZ are both free
   (§1).
 - **Availability.** DDMnle ships with EMC2 on the `main` branch of the DMC2 repository and is the default network of `DDMnn()`. Two
-  more neural likelihoods ship with it: the conflict racing diffusion model (CRDM, `CRDMnn()`; Appendix D), whose exact likelihood,
-  a slow numerical (Volterra) solution with an exact simulator, also ships as the model `CRDM()`, and the RTCON2 confidence-rating model (`RTCONnn()`), which has no analytic likelihood in EMC2. The
+  more neural likelihoods ship with it: the conflict racing diffusion model (CRDM, `CRDMnn()`; Appendix D), whose exact density
+  (a slow numerical Volterra solution) and simulator also ship, as `CRDM()`, the network's twin and validation control, and the
+  RTCON2 confidence-rating model (`RTCONnn()`), which has no analytic likelihood in EMC2. The
   Python package nleflow trains such networks, exports them as cards and as ONNX graphs, and converts published LANs (§6).
 - **LAN.** In Appendix A we use our methodology to test a published LAN from HSSM for the st0 case. It is not calibrated in its own box (four of five parameters outside the envelope; coverage of `a` 0.71), while the analytic control is clean.
 
@@ -142,10 +143,10 @@ differences with 95% envelopes) for each model.
   the standard DDM, the DDM at precision 1e-8 and DDMnle: the posteriors agree to within 0.09 posterior sd, and the fits take 52 s, 1410 s
   and 8 s. DDMnle's log-likelihood sits about 4 units below the exact one, a roughly constant offset.
 - **Keep the prior inside the box.** A network returns its floor outside the region it was trained on, which truncates a posterior
-  there; EMC2 checks that a prior's mean ± 4 sd lies inside the box before a cell or an SBC run.
+  there; EMC2 warns when a prior's mean ± 4 sd leaves the box, for a cell or an SBC run, and can be told to stop instead.
 - **Response-time resolution.** The default `rt_resolution = 1/60` floors each RT to a 1/60 s grid, which corrects the delay a 60 Hz
-  display adds to real data but, on simulated or millisecond-accurate data, shifts t0 down by about 8 ms (about −1.3 posterior sd at
-  N = 100). The bias is in the data, not the likelihood, and holds for analytic and neural likelihoods alike. Use 1/1000 unless the RTs
+  display adds to real data but, on simulated or millisecond-accurate data, shifts t0 down by about 8 ms (a standardised bias of
+  about −1.9 posterior sd at N = 100 in DDMnle's calibration). The bias is in the data, not the likelihood, and holds for analytic and neural likelihoods alike. Use 1/1000 unless the RTs
   carry that noise.
 - **Training your own.** nleflow takes a short model specification and a simulator, trains a race or choice flow, and exports a card
   and an ONNX graph; the same checks as here (golden vectors, score bias, SBC) are run in EMC2. It also converts a published LAN
@@ -340,9 +341,10 @@ which is slow. The CRDM flow is Malte's; our work is its integration into EMC2 a
 - **A hybrid race likelihood in EMC2.** The flow supplies the density and survivor of the pulsed accumulator and the analytic Wald
   supplies the other, assembled in the compiled likelihood. Amplitude is exactly 0 outside the distractor-matched condition, so
   such trials reduce to the plain RDM.
-- **A CRDM model with a reference.** A compiled simulator and a Volterra solver, usable as the analytic comparison and shipped
-  with EMC2 as the model `CRDM()`: the exact CRDM likelihood, which can be fitted directly where its cost is acceptable, and the
-  simulator that `CRDMnn()` uses to generate data. Our solver agrees
+- **A CRDM model with a reference.** A compiled simulator and a Volterra solver, shipped with EMC2 as `CRDM()`: the exact CRDM
+  density and simulator, the twin of `CRDMnn()` (its parameterisation and the simulator that generates its data) and the control of
+  its validation checks. `CRDM()` has no compiled likelihood, which EMC2's sampler needs, so it is not fitted; `CRDMnn()` is the CRDM
+  to fit. Our solver agrees
   with Malte's to a relative error of 9 × 10^-14^ (time step 0.002) and 3.7 × 10^-13^ (0.0005); at amplitude 0 it equals the closed-form
   Wald to 4 × 10^-14^. Its convergence in the time step has order about 1.5–1.9, with a density error relative to the peak of
   5.9 × 10^-3^, 2.1 × 10^-3^ and 5.6 × 10^-4^ at steps 0.002, 0.001 and 0.0005 (against a step of 0.00025). Our simulator
@@ -363,11 +365,11 @@ which is slow. The CRDM flow is Malte's; our work is its integration into EMC2 a
   control: no disagreement beyond chance (smallest p 0.114 and 0.075, Bonferroni over 18 tests).
 - **Posterior shift against the reference** (200 datasets, the largest shift in analytic posterior sd): 0.017 for the 0.0005 flow,
   below the 0.10 floor, so it passes; 0.117 for the 0.005 flow, narrowly over; 0.59 for the 0.05 flow, which fails.
-- **Speed.** Per likelihood evaluation in the timing check: hybrid flow 0.23 ms, Volterra at step 0.002 3.4 ms, at 0.0005 42.5 ms,
-  so the flow is 15 times and 185 times faster. A full Volterra SBC cell took 2.7 h (step 0.002, 250 replicates) and 8.5 h (0.0005,
-  50 replicates) on 48 cores, against 22 minutes for the 500-replicate network cell. The solver's cost grows with the square of the
-  longest decision time, so the gap widens with slower responses: on 400 trials with responses up to 2.3 s, one evaluation takes
-  0.16 ms with the flow and 113 ms with the solver at step 0.0005, about 700 times longer.
+- **Speed.** On 400 trials with responses up to 2.3 s, one likelihood evaluation takes 0.17 ms with the flow, 4.1 ms with EMC2's
+  Volterra solver at step 0.002 and 61 ms at step 0.0005 (one thread), so the flow is about 24 and 360 times faster. The solver's cost
+  grows with the square of the longest decision time, so the gap widens with slower responses. In the SBC runs a Volterra cell took
+  2.7 h (step 0.002, 250 replicates) and 8.5 h (0.0005, 50 replicates) on 48 cores, against 22 minutes for the 500-replicate network
+  cell.
 - **Verdict.** The hybrid network with the 0.0005 flow passes SBC at N = 400 and is indistinguishable from the Volterra reference at
   both resolutions. It ships with EMC2 as `CRDMnn()`; the 0.005 and 0.05 flows, which failed the posterior-shift check, do not.
 - **Limit.** The score-bias screen cannot yet resolve amplitude: its analytic control is 0.021 on that parameter, 21 times its
