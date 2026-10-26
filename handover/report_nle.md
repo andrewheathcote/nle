@@ -13,7 +13,7 @@ Draft of 2026-10-26.
 - **Speed.** DDMnle is 1.9–6.2x faster at N = 100 and 2.9–11.5x faster at N = 400 than EMC2's default-precision (5e-3) compiled WienR,
   and 9–685x faster than WienR at the project's reference precision 1e-8, with the largest gains where st0 and SZ are both free
   (§1).
-- **Availability.** DDMnle ships with EMC2 on the `main` branch of the DMC2 repository and is the default network of `DDMnn()`. Two
+- **Availability.** DDMnle ships with EMC2 on the `main` branch of the DMC2 repository as the scaled DDM card, the default network of `DDMnn()` (EMC2 and nleflow call it by that name). Two
   more neural likelihoods ship with it: the conflict racing diffusion model (CRDM, `CRDMnn()`; Appendix D), whose exact density
   (a slow numerical Volterra solution) and simulator also ship, as `CRDM()`, the network's twin and validation control, and the
   RTCON2 confidence-rating model (`RTCONnn()`), which has no analytic likelihood in EMC2. The
