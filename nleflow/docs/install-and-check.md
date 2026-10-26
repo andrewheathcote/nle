@@ -1,19 +1,19 @@
 # Install and check
 
 What you need depends on the task (NLEFLOW_PLAN.md section 9.1): **using a card in
-EMC2** needs R and EMC2 `dev-flow`; **training, exporting, ONNX and converting** need
+EMC2** needs R and EMC2 as built from DMC2 `main`; **training, exporting, ONNX and converting** need
 the Python environment of this directory; the **simulator of a worked example** needs
 both. Every step below has one check. Commands run from `nleflow/` unless said.
 
 Order: R and EMC2 first, then the verification command, then Python.
 
-**Which EMC2.** The steps name `dev-flow` of `ampl-psych/EMC2`: the nle work on `dev` after
-the `joint_move` sampler merge; it reads a card's `fixed` field. The older `dev-nle-m0`
-serves except for cards with fixed parameters ([START_HERE.md](../START_HERE.md), "Known limits").
+**Which EMC2.** The package EMC2 as built from `main` of DMC2
+(<https://github.com/andrewheathcote/DMC2>), which carries the neural likelihoods; it reads
+a card's `fixed` field ([START_HERE.md](../START_HERE.md), "Known limits").
 
 ## 1. R >= 4.5 and EMC2
 
-R older than 4.5 has no `tools::sha256sum`; EMC2 then pins its shipped artefacts by md5
+R older than 4.5 has no `tools::sha256sum`; EMC2 then pins its shipped cards by md5
 and a JSON card still registers, but use 4.5 or later.
 
 1. R >= 4.5 from CRAN. Check: `R --version | head -1` shows 4.5 or later.
@@ -21,12 +21,13 @@ and a JSON card still registers, but use 4.5 or later.
    `g++` >= 11. Check: `R CMD config CXX17` prints a compiler.
 3. EMC2's R packages and `WienR` >= 0.3-17 (not packaged for Ubuntu; from CRAN).
    Check: `Rscript -e 'stopifnot(packageVersion("WienR") >= "0.3.17")'` exits 0.
-4. EMC2 branch `dev-flow` of `ampl-psych/EMC2`, into a dedicated library:
+4. EMC2 from DMC2 `main`, into a dedicated library (the package is called EMC2, so keep
+   it apart from a CRAN EMC2):
 
    ```sh
-   git clone -b dev-flow https://github.com/ampl-psych/EMC2
+   git clone https://github.com/andrewheathcote/DMC2
    mkdir -p ~/R/nle-lib
-   MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib EMC2
+   MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib DMC2
    ```
 
    Check: `Rscript -e '.libPaths(c("~/R/nle-lib", .libPaths())); library(EMC2); cat(find.package("EMC2"), "\n")'`
@@ -39,7 +40,7 @@ and a JSON card still registers, but use 4.5 or later.
    Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))'
    ```
 
-   Check: one `PASS` line per shipped artefact and `all checks passed`; the exit status
+   Check: one `PASS` line per shipped card and `all checks passed`; the exit status
    is 1 on any `FAIL`. Cards are checked by naming them
    (`... nle_verify.R <card>`), each against the `<tag>_golden.csv` beside it.
 
@@ -68,21 +69,20 @@ change), the plan's "at most 8 cores" rule.
 
 ```sh
 export NLEFLOW_EMC2_LIB=$HOME/R/nle-lib NLEFLOW_RLIB=$HOME/R/nle-lib
-export NLEFLOW_EMC2_SRC=/path/to/EMC2        # EMC2's source tree; default ../EMC2 beside the nle repo
 R_PROFILE_USER=/dev/null uv run pytest -rs
 ```
 
-Check: no failures. Without the three variables the R-dependent cases skip and say why
-(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 `dev-flow`) turns on the cases that
-register cards in R and compare the ONNX graph with EMC2, `NLEFLOW_RLIB` the R simulator
-cases, and `NLEFLOW_EMC2_SRC` the LAN and z0 cases, which read EMC2's
-`tests/testthat/golden/`.
+Check: no failures. Without the two variables the R-dependent cases skip and say why
+(`-rs`): `NLEFLOW_EMC2_LIB` (a library holding EMC2 built from DMC2 `main`) turns on the
+cases that register cards in R and compare the ONNX graph with EMC2, and `NLEFLOW_RLIB` the
+R simulator cases. The LAN and z0 cases read their fixtures from
+`handover/nle-methods/port/export/`.
 
 Golden and ONNX comparisons are bounded per row by 1e-12 plus a multiple of the
 rounding error of the spline knots over the width of the bin holding the point
 (`tests/test_golden.py`, `tests/test_onnx.py`): the two narrowest bins (1e-4) amplify
 the last bit of a matrix product, so the same card differs across BLAS libraries there.
-The golden file of DDMnle differs from this machine's output by up to 3.6e-11 on x86_64
+The golden file of the scaled DDM card differs from this machine's output by up to 3.6e-11 on x86_64
 OpenBLAS and 1.8e-11 on Apple Accelerate, only where z lies in the top bin.
 
 ## 4. The container (no local R or Python needed)
@@ -91,8 +91,8 @@ OpenBLAS and 1.8e-11 on Apple Accelerate, only where z lies in the top bin.
 R >= 4.5 from CRAN's Ubuntu repository, EMC2's R packages, `WienR` and the test suite's
 `testthat`, `vdiffr`, `withr`, `DiagrammeR`, EMC2 in `/opt/emc2/lib` (its source in
 `/opt/emc2/src`, `EMC2_SHA.txt` beside the library), `uv` and the lock, a UTF-8 locale.
-From the root of the nle repository, either EMC2 from GitHub at `EMC2_SHA` (default
-`dev-flow`, bb96fb03):
+From the root of the nle repository, either EMC2 from DMC2 on GitHub at `EMC2_SHA` (default:
+a commit of DMC2 `main`):
 
 ```sh
 docker build -f nleflow/docker/Dockerfile -t nleflow .
@@ -102,9 +102,9 @@ or from a source tarball of a local EMC2 build, placed in
 `nleflow/docker/emc2/` (git-ignored); `EMC2_SHA` is then only a label:
 
 ```sh
-R CMD build <EMC2 worktree> && mv EMC2_3.4.1.9001.tar.gz nleflow/docker/emc2/
-docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
-  --build-arg EMC2_SHA=bb96fb03 -t nleflow:dev-flow .
+R CMD build <DMC2 worktree> && mv EMC2_3.4.1.tar.gz nleflow/docker/emc2/
+docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.tar.gz \
+  --build-arg EMC2_SHA=<the DMC2 commit> -t nleflow:dmc2 .
 ```
 
 Then:
@@ -129,7 +129,7 @@ affected. Use `OPENBLAS_NUM_THREADS=1` when the chains run in parallel.
 9 skipped in 75 s; the Mac gives 1474 / 0 / 8. The difference is two macOS-only
 expectations: the Accelerate link-order test skips, and the `VECLIB_MAXIMUM_THREADS`
 check in `test-nn-validate.R` does not run. `nle-verify` passes on the shipped cards,
-DDMnle, the RDM A = 0 card and ddm_svst0_e299, with the same maxima as on the Mac.
+the scaled DDM card, the RDM A = 0 card and ddm_svst0_e299, with the same maxima as on the Mac.
 EMC2's compiled likelihood on the inputs of `test-nn-reference.R`, exported from the
 Mac, against the Mac's values: trial-wise max |diff| 3.1e-13 (ddm_cap256w_c4), 1.35e-12
 (ddm_st0zero, one trial of 9600; the median is 6e-16), 9.5e-14 and 1.3e-13 (rdm_small

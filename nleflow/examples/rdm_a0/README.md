@@ -9,12 +9,12 @@ batch 1024, 300 epochs, 30 kept checkpoints. `spec_smoke.yaml` is the same
 with 1 % of the data (240 000 training rows, 24 000 validation rows) and 2
 epochs: end to end in about a minute on 4 cores.
 
-Needs R with EMC2 `dev-flow` in a dedicated library (for `rWald` and
+Needs R with EMC2 (built from DMC2 `main`) in a dedicated library (for `rWald` and
 `dRDM`) and `jsonlite`; `arrow` for parquet, else the simulator writes CSV.
 
 ```sh
 cd nleflow                                   # the package directory, after uv sync
-export NLEFLOW_RLIB=~/R/nle-m0-lib           # the library holding EMC2 dev-flow
+export NLEFLOW_RLIB=~/R/nle-m0-lib           # the library holding EMC2 built from DMC2 main
 uv run nleflow simulate examples/rdm_a0/spec_smoke.yaml      # 5 s: data_smoke/{train,val}
 uv run nleflow train    examples/rdm_a0/spec_smoke.yaml      # 15 s: runs/rdm_a0_smoke/
 uv run nleflow steps    examples/rdm_a0/runs/rdm_a0_smoke

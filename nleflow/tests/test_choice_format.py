@@ -1,6 +1,6 @@
 """The choice-set names in a spec and the format the simulator writes agree.
 
-DDMnle's simulate.R wrote Parquet (when arrow is installed) to the names the
+The scaled DDM example's simulate.R wrote Parquet (when arrow is installed) to the names the
 spec gave, `choice/train.csv`, and the reader chose the format from the suffix
 and parsed Parquet bytes as CSV."""
 import os
@@ -14,7 +14,7 @@ from nleflow.data import load_choice_set, open_dataset, write_parquet
 from nleflow.simulate import simulate
 from nleflow.spec import load_spec
 
-DDMNLE = Path(__file__).resolve().parents[1] / "examples" / "ddmnle"
+DDM_SCALED = Path(__file__).resolve().parents[1] / "examples" / "ddm_scaled"
 COLS = {"kappa": [0.5, 1.0], "eta": [0.1, 0.2], "Z": [0.0, 0.3], "SZ": [0.0, 0.1], "p_R2": [0.2, 0.7]}
 
 
@@ -34,7 +34,7 @@ def test_missing_file_still_raises(tmp_path):
 
 
 @pytest.mark.parametrize("fmt", ["parquet", "csv"])
-def test_ddmnle_smoke_simulator_names_agree_with_the_spec(tmp_path, fmt, monkeypatch):
+def test_ddm_scaled_smoke_simulator_names_agree_with_the_spec(tmp_path, fmt, monkeypatch):
     rlib = os.environ.get("NLEFLOW_RLIB", "")
     if not rlib or shutil.which("Rscript") is None:
         pytest.skip("set NLEFLOW_RLIB to a library holding EMC2 and WienR for the R simulator")
@@ -43,8 +43,8 @@ def test_ddmnle_smoke_simulator_names_agree_with_the_spec(tmp_path, fmt, monkeyp
                      f'cat(requireNamespace("arrow", quietly = TRUE))\'').read()
         if "TRUE" not in r:
             pytest.skip("R arrow is not installed")
-    work = tmp_path / "ddmnle"
-    shutil.copytree(DDMNLE, work, ignore=shutil.ignore_patterns("data*", "runs"))
+    work = tmp_path / "ddm_scaled"
+    shutil.copytree(DDM_SCALED, work, ignore=shutil.ignore_patterns("data*", "runs"))
     monkeypatch.setenv("NLEFLOW_FORMAT", fmt)
     monkeypatch.setenv("R_PROFILE_USER", "/dev/null")
     spec = load_spec(work / "spec_smoke.yaml")

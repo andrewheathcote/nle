@@ -4,7 +4,7 @@ A published likelihood approximation network (Fengler et al.; HSSM's LANs) is a 
 multilayer perceptron whose ONNX file holds weights and an input width. `nleflow convert`
 reads the graph and writes an EMC2 card of kind `mlp_joint` (card_version 1) that EMC2's
 compiled MLP evaluator runs; EMC2 never runs ONNX. The converter that used to live in
-EMC2 (`inst/scripts/onnx_to_card.py`) is replaced by this command. Needs the Python
+EMC2 does not convert ONNX; this command does. Needs the Python
 environment with `onnx` and `onnxruntime` ([install and check](install-and-check.md)).
 
 What a graph does not record comes from a preset (`src/nleflow/presets/*.yaml`):
@@ -16,8 +16,8 @@ uv run nleflow convert path/to/ddm_uniform_st.onnx --preset ddm_uniform_st \
 ```
 
 (`path/to/` is where the published `ddm_uniform_st.onnx` is. The current file is
-`https://huggingface.co/Eitanm/ddm-st-lans/resolve/40e0327c22a4/ddm_uniform_st.onnx`; EMC2's
-`tests/testthat/golden/` holds the superseded 3 × 100 file. Both convert; see Presets below.
+`https://huggingface.co/Eitanm/ddm-st-lans/resolve/40e0327c22a4/ddm_uniform_st.onnx`; `handover/nle-methods/port/export/`
+holds the superseded 3 × 100 file. Both convert; see Presets below.
 [examples/lan_in](../examples/lan_in/README.md) runs the whole path.) Checks:
 
 | command | check |

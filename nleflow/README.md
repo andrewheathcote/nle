@@ -1,11 +1,12 @@
 # nleflow
 
 Train a normalizing-flow neural likelihood for an evidence-accumulation model
-from a model specification, and export it as a card that EMC2 (branch
-`dev-flow`) loads with `register_nn_model()`. Milestones M1 to M3 of
-`handover/NLEFLOW_PLAN.md`: the race-model path with the RDM A = 0 example;
-the choice-model path (flow + choice classifier; the scaled DDM card,
-DDMnle) with its ONNX export; and the converter that brings a published
+from a model specification, and export it as a card that EMC2 (as built from
+DMC2 `main`, <https://github.com/andrewheathcote/DMC2>) loads with
+`register_nn_model()`. Milestones M1 to M3 of `handover/NLEFLOW_PLAN.md`: the
+race-model path with the RDM A = 0 example; the choice-model path (flow +
+choice classifier; the scaled DDM card, EMC2's `DDMnn()`) with its ONNX
+export; and the converter that brings a published
 likelihood approximation network (a LAN, in ONNX) into EMC2 as a card.
 
 ```
@@ -31,7 +32,7 @@ minutes).
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) |
 | install the tools and check them (R + EMC2, Python, the tests, the container) | [docs/install-and-check.md](docs/install-and-check.md) |
 | train a race flow (the RDM example; the LBA in `examples/lba/`) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) |
-| train a choice flow (the scaled DDM, DDMnle) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
+| train a choice flow (the scaled DDM card) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) |
 | write the ONNX graph of a card and check it | [docs/onnx-out.md](docs/onnx-out.md) |
 | bring a published LAN (ONNX) into EMC2 | [docs/lan-in.md](docs/lan-in.md); run [examples/lan_in](examples/lan_in/README.md) |
@@ -40,16 +41,16 @@ minutes).
 Each page gives its commands with a one-line check each. The sections below are the
 reference they are built from: the spec, the data contract, the card and its gate, the
 ONNX export, the converter. `docker/Dockerfile` builds an image with R >= 4.5, EMC2
-`dev-flow` and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
+(from DMC2) and the lock; `docker run <image> nle-verify` and `docker run <image> pytest`
 are its checks.
 
 What a flow is, how the cards are evaluated and validated, and the card
-format are EMC2's: `vignette("neural-likelihood-cards")` on `dev-flow` is
-the contract this package writes to.
+format are EMC2's: `vignette("neural-likelihood-cards")` is the contract this
+package writes to.
 
 ## Installation (the Python side of NLEFLOW_PLAN.md section 9.2)
 
-Each step has its one-line check. R and EMC2 `dev-flow` are needed only
+Each step has its one-line check. R and EMC2 (from DMC2) are needed only
 for the simulator of the RDM example (`EMC2:::rWald`) and for registering
 the exported card; their steps are in the plan's section 9.2.
 
@@ -68,9 +69,8 @@ the exported card; their steps are in the plan's section 9.2.
 4. **The command.** Check: `uv run nleflow --help` lists the nine commands
    (or `source .venv/bin/activate` once and use `nleflow` directly).
 5. **The tests.** Check: `uv run pytest -rs` passes. With `NLEFLOW_EMC2_LIB=<library holding
-   EMC2 dev-flow>`, `NLEFLOW_RLIB=<the same library>` (the R simulators) and
-   `NLEFLOW_EMC2_SRC=<EMC2 source tree>` (its `tests/testthat/golden/`: the LAN and z0
-   files; default `../EMC2` beside this repository) all 51 run;
+   EMC2 built from DMC2 main>` and `NLEFLOW_RLIB=<the same library>` (the R simulators)
+   all 51 run (the LAN and z0 fixtures are in `handover/nle-methods/port/export/`);
    without them the R-dependent cases skip and `-rs` says
    why. About 90 s on 4 cores. The ONNX tests need `onnx` and `onnxruntime` from the lock;
    check: `uv run python -c "import onnxruntime as ort; print(ort.__version__)"`
@@ -117,14 +117,14 @@ names in `context_transforms` but not in `context_names`, their box the value
 itself in `bounds_natural`, and the values in `fixed`. EMC2 then needs them at
 registration, `register_nn_model(card, twin = DDM, exceptions = c(s = 1, SZ = 0))`
 (`unlist(jsonlite::fromJSON(card)$fixed)`), and says which is missing when they
-are not given. EMC2 `dev-flow` reads `fixed` itself, so `nle_verify.R` checks such a card from the
-card alone (`examples/ddm_svst0/`); the older `dev-nle-m0` does not (see "Known limits" in
-START_HERE.md).
+are not given. EMC2 as built from DMC2 reads `fixed` itself, so `nle_verify.R` checks such a
+card from the card alone (`examples/ddm_svst0/`); an EMC2 that does not read `fixed` cannot
+(see "Known limits" in START_HERE.md).
 
 YAML note: write exponents with a sign (`1.0e-4`, not `1e-4`) or as plain
 integers; PyYAML reads `24e6` as a string and the spec refuses it.
 
-**A choice model** (the scaled DDM, `examples/ddmnle/spec.yaml`) sets
+**A choice model** (the scaled DDM, `examples/ddm_scaled/spec.yaml`) sets
 `response: choice`, a `classifier`, `scaling: {kind: ddm_unit}` and, for the
 simulator, per-input strata in the long form (`kind`, `share`, `range`) plus
 `regimes`, the shares of draws with each set of inputs exactly 0:
@@ -256,7 +256,7 @@ regimes of `sbc/scaled_cell.R`, half the draws with s ≠ 1). For a
 `flow_joint` card the cases carry the card's own inputs instead (its context
 on the stored scale, then `rt`, `choice`, `logp`; every row a density, against
 `--tol`); `examples/ddm_svst0/check_in_emc2.R` writes them. Measured on the
-committed DDMnle card, both signatures:
+committed scaled DDM card, both signatures:
 
 | comparison | rows above the floor | max \|Δ log p\| | median |
 |---|---|---|---|
@@ -282,7 +282,7 @@ EMC2 never runs ONNX. What the graph does not record comes from a preset:
 
 ```sh
 uv run nleflow convert --list-presets
-uv run nleflow convert ../../EMC2/tests/testthat/golden/ddm_uniform_st.onnx \
+uv run nleflow convert ../handover/nle-methods/port/export/ddm_uniform_st.onnx \
     --preset ddm_uniform_st --out lan_ddm_uniform_st_weights.json --verify 300
 ```
 
@@ -340,10 +340,8 @@ verified. Today: `ddm_uniform_st`, HSSM's DDM with uniform non-decision time
 defaults EMC2's `nle_verify.R` registers it with (`p_types`, from the preset) and a
 `validation` block: `calibration: "unknown; needs its own SBC cell before
 inference"` always, and with `--verify` the golden file and the tolerance it
-holds at. No other fields. EMC2 used to read cards with R's `$`, which matches
-partial names, so a field such as `preset` was read as `pre` (a decision-time
-shift) and the card refused; `dev-flow` reads every card field by exact
-name, and the converter still writes only fields the vignette names.
+holds at. No other fields: EMC2 reads every card field by exact name, and the
+converter writes only fields the vignette names.
 
 **`--verify N`** (or `--rows <csv>` to verify on given rows) compares the
 card's float64 forward pass with onnxruntime, each with one-trial calls and
@@ -358,26 +356,25 @@ In the float64 copy a Gelu node is expanded into Mul, Add and Tanh, because
 onnxruntime's double Gelu kernel is accurate to about 6e-9 only (its Tanh to
 6e-16). The onnxruntime outputs of the published graph are written as the
 card's golden file (`<tag>_golden.csv`: the parameters, `rt`, `choice`,
-`logp_ort`), the format of EMC2's `tests/testthat/golden/lan_ddm_uniform_st_ort.csv`;
+`logp_ort`), the format of `handover/nle-methods/port/export/lan_ddm_uniform_st_ort.csv`;
 `nn_golden_check(m)` reads it, with the tolerance the card records. Run on the committed CSV's rows
 (`--rows`), the converter reproduces that file exactly.
 
-**EMC2's `inst/scripts/onnx_to_card.py`** was this converter's first version; it is now a
-pointer to `nleflow convert` and its test in EMC2 is skipped with that message. The output
-for `ddm_uniform_st` equals the card EMC2's tests hold
-(`tests/testthat/golden/lan_ddm_uniform_st.rds`) in every field that script wrote, apart
-from `converted_with` (provenance) and `calibration`, which moved into `validation`.
+EMC2 does not convert ONNX; this command does. Its output for `ddm_uniform_st` equals the
+committed card (`handover/nle-methods/port/export/lan_ddm_uniform_st.rds`, the card EMC2's
+tests use) in every field it holds, apart from `converted_with` (provenance) and
+`calibration`, which the converter records in `validation`.
 
 ## Checking a card in EMC2
 
 ```r
-.libPaths(c("~/R/nle-m0-lib", .libPaths())); library(EMC2)
+.libPaths(c("~/R/nle-lib", .libPaths())); library(EMC2)
 m <- register_nn_model("rdm_a0_smoke_e1_weights.json", twin = RDM)
 nn_golden_check(m)    # PASS golden check ... max |diff| 2.70e-13 (log_pdf) against 1e-09
 ```
 and the verification command,
 `Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' <card>`,
-which prints one PASS/FAIL line per shipped artefact and per card and exits 1 on any FAIL.
+which prints one PASS/FAIL line per shipped card and per card given and exits 1 on any FAIL.
 
 ## Layout
 
@@ -397,7 +394,7 @@ scripts/onnx_cases_scaled.R   EMC2 reference cases for onnx-check
 src/nleflow/flow/             the flow, vendored from the NLE project
 examples/rdm_a0/              the RDM A = 0 example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/lba/                 the LBA example (twin = LBA, v identity, A zero-box) and its two check scripts
-examples/ddmnle/              the scaled DDM example (DDMnle): spec.yaml, spec_smoke.yaml, simulate.R
+examples/ddm_scaled/          the scaled DDM card's example: spec.yaml, spec_smoke.yaml, simulate.R
 examples/ddm_svst0/           the DDM with sv and st0 as an eight-parameter flow_joint card (s, SZ fixed) and its checks
 examples/lan_in/              HSSM's ddm_uniform_st LAN into EMC2: download, convert, verify, vs the analytic DDM
 examples/onnx_use/            a card's ONNX graphs from Python with onnxruntime alone

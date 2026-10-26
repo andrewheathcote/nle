@@ -20,7 +20,7 @@ Two kinds of network are trained:
 | path | what it learns | card kind | worked example |
 |---|---|---|---|
 | race | the density of each accumulator's finishing time; EMC2 combines them | `flow_race` | `examples/rdm_a0`, `examples/lba` |
-| choice | rt given the response (a spline flow) and P(response) (a classifier) | `flow_joint`, `flow_scaled` | `examples/ddm_svst0`, `examples/ddmnle` |
+| choice | rt given the response (a spline flow) and P(response) (a classifier) | `flow_joint`, `flow_scaled` | `examples/ddm_svst0`, `examples/ddm_scaled` |
 
 **What it is not.** It does not fit models (EMC2 does), it does not train LANs (it
 converts them), and a card that passes every check here is still not shown to give
@@ -31,12 +31,9 @@ EMC2's vignette "Neural likelihoods").
 
 Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.md). In short:
 
-1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own.
-   Today that is EMC2 branch **`dev-flow`** (the nle work on top of `dev` after the
-   `joint_move` sampler merge, origin/dev ff374317; it reads a card's `fixed` field;
-   stage H3). It is on GitHub (`ampl-psych/EMC2`, `git clone -b dev-flow`);
-   `dev-nle-m0` also works for everything except registering a card with fixed
-   parameters from the card alone (see "Known limits").
+1. **R >= 4.5 and EMC2** with the neural-likelihood code, in a library of its own:
+   the EMC2 package as built from **DMC2** `main`
+   (<https://github.com/andrewheathcote/DMC2>, `git clone https://github.com/andrewheathcote/DMC2`).
    ```sh
    MAKEFLAGS=-j4 R CMD INSTALL --preclean --library=$HOME/R/nle-lib <EMC2 source>
    export R_LIBS=$HOME/R/nle-lib R_PROFILE_USER=/dev/null     # always both (a second EMC2 can shadow yours)
@@ -49,9 +46,9 @@ Full steps, one check each: [docs/install-and-check.md](docs/install-and-check.m
    ```
    Check: one `PASS` line per card and `all checks passed`.
 4. **The tests**: `R_PROFILE_USER=/dev/null uv run pytest -rs` in `nleflow/`; set
-   `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies), `NLEFLOW_RLIB`
-   and `NLEFLOW_EMC2_SRC` (an EMC2 source tree) to turn on the R cases.
-5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from GitHub or from a source tarball of `dev-flow`, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
+   `NLEFLOW_EMC2_LIB` (the EMC2 library; R_LIBS for its dependencies) and `NLEFLOW_RLIB`
+   to turn on the R cases.
+5. **Or Docker**: `docker/Dockerfile` (R, EMC2 from DMC2 on GitHub or from a source tarball of it, the lock); `docker run <image> nle-verify`, `pytest`, `emc2-tests` ([install and check](docs/install-and-check.md), section 4).
 
 ## Where the cards are
 
@@ -61,22 +58,22 @@ Cards live in this repository, `handover/nle-methods/port/export/`, each as
 | card | model | kind | notes |
 |---|---|---|---|
 | `ddm_svst0_e<N>` | DDM with sv and st0 free, s = 1, SZ = 0 fixed | `flow_joint` | `examples/ddm_svst0`; its README has the gates |
-| `ddm_sc_s1106_e245` | the full DDM, scaled (DDMnle) | `flow_scaled` | the adopted DDM network; `examples/ddmnle` |
+| `ddm_sc_s1106_e245` | the full DDM, scaled (the scaled DDM card, EMC2's `DDMnn()`) | `flow_scaled` | the adopted DDM network; `examples/ddm_scaled` |
 | `lba_e299` | LBA | `flow_race` | `examples/lba` |
 | `rdm_ss_base_s801_e271`, `rdm_rdm_small_e195` | RDM | `flow_race` | `examples/rdm_a0` |
 | `rtcon2_r3_s2_e006` (RTCONnn) | RTCON2 rating model, K response categories | `flow_cat` | shipped by EMC2; not an nleflow example |
 | `lan_ddm_uniform_st` | HSSM's DDM with uniform st (a converted LAN) | `mlp_joint` | `examples/lan_in` converts the current file |
 
-EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow covering all variability cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow) and `rtcon2_r3_s2_e006_weights.json` (RTCONnn), loaded via `register_nn_model()` or the `DDMnn()`, `RDMnn()` and `RTCONnn()` model functions (DDMnn() defaults to the DDMnle card). The older `ddm_cap256w_c4`, `ddm_st0zero` and `rdm_small` `.rds` artefacts are gone from EMC2 dev-flow.
+EMC2 ships four cards: `ddm_sc_s1106_e245_weights.json` (the scaled DDM card, one DDM flow covering all variability cases), `rdm_ss_base_s801_e271_weights.json` (the RDM flow), `crdm_aff_log_h2_k12_clip_100k_dt0.0005_weights.json` (the CRDM flow) and `rtcon2_r3_s2_e006_weights.json` (RTCON2), loaded with `register_nn_model()` or the model functions `DDMnn()`, `RDMnn()`, `CRDMnn()` and `RTCONnn()`.
 
 ## A map
 
 | to do this | read | run |
 |---|---|---|
 | the whole path once, on small data | [TUTORIAL.md](TUTORIAL.md) | `examples/ddm_svst0/run_smoke.sh` |
-| train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddmnle` |
+| train a choice flow (DDM variants) | [docs/train-a-choice-flow.md](docs/train-a-choice-flow.md) | `examples/ddm_svst0`, `examples/ddm_scaled` |
 | train a race flow (RDM, LBA) | [docs/train-a-race-flow.md](docs/train-a-race-flow.md) | `examples/lba`, `examples/rdm_a0` |
-| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` (dev-flow, or dev-nle-ondev >= cb40f173) | `inst/scripts/using_a_trained_flow_data.R` |
+| fit data with a card in EMC2 (register, check, prior in the box, fit vs the analytic model) | EMC2's `vignette("using-a-trained-flow")` | `inst/scripts/using_a_trained_flow_data.R` |
 | export a card and check it in EMC2 | [docs/export-and-check-a-card.md](docs/export-and-check-a-card.md) | each example's `check_in_emc2.R` |
 | a card as ONNX, and check it | [docs/onnx-out.md](docs/onnx-out.md) | `nleflow onnx`, `nleflow onnx-check` |
 | use the ONNX graph from Python | [examples/onnx_use](examples/onnx_use/README.md) | `examples/onnx_use/run.sh` |
@@ -91,20 +88,20 @@ EMC2 ships `ddm_sc_s1106_e245_weights.json` (DDMnle, the single DDM flow coverin
   float64 card to about 1e-5 in log density (the golden check's tolerance is 1e-4 and
   is recorded in the card); our graphs are float64 and match EMC2 to about 1e-13 (1e-8
   where st0 > 0 makes the density a difference of two CDFs).
-- **Cards with fixed parameters need EMC2 >= 1d9fb41d** (`dev-flow` or `dev-nle-ondev`). A twin
-  parameter held at a value in training (`fixed` in the spec, e.g. s = 1 and SZ = 0 for
-  `ddm_svst0`) is recorded in the card; older EMC2 ignores it, so registration needs
-  `exceptions = unlist(jsonlite::fromJSON(card)$fixed)` and `nle_verify.R` fails on
-  the card.
+- **Cards with fixed parameters need an EMC2 that reads the card's `fixed` field**
+  (DMC2 `main` does). A twin parameter held at a value in training (`fixed` in the spec,
+  e.g. s = 1 and SZ = 0 for `ddm_svst0`) is recorded in the card; an EMC2 that ignores it
+  needs `exceptions = unlist(jsonlite::fromJSON(card)$fixed)` at registration, and
+  `nle_verify.R` fails on the card there.
 - **Priors inside the training box.** A network returns its floor outside the box it
-  was trained on, which truncates a posterior there; `nn_cell()` and `run_sbc()` refuse
-  a prior whose mean ± 4 sd leaves it (`nn_in_box()`).
+  was trained on, which truncates a posterior there; `nn_cell()` and `run_sbc()` warn
+  about a prior whose mean ± 4 sd leaves it (`nn_in_box()`; `error = TRUE` stops instead).
 - **rt resolution.** When t0 is sampled, set `rt_resolution = 1/1000` (or finer) in
   `make_emc()`: EMC2's default 1/60 floors the response times and biases t0 by about
   −1.9 posterior sd at N = 100, for the analytic likelihood too; `make_emc()` warns
   when a neural-likelihood design does this.
 - **A trained flow varies by seed and by checkpoint** as much as by architecture.
   Screen several checkpoints of a run (`nleflow steps`, then EMC2's score-bias check)
-  before adopting one, as DDMnle and the RDM card were (the plan's sections 2 and 3).
+  before adopting one, as the scaled DDM card and the RDM card were (the plan's sections 2 and 3).
 - **Laptop runs at <= 8 cores.** `nleflow train` uses `min(8, cores)` threads; a full
   recipe (24 M rows, 300 epochs) is about 7 h on an Apple M2 Max.

@@ -1,4 +1,4 @@
-"""The ONNX export (M2): the graph of the committed DDMnle card reproduces
+"""The ONNX export (M2): the graph of the committed scaled DDM card reproduces
 its golden rows in both signatures, the eight-parameter graph reproduces
 the z0 card's golden rows, and (with NLEFLOW_EMC2_LIB) the scaled graph
 agrees with EMC2's evaluation over prior draws in the six regimes of
@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import EMC2_GOLDEN
 
 from nleflow.onnx_export import SCALED_INPUTS, check_against, export_onnx, golden_cases, run, session
 
@@ -135,9 +134,9 @@ def test_scaled_graph_branches(sc_models):
 
 
 def test_eight_parameter_graph_reproduces_z0_golden(export_dir, tmp_path):
-    golden = EMC2_GOLDEN / "ddm_z0_s503_e282_golden.csv"
+    golden = EXPORT / "ddm_z0_s503_e282_golden.csv"
     if not golden.exists():
-        pytest.skip("the z0 golden file lives in EMC2's test tree")
+        pytest.skip("the z0 golden file is not in the reference exports")
     card_path = export_dir / "ddm_z0_s503_e282_weights.json"
     card = json.load(open(card_path))
     for sig in ("trialwise", "shared"):
@@ -176,9 +175,9 @@ def test_onnx_check_takes_cases_of_a_joint_card(export_dir, tmp_path):
     inputs (the context on the stored scale), not the scaled card's eight natural
     parameters; here the z0 card's golden rows written as cases."""
     from nleflow.onnx_export import check_onnx
-    golden = EMC2_GOLDEN / "ddm_z0_s503_e282_golden.csv"
+    golden = EXPORT / "ddm_z0_s503_e282_golden.csv"
     if not golden.exists():
-        pytest.skip("the z0 golden file lives in EMC2's test tree")
+        pytest.skip("the z0 golden file is not in the reference exports")
     card_path = export_dir / "ddm_z0_s503_e282_weights.json"
     card = json.load(open(card_path))
     theta, rt, choice, ref = golden_cases(card, golden)

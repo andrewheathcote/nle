@@ -9,7 +9,7 @@ describes the converter.
 
 ```sh
 cd nleflow/examples/lan_in
-export NLEFLOW_RLIB=<library holding EMC2 dev-nle-ondev and its dependencies>   # default ~/R/nle-ondev-lib:~/R/nle-m4-lib
+export NLEFLOW_RLIB=<library holding EMC2 built from DMC2 main and its dependencies>   # default ~/R/nle-ondev-lib:~/R/nle-m4-lib
 ./run.sh                      # about 5 s; LAN_ONNX=<file> to use a file you have
 ```
 
@@ -73,6 +73,6 @@ How to read it:
 The source replaced `ddm_uniform_st.onnx` on 2026-10-05 under the same name. The
 preset knows both by sha256 and takes the box of the file it is given: the current
 5 × 100 network (`st` up to 0.35) and the first 3 × 100 one (`st` up to 0.25; the copy
-in EMC2's `tests/testthat/golden/`, which EMC2's tests use). Any other file converts
+in `handover/nle-methods/port/export/`). Any other file converts
 with a warning; check its parameters, box and coding against its model card before
 trusting the mapping.

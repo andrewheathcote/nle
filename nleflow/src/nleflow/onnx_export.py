@@ -7,7 +7,7 @@ Two card kinds, two signatures each (NLEFLOW_PLAN.md section 7.3):
                stored (sampled) scale in context_names order (a zero-box
                input as log x, or probit x for SZ, -Inf at an exact zero),
                rt in seconds, choice (-1 lower, +1 upper).
-  flow_scaled  the scaled DDM (DDMnle): INPUT float64 [N, 10]: the natural
+  flow_scaled  the scaled DDM card: INPUT float64 [N, 10]: the natural
                DDM parameters v, a, t0, s, Z, SZ (the start-point
                proportion), sv, st0, then rt and choice. The graph computes
                kappa = v a/s^2, eta = sv a/s^2, the zero-box encodings, the

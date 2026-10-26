@@ -14,12 +14,12 @@ import onnx
 import pytest
 from onnx import TensorProto, helper, numpy_helper
 
-from conftest import EMC2_GOLDEN
+from conftest import EXPORT
 from nleflow.convert import ConvertError, convert, list_presets, load_preset, read_graph
 
 REPO = Path(__file__).resolve().parents[2]
-LAN_ONNX = EMC2_GOLDEN / "ddm_uniform_st.onnx"
-LAN_ORT = EMC2_GOLDEN / "lan_ddm_uniform_st_ort.csv"
+LAN_ONNX = EXPORT / "ddm_uniform_st.onnx"
+LAN_ORT = EXPORT / "lan_ddm_uniform_st_ort.csv"
 LAN_JSON = REPO / "handover" / "nle-methods" / "port" / "export" / "lan_ddm_uniform_st.json"
 quiet = dict(say=lambda *a: None)
 
@@ -27,7 +27,7 @@ quiet = dict(say=lambda *a: None)
 @pytest.fixture(scope="module")
 def lan_onnx():
     if not LAN_ONNX.exists():
-        pytest.skip(f"the published LAN is in EMC2's test tree ({LAN_ONNX})")
+        pytest.skip(f"the published LAN is not at {LAN_ONNX}")
     return LAN_ONNX
 
 
@@ -104,7 +104,7 @@ def test_lan_converts_to_the_committed_card(lan_onnx, tmp_path):
 
 
 def test_lan_card_equals_emc2s_committed_card(lan_onnx, tmp_path):
-    rds = EMC2_GOLDEN / "lan_ddm_uniform_st.rds"
+    rds = EXPORT / "lan_ddm_uniform_st.rds"
     res = convert(lan_onnx, out=tmp_path / "lan_weights.json", preset="ddm_uniform_st", **quiet)
     fields = ["kind", "context_names", "context_transforms", "bounds_natural", "input_layout", "response_values",
               "ll_floor_log", "mlp", "source_sha256", "source", "source_model", "encoding", "map_to_emc2_ddm"]

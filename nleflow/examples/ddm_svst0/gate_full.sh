@@ -19,7 +19,7 @@ Rscript -e 'library(EMC2); f <- commandArgs(TRUE)[1]
   m <- register_nn_model(f, twin = DDM, exceptions = unlist(jsonlite::fromJSON(f)$fixed)); print(nn_golden_check(m))' $CARD
 Rscript check_in_emc2.R $CARD data/val $E/cases.csv
 Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD || echo "nle_verify.R: exit $? (see README)"
-# with an EMC2 that reads the card's `fixed` (EMC2 1d9fb41d on dev-nle-ondev), if one is given
+# with an EMC2 that reads the card's `fixed` (DMC2 main does), if one is given
 if [ -n "${EMC2_FIXED_LIB:-}" ]; then
   echo "== nle_verify.R, EMC2 reading the card's fixed ($EMC2_FIXED_LIB)"
   R_LIBS=$EMC2_FIXED_LIB:$NLEFLOW_RLIB Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $CARD

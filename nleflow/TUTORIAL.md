@@ -18,7 +18,7 @@ From the repository root:
 
 ```sh
 export NLE=$PWD/nleflow
-export NLEFLOW_RLIB=$HOME/R/nle-lib      # your EMC2 library (dev-nle-ondev); a list a:b also works
+export NLEFLOW_RLIB=$HOME/R/nle-lib      # your EMC2 library (built from DMC2 main); a list a:b also works
 export R_LIBS=$NLEFLOW_RLIB R_PROFILE_USER=/dev/null
 NF="uv run --project $NLE nleflow"
 mkdir -p ~/nle-tutorial && cd ~/nle-tutorial
@@ -110,8 +110,8 @@ Rscript -e 'source(system.file("scripts", "nle_verify.R", package = "EMC2"))' $C
 ```
 
 Check: a `PASS golden check` line for each card EMC2 ships and for yours, then `all
-checks passed`. (With EMC2 older than 1d9fb41d it fails on this card: older EMC2 does
-not read the card's `fixed`; see START_HERE's known limits.)
+checks passed`. (An EMC2 that does not read the card's `fixed` fails on this card; see
+START_HERE's known limits.)
 
 In R (started in this shell, so `CARD` is set), the card is a model like any other:
 

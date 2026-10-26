@@ -36,7 +36,7 @@ cd nleflow/examples/ddm_svst0
 export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   # e.g. ~/R/nle-ondev-lib:~/R/nle-m4-lib
 ./run_smoke.sh          # 1 min: the whole chain below on 1 % of the data, 2 epochs
 ./run_full.sh           # the full recipe: simulate + 300 epochs, about 7.2 h at 8 cores
-./gate_full.sh          # the full card's gates, 2 min (EMC2_FIXED_LIB=<EMC2 >= 1d9fb41d> adds nle_verify.R on the card alone)
+./gate_full.sh          # the full card's gates, 2 min (EMC2_FIXED_LIB=<an EMC2 that reads `fixed`, e.g. DMC2 main> adds nle_verify.R on the card alone)
 ```
 
 `run_smoke.sh` runs, in order:
@@ -51,7 +51,7 @@ export NLEFLOW_RLIB=<library holding EMC2 and WienR> R_PROFILE_USER=/dev/null   
 | `nleflow golden` + `cmp` | the golden file rewritten from the card alone is identical |
 | `nn_golden_check()` | `PASS golden check ... (flow_joint, 1150 rows)` |
 | `check_in_emc2.R` | compiled vs R path below 1e-11; the network vs the analytic DDM through a design and per trial; writes `cases.csv` |
-| `nle_verify.R` | passes with EMC2 >= 1d9fb41d (`dev-nle-ondev`); fails with older EMC2 (below) |
+| `nle_verify.R` | passes with an EMC2 that reads the card's `fixed` (DMC2 main); fails with one that does not (below) |
 | `nleflow onnx` + `onnx-check --cases` | both signatures `PASS` on the golden rows and on the EMC2 cases |
 
 `check_simulator.R` tests the simulator, not the network: given the response,
@@ -69,10 +69,10 @@ onnxruntime's batched Exp may differ from R's `exp` by an ulp, which decides
 the tie at the discontinuous onset of an `st0 = 0` density either way (42 of
 1600 such rows did so in the trialwise graph).
 
-**`nle_verify.R` needs EMC2 >= 1d9fb41d for this card.** It registers a card with
-the card alone. EMC2 1d9fb41d (`dev-nle-ondev`) takes the card's `fixed` values as
+**`nle_verify.R` needs an EMC2 that reads `fixed` for this card.** It registers a card with
+the card alone. EMC2 1d9fb41d (as DMC2 main) takes the card's `fixed` values as
 the default `exceptions` (and refuses an exception that contradicts them); older
-EMC2 (`dev-nle-m0`, 252e155f) ignores them, so registration stops with "the network
+EMC2 (252e155f) ignores them, so registration stops with "the network
 was trained without 's' ... declare the value it was fixed at with exceptions =
 c(s = <value>)". With older EMC2, register with the exceptions as above;
 `run_smoke.sh` and `gate_full.sh` do.

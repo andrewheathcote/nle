@@ -12,7 +12,7 @@ cd nleflow/examples/onnx_use
 ```
 
 `use_onnx.py` is written for `flow_joint` cards; it reads their JSON layout
-(`kind`, `context_names`, `context_transforms`). A `flow_scaled` card (DDMnle) has
+(`kind`, `context_names`, `context_transforms`). A `flow_scaled` card (the scaled DDM card) has
 another layout: its graph exports and passes `nleflow onnx-check` the same way, and
 takes the eight natural DDM parameters (docs/onnx-out.md), but this script does not
 read that card.

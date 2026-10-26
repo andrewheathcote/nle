@@ -1,4 +1,4 @@
-# nleflow + EMC2 (a source tarball, or a commit of ampl-psych/EMC2), the cloud recipe of
+# nleflow + EMC2 (a source tarball, or a commit of DMC2, the EMC2 that carries the neural likelihoods), the cloud recipe of
 # NLEFLOW_PLAN.md section 9.2 as an image.
 #
 #   docker build -f nleflow/docker/Dockerfile -t nleflow .     # from the root of the nle repository
@@ -9,14 +9,14 @@
 # Build arguments:
 #   EMC2_TARBALL  the file name of an `R CMD build` tarball placed in nleflow/docker/emc2/ (git-ignored);
 #                 when set, EMC2 is installed from it and nothing is cloned. This is how a local build
-#                 of EMC2 not on GitHub gets into the image:
-#                   R CMD build <EMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
-#                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.9001.tar.gz \
-#                     --build-arg EMC2_SHA=bb96fb03 -t nleflow:dev-flow .
-#   EMC2_SHA      without EMC2_TARBALL, the commit of ampl-psych/EMC2 to clone and build (default: dev-flow,
-#                 bb96fb03 on GitHub); with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the
-#                 tarball's sha256.
-# Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped artefacts by sha256, so R comes from
+#                 gets into the image:
+#                   R CMD build <DMC2 worktree> && mv EMC2_*.tar.gz nleflow/docker/emc2/
+#                   docker build -f nleflow/docker/Dockerfile --build-arg EMC2_TARBALL=EMC2_3.4.1.tar.gz \
+#                     --build-arg EMC2_SHA=<the DMC2 commit> -t nleflow:dmc2 .
+#   EMC2_REPO     without EMC2_TARBALL, the repository to clone (default: DMC2 on GitHub)
+#   EMC2_SHA      without EMC2_TARBALL, the commit of EMC2_REPO to build (default: a commit of DMC2 main);
+#                 with it, only a label recorded in /opt/emc2/lib/EMC2_SHA.txt beside the tarball's sha256.
+# Ubuntu 24.04 ships R 4.3.3, which cannot check the shipped cards by sha256, so R comes from
 # CRAN's own Ubuntu repository (R >= 4.5); the R packages, WienR included, come from CRAN.
 #
 # BLAS: R and EMC2 link libblas.so.3 / liblapack.so.3, which Ubuntu's alternatives point at the
@@ -25,7 +25,8 @@
 # needs no rebuild.
 FROM ubuntu:24.04
 
-ARG EMC2_SHA=bb96fb0394d0d83be9a35056c96658ecdccf9ec4
+ARG EMC2_REPO=https://github.com/andrewheathcote/DMC2
+ARG EMC2_SHA=6ee521389e420453dbdb8f9c4d343c34d9ed3e5c
 ARG EMC2_TARBALL=
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -57,7 +58,7 @@ RUN Rscript -e 'options(Ncpus = max(1L, parallel::detectCores()), \
  && (Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/noble/latest"), HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), paste(getRversion(), R.version$platform, R.version$arch, R.version$os))); install.packages("arrow"); stopifnot(requireNamespace("arrow", quietly = TRUE))' \
      || echo "arrow not installed: the R simulator writes CSV")
 
-# --- EMC2 into /opt/emc2/lib, its source beside it (the tests read its golden files) ---------------
+# --- EMC2 into /opt/emc2/lib, its source beside it (emc2-tests runs its test suite) ----------------
 # From the tarball when EMC2_TARBALL is set (nleflow/docker/emc2/ is copied either way; it may hold
 # only its README), else from a clone at EMC2_SHA.
 COPY nleflow/docker/emc2 /opt/emc2/in
@@ -67,7 +68,7 @@ RUN set -e; mkdir -p /opt/emc2/lib; \
       printf '%s tarball %s sha256 %s\n' "${EMC2_SHA}" "${EMC2_TARBALL}" \
         "$(sha256sum "/opt/emc2/in/${EMC2_TARBALL}" | cut -d' ' -f1)" > /opt/emc2/EMC2_SHA.txt; \
     else \
-      git clone --quiet https://github.com/ampl-psych/EMC2 /opt/emc2/src; \
+      git clone --quiet "${EMC2_REPO}" /opt/emc2/src; \
       git -C /opt/emc2/src checkout --quiet "${EMC2_SHA}"; \
       git -C /opt/emc2/src rev-parse HEAD > /opt/emc2/EMC2_SHA.txt; \
     fi; \
@@ -87,7 +88,6 @@ RUN rm -rf /opt/nle/nleflow/docker/emc2 && uv sync --frozen --group dev
 
 ENV NLEFLOW_EMC2_LIB=/opt/emc2/lib \
     NLEFLOW_RLIB=/opt/emc2/lib \
-    NLEFLOW_EMC2_SRC=/opt/emc2/src \
     R_LIBS=/opt/emc2/lib \
     R_PROFILE_USER=/dev/null \
     LANG=C.UTF-8 \
